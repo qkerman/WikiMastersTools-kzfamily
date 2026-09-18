@@ -1,4 +1,7 @@
 (() => {
+  if (window.__wmAverageUiInstalled) return;
+  window.__wmAverageUiInstalled = true;
+
   const CACHE_TTL = 24 * 60 * 60 * 1000; // 24 h
   const CACHE_PREFIX = 'wm_avg_v3_';
   const MAX_CONCURRENT = 3;
@@ -799,5 +802,5 @@
     }
   });
 
-  console.debug('[WM Average] content script v3.4 chargé');
+  console.debug('[WM Average] content script v3.4.1 chargé');
 })();
