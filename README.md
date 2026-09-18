@@ -203,6 +203,6 @@ Depuis la version **3.5.0**, le bouton **Charger les prix** ouvre d'abord une fe
 
 Des presets **Rares** (`L / UR / SR / R`), **Courantes** (`PC / C`) et **Toutes** sont disponibles.
 
-L'objectif est de ne pas perdre du temps à charger le prix de toutes les cartes communes — notamment les très nombreuses cartes de communes et de villes — lorsqu'on veut seulement actualiser les cartes rares. Une routine pratique consiste par exemple à mettre à jour `L / UR / SR / R` chaque jour et `PC / C` beaucoup moins souvent, par exemple une fois par semaine.
+L'objectif est de ne pas perdre du temps à charger le prix de toutes les cartes communes. Une routine pratique consiste par exemple à mettre à jour `L / UR / SR / R` chaque jour et `PC / C` beaucoup moins souvent, par exemple une fois par semaine.
 
 La popup affiche aussi le **dernier chargement de masse par rareté**. L'avertissement de moins de 24 h est désormais calculé séparément pour chaque rareté sélectionnée.
