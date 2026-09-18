@@ -93,7 +93,7 @@ WM Average
 Les messages principaux sont :
 
 ```text
-[WM Average] content script v3.4 chargé
+[WM Average] content script v3.4.1 chargé
 [WM Average] bridge installé
 [WM Average] navigation SPA détectée: /collection
 [WM Average] N cartes détectées
@@ -108,7 +108,7 @@ Les messages principaux sont :
 
 ## Version
 
-Version actuelle : **3.4.0**
+Version actuelle : **3.4.1**
 
 
 ## Chargement complet et classement par prix
@@ -169,3 +169,10 @@ bouton sponsorisé par https://www.twitch.tv/botkz
 ```
 
 Le lien Twitch est cliquable et s'ouvre dans un nouvel onglet.
+
+
+## Content script dans le MAIN world
+
+Depuis la version **3.4.1**, `content.js` est lui aussi injecté dans le **MAIN world** de WikiMasters.
+
+L'objectif est d'éviter les erreurs `Extension context invalidated` qui peuvent survenir lorsqu'une extension en mode développeur est rechargée pendant qu'un ancien content script est encore actif dans un onglet. Un garde-fou `window.__wmAverageUiInstalled` empêche également une double initialisation sur la même page.
