@@ -93,7 +93,7 @@ WM Average
 Les messages principaux sont :
 
 ```text
-[WM Average] content script v3.2 chargé
+[WM Average] content script v3.3 chargé
 [WM Average] bridge installé
 [WM Average] navigation SPA détectée: /collection
 [WM Average] N cartes détectées
@@ -108,4 +108,21 @@ Les messages principaux sont :
 
 ## Version
 
-Version actuelle : **3.2.0**
+Version actuelle : **3.3.0**
+
+
+## Chargement complet et classement par prix
+
+Depuis la version **3.3.0**, deux boutons sont ajoutés en haut de la page Collection :
+
+- **Tout charger** : récupère toute la collection, page par page, puis charge les prix moyens absents ou expirés du cache.
+- **Plus chères** : ouvre une liste de toute la collection triée du prix moyen le plus élevé au plus faible.
+
+Pour limiter la charge sur WikiMasters :
+
+- les pages de collection sont récupérées avec au maximum **2 requêtes simultanées** ;
+- les résumés de ventes restent limités à **3 requêtes simultanées** ;
+- les prix valides de moins de 24 h sont réutilisés ;
+- si **Tout charger** a déjà été lancé il y a moins de 24 h, une confirmation est demandée avant de forcer un nouveau chargement complet des prix.
+
+La liste complète des cartes est également conservée localement afin que le classement **Plus chères** puisse être rouvert sans recharger toute la collection.
