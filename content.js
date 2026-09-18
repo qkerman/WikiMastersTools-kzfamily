@@ -1063,5 +1063,5 @@
     }
   });
 
-  console.debug('[WM Average] content script v3.6 chargé');
+  console.debug('[WM Average] page runtime v3.7 chargé');
 })();
