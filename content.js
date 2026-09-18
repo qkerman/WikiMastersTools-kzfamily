@@ -496,7 +496,7 @@
 
       const text = document.createElement('p');
       text.className = 'wm-rarity-explanation';
-      text.textContent = 'Sélectionne seulement les raretés qui t’intéressent. Le gros avantage, c’est de ne pas perdre du temps à charger les prix de toutes les cartes communes — notamment les très nombreuses communes et villes — quand tu veux simplement actualiser les cartes rares.';
+      text.textContent = 'Sélectionne seulement les raretés qui t’intéressent. Le gros avantage, c’est de ne pas perdre du temps à charger les prix de toutes les cartes communes.';
 
       const tip = document.createElement('p');
       tip.className = 'wm-rarity-tip';
