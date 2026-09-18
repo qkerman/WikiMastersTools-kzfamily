@@ -22,3 +22,27 @@
   color: #d1d5db;
   border-color: rgba(209, 213, 219, 0.35);
 }
+
+.wm-average-badge.wm-average-loading {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #e5e7eb;
+  border-color: rgba(229, 231, 235, 0.4);
+}
+
+.wm-average-spinner {
+  width: 9px;
+  height: 9px;
+  flex: 0 0 9px;
+  border: 1.5px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 999px;
+  animation: wm-average-spin 0.75s linear infinite;
+}
+
+@keyframes wm-average-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
