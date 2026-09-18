@@ -43,6 +43,68 @@
     return CACHE_PREFIX + id;
   }
 
+  function readLocalValue(key) {
+    try {
+      const raw = localStorage.getItem(key);
+      return raw == null ? undefined : JSON.parse(raw);
+    } catch (_) {
+      return undefined;
+    }
+  }
+
+  function writeLocalValue(key, value) {
+    try {
+      localStorage.setItem(key, JSON.stringify(value));
+      return true;
+    } catch (error) {
+      console.warn('[WM Average] localStorage indisponible', error);
+      return false;
+    }
+  }
+
+  async function storageGet(keys) {
+    const list = Array.isArray(keys) ? keys : [keys];
+    const result = {};
+    const missing = [];
+
+    for (const key of list) {
+      const value = readLocalValue(key);
+      if (value !== undefined) {
+        result[key] = value;
+      } else {
+        missing.push(key);
+      }
+    }
+
+    // Migration best-effort depuis les anciennes versions qui utilisaient
+    // chrome.storage.local. Si l'extension vient d'être rechargée, son ancien
+    // content script peut avoir un contexte invalidé : on ignore alors
+    // silencieusement l'API Chromium au lieu de casser l'extension.
+    if (missing.length > 0) {
+      try {
+        if (chrome?.runtime?.id && chrome?.storage?.local) {
+          const legacy = await chrome.storage.local.get(missing);
+          for (const key of missing) {
+            if (legacy?.[key] !== undefined) {
+              result[key] = legacy[key];
+              writeLocalValue(key, legacy[key]);
+            }
+          }
+        }
+      } catch (_) {
+        // Contexte d'extension invalidé : localStorage reste pleinement utilisable.
+      }
+    }
+
+    return result;
+  }
+
+  async function storageSet(values) {
+    for (const [key, value] of Object.entries(values || {})) {
+      writeLocalValue(key, value);
+    }
+  }
+
   function registerCards(cards) {
     for (const meta of cards) {
       if (!meta?.id || !meta?.title) continue;
@@ -171,7 +233,7 @@
     }
 
     const keys = cards.map(({ id }) => cacheKey(id));
-    const stored = force ? {} : await chrome.storage.local.get(keys);
+    const stored = force ? {} : await storageGet(keys);
     const now = Date.now();
 
     if (markBulk) {
@@ -248,7 +310,7 @@
     }
 
     cacheMemory.set(id, entry);
-    await chrome.storage.local.set({ [cacheKey(id)]: entry });
+    await storageSet({ [cacheKey(id)]: entry });
     renderOne(id);
 
     if (bulkPendingIds.delete(id)) {
@@ -299,7 +361,7 @@
   async function handleBulkClick() {
     if (bulkActive) return;
 
-    const data = await chrome.storage.local.get(BULK_LAST_CLICK_KEY);
+    const data = await storageGet(BULK_LAST_CLICK_KEY);
     const lastClick = Number(data[BULK_LAST_CLICK_KEY]) || 0;
     const now = Date.now();
     const recent = lastClick > 0 && now - lastClick < CACHE_TTL;
@@ -311,7 +373,7 @@
       force = true;
     }
 
-    await chrome.storage.local.set({ [BULK_LAST_CLICK_KEY]: now });
+    await storageSet({ [BULK_LAST_CLICK_KEY]: now });
 
     bulkActive = true;
     bulkForce = force;
@@ -450,7 +512,7 @@
   }
 
   async function openRankingModal() {
-    const storedCollection = await chrome.storage.local.get(ALL_COLLECTION_KEY);
+    const storedCollection = await storageGet(ALL_COLLECTION_KEY);
     const collectionEntry = storedCollection[ALL_COLLECTION_KEY];
     const cards = Array.isArray(collectionEntry?.cards) ? collectionEntry.cards : [];
 
@@ -460,7 +522,7 @@
     }
 
     const priceKeys = cards.map((card) => cacheKey(card.id));
-    const prices = await chrome.storage.local.get(priceKeys);
+    const prices = await storageGet(priceKeys);
 
     const rows = cards.map((card) => {
       const entry = prices[cacheKey(card.id)];
@@ -599,7 +661,7 @@
     const cards = Array.isArray(detail.cards) ? detail.cards : [];
     const fetchedAt = Date.now();
 
-    await chrome.storage.local.set({
+    await storageSet({
       [ALL_COLLECTION_KEY]: { fetchedAt, cards }
     });
 
@@ -647,5 +709,5 @@
     }
   });
 
-  console.debug('[WM Average] content script v3.3 chargé');
+  console.debug('[WM Average] content script v3.3.1 chargé');
 })();
