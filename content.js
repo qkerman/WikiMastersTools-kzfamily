@@ -5,8 +5,11 @@
   const CACHE_TTL = 24 * 60 * 60 * 1000; // 24 h
   const CACHE_PREFIX = 'wm_avg_v3_';
   const MAX_CONCURRENT = 3;
-  const BULK_LAST_CLICK_KEY = 'wm_bulk_last_click_v1';
+  const BULK_LAST_CLICK_KEY = 'wm_bulk_last_click_v1'; // legacy, conservé pour compatibilité
+  const BULK_RARITY_LAST_LOAD_KEY = 'wm_bulk_rarity_last_load_v1';
   const ALL_COLLECTION_KEY = 'wm_all_collection_v1';
+  const RARITIES = ['L', 'UR', 'SR', 'R', 'PC', 'C'];
+  const DEFAULT_RARE_RARITIES = ['L', 'UR', 'SR', 'R'];
 
   const titleById = new Map();
   const cardMetaById = new Map();
@@ -21,6 +24,8 @@
   let bulkForce = false;
   let bulkRequestId = null;
   let bulkTotal = 0;
+  let bulkSelectedRarities = new Set(DEFAULT_RARE_RARITIES);
+  let bulkForceRarities = new Set();
   const bulkPendingIds = new Set();
 
   let bulkButton = null;
@@ -304,16 +309,17 @@
     }
   }
 
-  async function loadCacheForCards(cards, { force = false, markBulk = false } = {}) {
+  async function loadCacheForCards(cards, { force = false, forceRarities = null, markBulk = false } = {}) {
     registerCards(cards);
 
-    for (const { id } of cards) {
-      if (force) cacheMemory.delete(id);
-      renderKnownCard(id);
+    for (const card of cards) {
+      const forceCard = force || Boolean(forceRarities?.has(card.rarity));
+      if (forceCard) cacheMemory.delete(card.id);
+      renderKnownCard(card.id);
     }
 
     const keys = cards.map(({ id }) => cacheKey(id));
-    const stored = force ? {} : await storageGet(keys);
+    const stored = await storageGet(keys);
     const now = Date.now();
 
     if (markBulk) {
@@ -321,9 +327,11 @@
       bulkTotal = cards.length;
     }
 
-    for (const { id } of cards) {
+    for (const card of cards) {
+      const { id } = card;
+      const forceCard = force || Boolean(forceRarities?.has(card.rarity));
       const entry = stored[cacheKey(id)];
-      const valid = !force && entry && Number.isFinite(entry.fetchedAt) && now - entry.fetchedAt < CACHE_TTL;
+      const valid = !forceCard && entry && Number.isFinite(entry.fetchedAt) && now - entry.fetchedAt < CACHE_TTL;
 
       if (valid) {
         cacheMemory.set(id, entry);
@@ -423,8 +431,8 @@
     bulkButton = document.createElement('button');
     bulkButton.type = 'button';
     bulkButton.className = 'wm-tool-button';
-    bulkButton.textContent = 'Tout charger';
-    bulkButton.title = 'Charge toute la collection et les prix manquants';
+    bulkButton.textContent = 'Charger les prix';
+    bulkButton.title = 'Choisir les raretés dont tu veux charger ou actualiser les prix';
     bulkButton.addEventListener('click', handleBulkClick);
 
     rankingButton = document.createElement('button');
@@ -441,22 +449,29 @@
   async function handleBulkClick() {
     if (bulkActive) return;
 
-    const data = await storageGet(BULK_LAST_CLICK_KEY);
-    const lastClick = Number(data[BULK_LAST_CLICK_KEY]) || 0;
-    const now = Date.now();
-    const recent = lastClick > 0 && now - lastClick < CACHE_TTL;
+    const lastLoadsData = await storageGet(BULK_RARITY_LAST_LOAD_KEY);
+    const lastLoads = lastLoadsData[BULK_RARITY_LAST_LOAD_KEY] || {};
 
-    let force = false;
-    if (recent) {
-      const confirmed = await showReloadConfirmation(lastClick);
+    const selected = await showRaritySelectionModal(lastLoads);
+    if (!selected?.length) return;
+
+    const now = Date.now();
+    const recentRarities = selected.filter((rarity) => {
+      const timestamp = Number(lastLoads[rarity]) || 0;
+      return timestamp > 0 && now - timestamp < CACHE_TTL;
+    });
+
+    const forceRarities = new Set();
+    if (recentRarities.length > 0) {
+      const confirmed = await showReloadConfirmation(recentRarities, lastLoads);
       if (!confirmed) return;
-      force = true;
+      recentRarities.forEach((rarity) => forceRarities.add(rarity));
     }
 
-    await storageSet({ [BULK_LAST_CLICK_KEY]: now });
-
     bulkActive = true;
-    bulkForce = force;
+    bulkForce = false;
+    bulkSelectedRarities = new Set(selected);
+    bulkForceRarities = forceRarities;
     bulkPendingIds.clear();
     bulkTotal = 0;
     bulkRequestId = `bulk:${now}:${Math.random().toString(36).slice(2)}`;
@@ -466,6 +481,128 @@
     window.dispatchEvent(new CustomEvent('wm-average-load-all-collection', {
       detail: { requestId: bulkRequestId }
     }));
+  }
+
+  function showRaritySelectionModal(lastLoads = {}) {
+    return new Promise((resolve) => {
+      const overlay = document.createElement('div');
+      overlay.className = 'wm-modal-overlay';
+
+      const modal = document.createElement('div');
+      modal.className = 'wm-modal wm-confirm-modal wm-rarity-modal';
+
+      const title = document.createElement('h2');
+      title.textContent = 'Quels prix mettre à jour ?';
+
+      const text = document.createElement('p');
+      text.className = 'wm-rarity-explanation';
+      text.textContent = 'Sélectionne seulement les raretés qui t’intéressent. Le gros avantage, c’est de ne pas perdre du temps à charger les prix de toutes les cartes communes — notamment les très nombreuses communes et villes — quand tu veux simplement actualiser les cartes rares.';
+
+      const tip = document.createElement('p');
+      tip.className = 'wm-rarity-tip';
+      tip.textContent = 'Exemple : L / UR / SR / R tous les jours, puis PC / C seulement une fois par semaine.';
+
+      const presets = document.createElement('div');
+      presets.className = 'wm-rarity-presets';
+
+      const grid = document.createElement('div');
+      grid.className = 'wm-rarity-grid';
+
+      const selected = new Set(DEFAULT_RARE_RARITIES);
+      const checkboxByRarity = new Map();
+
+      const updateChecks = () => {
+        for (const [rarity, input] of checkboxByRarity) {
+          input.checked = selected.has(rarity);
+          input.closest('.wm-rarity-option')?.classList.toggle('is-selected', input.checked);
+        }
+      };
+
+      const makePreset = (label, rarities) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'wm-tool-button wm-rarity-preset';
+        button.textContent = label;
+        button.addEventListener('click', () => {
+          selected.clear();
+          rarities.forEach((rarity) => selected.add(rarity));
+          updateChecks();
+        });
+        return button;
+      };
+
+      presets.append(
+        makePreset('Rares', ['L', 'UR', 'SR', 'R']),
+        makePreset('Courantes', ['PC', 'C']),
+        makePreset('Toutes', RARITIES)
+      );
+
+      for (const rarity of RARITIES) {
+        const label = document.createElement('label');
+        label.className = 'wm-rarity-option';
+
+        const input = document.createElement('input');
+        input.type = 'checkbox';
+        input.value = rarity;
+        input.checked = selected.has(rarity);
+        checkboxByRarity.set(rarity, input);
+
+        const main = document.createElement('span');
+        main.className = 'wm-rarity-option-main';
+        main.textContent = rarity;
+
+        const last = document.createElement('span');
+        last.className = 'wm-rarity-last';
+        const timestamp = Number(lastLoads[rarity]) || 0;
+        last.textContent = timestamp ? `dernier chargement : il y a ${humanElapsed(timestamp)}` : 'jamais chargé en masse';
+
+        input.addEventListener('change', () => {
+          if (input.checked) selected.add(rarity);
+          else selected.delete(rarity);
+          label.classList.toggle('is-selected', input.checked);
+        });
+
+        label.classList.toggle('is-selected', input.checked);
+        label.append(input, main, last);
+        grid.append(label);
+      }
+
+      const actions = document.createElement('div');
+      actions.className = 'wm-modal-actions';
+
+      const cancel = document.createElement('button');
+      cancel.type = 'button';
+      cancel.className = 'wm-tool-button wm-secondary-button';
+      cancel.textContent = 'Annuler';
+
+      const confirm = document.createElement('button');
+      confirm.type = 'button';
+      confirm.className = 'wm-tool-button';
+      confirm.textContent = 'Charger ces raretés';
+
+      const close = (value) => {
+        overlay.remove();
+        resolve(value);
+      };
+
+      cancel.addEventListener('click', () => close(null));
+      confirm.addEventListener('click', () => {
+        const values = RARITIES.filter((rarity) => selected.has(rarity));
+        if (!values.length) {
+          confirm.textContent = 'Choisis au moins une rareté';
+          return;
+        }
+        close(values);
+      });
+      overlay.addEventListener('click', (event) => {
+        if (event.target === overlay) close(null);
+      });
+
+      actions.append(cancel, confirm);
+      modal.append(title, text, tip, presets, grid, actions);
+      overlay.append(modal);
+      document.body.append(overlay);
+    });
   }
 
   function setBulkButtonState(label, disabled) {
@@ -481,15 +618,26 @@
     setBulkButtonState(`Prix ${completed}/${bulkTotal}`, true);
   }
 
-  function finishBulkLoad() {
+  async function finishBulkLoad() {
     if (!bulkActive) return;
+
+    const selectedRarities = [...bulkSelectedRarities];
+    const data = await storageGet(BULK_RARITY_LAST_LOAD_KEY);
+    const lastLoads = { ...(data[BULK_RARITY_LAST_LOAD_KEY] || {}) };
+    const now = Date.now();
+    selectedRarities.forEach((rarity) => {
+      lastLoads[rarity] = now;
+    });
+    await storageSet({ [BULK_RARITY_LAST_LOAD_KEY]: lastLoads });
+
     bulkActive = false;
     bulkForce = false;
     bulkRequestId = null;
+    bulkForceRarities.clear();
     bulkPendingIds.clear();
-    setBulkButtonState('Tout chargé ✓', false);
+    setBulkButtonState('Chargé ✓', false);
     setTimeout(() => {
-      if (!bulkActive) setBulkButtonState('Tout charger', false);
+      if (!bulkActive) setBulkButtonState('Charger les prix', false);
     }, 2200);
   }
 
@@ -501,7 +649,7 @@
     setBulkButtonState('Erreur', false);
     showInfoModal('Chargement impossible', message || 'Impossible de charger toute la collection pour le moment.');
     setTimeout(() => {
-      if (!bulkActive) setBulkButtonState('Tout charger', false);
+      if (!bulkActive) setBulkButtonState('Charger les prix', false);
     }, 2200);
   }
 
@@ -513,7 +661,7 @@
     return remaining ? `${hours} h ${remaining} min` : `${hours} h`;
   }
 
-  function showReloadConfirmation(lastClick) {
+  function showReloadConfirmation(recentRarities, lastLoads) {
     return new Promise((resolve) => {
       const overlay = document.createElement('div');
       overlay.className = 'wm-modal-overlay';
@@ -522,10 +670,13 @@
       modal.className = 'wm-modal wm-confirm-modal';
 
       const title = document.createElement('h2');
-      title.textContent = 'Recharger tous les prix ?';
+      title.textContent = 'Recharger des prix déjà récents ?';
 
       const text = document.createElement('p');
-      text.textContent = `Tu as déjà lancé « Tout charger » il y a ${humanElapsed(lastClick)}, donc il y a moins de 24 h. Relancer maintenant peut envoyer beaucoup de requêtes à WikiMasters. Par prudence, mieux vaut attendre un peu : le site peut appliquer des limitations. Recharger quand même ?`;
+      const details = recentRarities
+        .map((rarity) => `${rarity} (il y a ${humanElapsed(Number(lastLoads[rarity]) || Date.now())})`)
+        .join(', ');
+      text.textContent = `Ces raretés ont déjà été chargées il y a moins de 24 h : ${details}. Les relancer force de nouvelles requêtes pour leurs cartes. Par prudence, évite de le faire trop souvent si ce n’est pas nécessaire. Recharger quand même ces raretés ?`;
 
       const actions = document.createElement('div');
       actions.className = 'wm-modal-actions';
@@ -533,7 +684,7 @@
       const cancel = document.createElement('button');
       cancel.type = 'button';
       cancel.className = 'wm-tool-button wm-secondary-button';
-      cancel.textContent = 'Attendre';
+      cancel.textContent = 'Garder le cache';
 
       const confirm = document.createElement('button');
       confirm.type = 'button';
@@ -809,9 +960,19 @@
       return;
     }
 
-    setBulkButtonState('Préparation des prix…', true);
-    loadCacheForCards(cards, { force: bulkForce, markBulk: true })
-      .catch((error) => failBulkLoad(String(error?.message || error)));
+    const selectedCards = cards.filter((card) => bulkSelectedRarities.has(card.rarity));
+
+    if (!selectedCards.length) {
+      finishBulkLoad();
+      return;
+    }
+
+    setBulkButtonState(`Préparation (${selectedCards.length})…`, true);
+    loadCacheForCards(selectedCards, {
+      force: bulkForce,
+      forceRarities: bulkForceRarities,
+      markBulk: true
+    }).catch((error) => failBulkLoad(String(error?.message || error)));
   });
 
   let renderTimer = null;
@@ -848,5 +1009,5 @@
     }
   });
 
-  console.debug('[WM Average] content script v3.4.2 chargé');
+  console.debug('[WM Average] content script v3.5 chargé');
 })();
