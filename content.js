@@ -17,6 +17,10 @@
   bridge.onload = () => bridge.remove();
   (document.documentElement || document.head).appendChild(bridge);
 
+  function isCollectionPage() {
+    return location.pathname === '/collection' || location.pathname.startsWith('/collection/');
+  }
+
   function normalizeTitle(value) {
     return String(value || '')
       .normalize('NFC')
@@ -47,6 +51,8 @@
   }
 
   function findCardByTitle(title) {
+    if (!isCollectionPage()) return null;
+
     const target = normalizeTitle(title);
     const headings = document.querySelectorAll('h3');
     for (const h3 of headings) {
@@ -71,6 +77,8 @@
   }
 
   function renderOne(id) {
+    if (!isCollectionPage()) return;
+
     const title = titleById.get(id);
     const cacheEntry = cacheMemory.get(id);
     if (!title || !cacheEntry) return;
@@ -98,6 +106,7 @@
   }
 
   function renderAll() {
+    if (!isCollectionPage()) return;
     for (const id of titleById.keys()) renderOne(id);
   }
 
@@ -191,7 +200,18 @@
   });
 
   let renderTimer = null;
+  let previousPath = location.pathname;
+
   const observer = new MutationObserver(() => {
+    const currentPath = location.pathname;
+
+    if (currentPath !== previousPath) {
+      previousPath = currentPath;
+      console.debug('[WM Average] navigation SPA détectée:', currentPath);
+    }
+
+    if (!isCollectionPage()) return;
+
     clearTimeout(renderTimer);
     renderTimer = setTimeout(renderAll, 80);
   });
@@ -206,5 +226,12 @@
   }
   startObserver();
 
-  console.debug('[WM Average] content script v3 chargé');
+  window.addEventListener('popstate', () => {
+    previousPath = location.pathname;
+    if (isCollectionPage()) {
+      setTimeout(renderAll, 0);
+    }
+  });
+
+  console.debug('[WM Average] content script v3.1 chargé');
 })();
