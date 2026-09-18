@@ -335,3 +335,81 @@
 #wm-marketplace-average .wm-sponsor-note {
   padding-left: 2px;
 }
+
+
+.wm-rarity-modal {
+  width: min(590px, calc(100vw - 32px));
+}
+
+.wm-rarity-explanation {
+  color: #e2e8f0 !important;
+}
+
+.wm-rarity-tip {
+  margin-top: 7px !important;
+  color: #bf94ff !important;
+  font-size: 12px !important;
+  font-weight: 700;
+}
+
+.wm-rarity-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 16px;
+}
+
+.wm-rarity-preset {
+  padding: 7px 10px;
+  font-size: 12px;
+}
+
+.wm-rarity-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.wm-rarity-option {
+  display: grid;
+  grid-template-columns: 18px auto;
+  column-gap: 8px;
+  row-gap: 1px;
+  align-items: center;
+  padding: 9px 10px;
+  border: 1px solid rgba(191, 148, 255, 0.24);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.035);
+  cursor: pointer;
+}
+
+.wm-rarity-option.is-selected {
+  border-color: #bf94ff;
+  background: rgba(191, 148, 255, 0.12);
+}
+
+.wm-rarity-option input {
+  grid-row: 1 / span 2;
+  width: 15px;
+  height: 15px;
+  accent-color: #bf94ff;
+}
+
+.wm-rarity-option-main {
+  color: #f8fafc;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.wm-rarity-last {
+  color: #94a3b8;
+  font-size: 10px;
+  line-height: 1.2;
+}
+
+@media (max-width: 520px) {
+  .wm-rarity-grid {
+    grid-template-columns: 1fr;
+  }
+}
