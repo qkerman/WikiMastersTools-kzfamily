@@ -1,22 +1,21 @@
 {
   "manifest_version": 3,
   "name": "WikiMasters - Prix moyen collection",
-  "version": "3.6.0",
+  "version": "3.7.0",
   "description": "Affiche les prix moyens WikiMasters dans la collection et sur les pages marketplace, avec cache individuel de 24 h.",
   "host_permissions": ["https://www.wiki-masters.com/*"],
   "content_scripts": [
     {
       "matches": ["https://www.wiki-masters.com/*"],
-      "js": ["page-bridge.js"],
-      "run_at": "document_start",
-      "world": "MAIN"
-    },
-    {
-      "matches": ["https://www.wiki-masters.com/*"],
-      "js": ["content.js"],
+      "js": ["bootstrap.js"],
       "css": ["styles.css"],
-      "run_at": "document_start",
-      "world": "MAIN"
+      "run_at": "document_start"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["page-bridge.js", "content.js"],
+      "matches": ["https://www.wiki-masters.com/*"]
     }
   ]
 }
