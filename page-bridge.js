@@ -35,6 +35,36 @@
     }));
   }
 
+  function isMarketplaceDetailApi(url) {
+    try {
+      const parsed = new URL(url, location.origin);
+      return /^\/api\/marketplace\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(parsed.pathname);
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function emitMarketplaceDetail(json) {
+    const auction = json?.auction;
+    const card = auction?.card;
+    const id = auction?.card_id || card?.id;
+    const title = card?.wikipedia_title;
+    if (!id || !title) return;
+
+    window.dispatchEvent(new CustomEvent('wm-average-marketplace-detail', {
+      detail: {
+        auctionId: auction?.id || null,
+        card: {
+          id,
+          title,
+          rarity: auction?.snapshot_rarity || card?.rarity || null,
+          imageUrl: card?.image_url || null,
+          count: 1
+        }
+      }
+    }));
+  }
+
   async function fetchCollectionPage(page, stats = false) {
     const response = await originalFetch(
       `/api/my-collection?sort=rarity&page=${encodeURIComponent(page)}&stats=${stats ? 1 : 0}`,
@@ -141,6 +171,8 @@
       const url = typeof input === 'string' ? input : input?.url;
       if (url && url.includes('/api/my-collection')) {
         response.clone().json().then(emitCollection).catch(() => {});
+      } else if (url && isMarketplaceDetailApi(url)) {
+        response.clone().json().then(emitMarketplaceDetail).catch(() => {});
       }
     } catch (_) {}
 
@@ -158,11 +190,18 @@
     };
 
     OriginalXHR.prototype.send = function(...args) {
-      if (this.__wmUrl && this.__wmUrl.includes('/api/my-collection')) {
+      if (
+        this.__wmUrl &&
+        (this.__wmUrl.includes('/api/my-collection') || isMarketplaceDetailApi(this.__wmUrl))
+      ) {
         this.addEventListener('load', () => {
           try {
             const json = JSON.parse(this.responseText);
-            emitCollection(json);
+            if (this.__wmUrl.includes('/api/my-collection')) {
+              emitCollection(json);
+            } else if (isMarketplaceDetailApi(this.__wmUrl)) {
+              emitMarketplaceDetail(json);
+            }
           } catch (_) {}
         }, { once: true });
       }
