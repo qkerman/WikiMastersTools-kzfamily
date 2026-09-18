@@ -1,21 +1,21 @@
 {
   "manifest_version": 3,
   "name": "WikiMasters - Prix moyen collection",
-  "version": "3.3.1",
+  "version": "3.3.2",
   "description": "Affiche le prix moyen de vente de chaque carte dans la collection WikiMasters, avec cache individuel de 24 h.",
   "host_permissions": ["https://www.wiki-masters.com/*"],
   "content_scripts": [
     {
       "matches": ["https://www.wiki-masters.com/*"],
+      "js": ["page-bridge.js"],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": ["https://www.wiki-masters.com/*"],
       "js": ["content.js"],
       "css": ["styles.css"],
       "run_at": "document_start"
-    }
-  ],
-  "web_accessible_resources": [
-    {
-      "resources": ["page-bridge.js"],
-      "matches": ["https://www.wiki-masters.com/*"]
     }
   ]
 }
