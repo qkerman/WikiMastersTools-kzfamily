@@ -40,6 +40,8 @@ Exemple de réponse :
 
 Le prix moyen correspondant à la rareté de la carte est ensuite affiché directement sur la carte dans la collection.
 
+Pendant qu'un prix absent du cache est en cours de récupération, la carte affiche immédiatement un petit badge **« Prix… »** avec un spinner. Le badge est remplacé automatiquement par la moyenne dès que le cache ou l'API répond.
+
 ## Cache et limitation des requêtes
 
 Pour éviter de solliciter inutilement l'API WikiMasters :
@@ -91,7 +93,7 @@ WM Average
 Les messages principaux sont :
 
 ```text
-[WM Average] content script v3.1 chargé
+[WM Average] content script v3.2 chargé
 [WM Average] bridge installé
 [WM Average] navigation SPA détectée: /collection
 [WM Average] N cartes détectées
@@ -106,4 +108,4 @@ Les messages principaux sont :
 
 ## Version
 
-Version actuelle : **3.1.0**
+Version actuelle : **3.2.0**
