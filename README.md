@@ -93,7 +93,7 @@ WM Average
 Les messages principaux sont :
 
 ```text
-[WM Average] content script v3.4.2 chargé
+[WM Average] content script v3.5 chargé
 [WM Average] bridge installé
 [WM Average] navigation SPA détectée: /collection
 [WM Average] N cartes détectées
@@ -108,7 +108,7 @@ Les messages principaux sont :
 
 ## Version
 
-Version actuelle : **3.4.2**
+Version actuelle : **3.5.0**
 
 
 ## Chargement complet et classement par prix
@@ -188,3 +188,21 @@ Depuis la version **3.4.2**, la fenêtre **Plus chères** ne crée plus toute la
 - les images restent en `loading="lazy"`.
 
 Le tri est toujours effectué sur toute la collection avant affichage : seul le rendu HTML est progressif.
+
+
+## Chargement sélectif par rareté
+
+Depuis la version **3.5.0**, le bouton **Charger les prix** ouvre d'abord une fenêtre permettant de choisir les raretés à actualiser :
+
+- `L`
+- `UR`
+- `SR`
+- `R`
+- `PC`
+- `C`
+
+Des presets **Rares** (`L / UR / SR / R`), **Courantes** (`PC / C`) et **Toutes** sont disponibles.
+
+L'objectif est de ne pas perdre du temps à charger le prix de toutes les cartes communes — notamment les très nombreuses cartes de communes et de villes — lorsqu'on veut seulement actualiser les cartes rares. Une routine pratique consiste par exemple à mettre à jour `L / UR / SR / R` chaque jour et `PC / C` beaucoup moins souvent, par exemple une fois par semaine.
+
+La popup affiche aussi le **dernier chargement de masse par rareté**. L'avertissement de moins de 24 h est désormais calculé séparément pour chaque rareté sélectionnée.
