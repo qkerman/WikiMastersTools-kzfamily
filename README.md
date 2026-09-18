@@ -93,7 +93,7 @@ WM Average
 Les messages principaux sont :
 
 ```text
-[WM Average] content script v3.4.1 chargé
+[WM Average] content script v3.4.2 chargé
 [WM Average] bridge installé
 [WM Average] navigation SPA détectée: /collection
 [WM Average] N cartes détectées
@@ -108,7 +108,7 @@ Les messages principaux sont :
 
 ## Version
 
-Version actuelle : **3.4.1**
+Version actuelle : **3.4.2**
 
 
 ## Chargement complet et classement par prix
@@ -176,3 +176,15 @@ Le lien Twitch est cliquable et s'ouvre dans un nouvel onglet.
 Depuis la version **3.4.1**, `content.js` est lui aussi injecté dans le **MAIN world** de WikiMasters.
 
 L'objectif est d'éviter les erreurs `Extension context invalidated` qui peuvent survenir lorsqu'une extension en mode développeur est rechargée pendant qu'un ancien content script est encore actif dans un onglet. Un garde-fou `window.__wmAverageUiInstalled` empêche également une double initialisation sur la même page.
+
+
+## Chargement progressif du classement
+
+Depuis la version **3.4.2**, la fenêtre **Plus chères** ne crée plus toute la liste dans le DOM dès son ouverture.
+
+- les **50 premières cartes** sont affichées immédiatement ;
+- lorsque l'utilisateur approche du bas de la liste, **50 cartes supplémentaires** sont ajoutées ;
+- le chargement continue par lots de 50 jusqu'à la fin du classement ;
+- les images restent en `loading="lazy"`.
+
+Le tri est toujours effectué sur toute la collection avant affichage : seul le rendu HTML est progressif.
