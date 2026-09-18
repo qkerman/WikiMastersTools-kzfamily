@@ -653,7 +653,10 @@
     const list = document.createElement('div');
     list.className = 'wm-ranking-list';
 
-    rows.forEach((row, index) => {
+    const PAGE_SIZE = 50;
+    let renderedCount = 0;
+
+    const createRankingRow = (row, index) => {
       const item = document.createElement('div');
       item.className = 'wm-ranking-row';
 
@@ -695,10 +698,53 @@
       }
 
       item.append(rank, thumb, info, price);
-      list.append(item);
+      return item;
+    };
+
+    const sentinel = document.createElement('div');
+    sentinel.className = 'wm-ranking-sentinel';
+
+    const renderNextChunk = () => {
+      if (renderedCount >= rows.length) {
+        sentinel.remove();
+        return;
+      }
+
+      const fragment = document.createDocumentFragment();
+      const end = Math.min(renderedCount + PAGE_SIZE, rows.length);
+
+      for (let index = renderedCount; index < end; index += 1) {
+        fragment.append(createRankingRow(rows[index], index));
+      }
+
+      renderedCount = end;
+      sentinel.remove();
+      list.append(fragment);
+
+      if (renderedCount < rows.length) {
+        list.append(sentinel);
+      }
+    };
+
+    const observer = new IntersectionObserver((entries) => {
+      if (entries.some((entry) => entry.isIntersecting)) {
+        renderNextChunk();
+      }
+    }, {
+      root: list,
+      rootMargin: '250px 0px',
+      threshold: 0
     });
 
-    const close = () => overlay.remove();
+    renderNextChunk();
+    if (renderedCount < rows.length) {
+      observer.observe(sentinel);
+    }
+
+    const close = () => {
+      observer.disconnect();
+      overlay.remove();
+    };
     closeButton.addEventListener('click', close);
     overlay.addEventListener('click', (event) => {
       if (event.target === overlay) close();
@@ -802,5 +848,5 @@
     }
   });
 
-  console.debug('[WM Average] content script v3.4.1 chargé');
+  console.debug('[WM Average] content script v3.4.2 chargé');
 })();
