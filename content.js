@@ -22,9 +22,14 @@
 
   let bulkButton = null;
   let rankingButton = null;
+  let marketplaceCardId = null;
 
   function isCollectionPage() {
     return location.pathname === '/collection' || location.pathname.startsWith('/collection/');
+  }
+
+  function isMarketplaceDetailPage() {
+    return /^\/marketplace\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/?$/i.test(location.pathname);
   }
 
   function normalizeTitle(value) {
@@ -90,6 +95,21 @@
       titleById.set(normalized.id, normalized.title);
       cardMetaById.set(normalized.id, normalized);
     }
+  }
+
+  function createSponsorNote() {
+    const note = document.createElement('div');
+    note.className = 'wm-sponsor-note';
+    note.append(document.createTextNode('bouton sponsorisé par '));
+
+    const link = document.createElement('a');
+    link.href = 'https://www.twitch.tv/botkz';
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    link.textContent = 'https://www.twitch.tv/botkz';
+
+    note.append(link);
+    return note;
   }
 
   function getRarityFromCard(cardEl) {
@@ -190,10 +210,95 @@
     }
   }
 
+  function renderMarketplaceAverage(id) {
+    if (!isMarketplaceDetailPage() || marketplaceCardId !== id) return;
+
+    const meta = cardMetaById.get(id);
+    if (!meta?.title) return;
+
+    const h1 = [...document.querySelectorAll('h1')]
+      .find((el) => normalizeTitle(el.textContent) === normalizeTitle(meta.title));
+    if (!h1) return;
+
+    const headingRow = h1.parentElement;
+    const titleBlock = headingRow?.parentElement;
+    const infoColumn = titleBlock?.parentElement;
+    if (!titleBlock || !infoColumn) return;
+
+    let wrap = document.getElementById('wm-marketplace-average');
+    if (!wrap) {
+      wrap = document.createElement('div');
+      wrap.id = 'wm-marketplace-average';
+      wrap.className = 'wm-marketplace-average-wrap';
+
+      const priceCard = document.createElement('div');
+      priceCard.className = 'wm-marketplace-average-card';
+
+      const labelWrap = document.createElement('div');
+      labelWrap.className = 'wm-marketplace-average-label-wrap';
+
+      const label = document.createElement('span');
+      label.className = 'wm-marketplace-average-label';
+      label.textContent = 'Prix moyen';
+
+      const rarity = document.createElement('span');
+      rarity.className = 'wm-marketplace-average-rarity';
+      rarity.dataset.role = 'rarity';
+
+      labelWrap.append(label, rarity);
+
+      const value = document.createElement('span');
+      value.className = 'wm-marketplace-average-value';
+      value.dataset.role = 'value';
+
+      priceCard.append(labelWrap, value);
+      wrap.append(priceCard, createSponsorNote());
+      titleBlock.insertAdjacentElement('afterend', wrap);
+    }
+
+    const rarityEl = wrap.querySelector('[data-role="rarity"]');
+    if (rarityEl) {
+      rarityEl.textContent = meta.rarity ? `Rareté ${meta.rarity}` : '';
+    }
+
+    const valueEl = wrap.querySelector('[data-role="value"]');
+    if (!valueEl) return;
+
+    const cacheEntry = cacheMemory.get(id);
+    if (!cacheEntry) {
+      valueEl.className = 'wm-marketplace-average-value wm-marketplace-average-loading';
+      valueEl.replaceChildren();
+
+      const spinner = document.createElement('span');
+      spinner.className = 'wm-average-spinner';
+      spinner.setAttribute('aria-hidden', 'true');
+
+      const loadingText = document.createElement('span');
+      loadingText.textContent = 'Chargement…';
+
+      valueEl.append(spinner, loadingText);
+      return;
+    }
+
+    const average = chooseAverage(cacheEntry, null, meta.rarity || null);
+    valueEl.className = 'wm-marketplace-average-value';
+    valueEl.textContent = average == null ? '—' : `${formatAverage(average)} W`;
+  }
+
+  function renderKnownCard(id) {
+    renderOne(id);
+    renderMarketplaceAverage(id);
+  }
+
   function renderAll() {
-    if (!isCollectionPage()) return;
-    ensureToolbar();
-    for (const id of titleById.keys()) renderOne(id);
+    if (isCollectionPage()) {
+      ensureToolbar();
+      for (const id of titleById.keys()) renderOne(id);
+    }
+
+    if (isMarketplaceDetailPage() && marketplaceCardId) {
+      renderMarketplaceAverage(marketplaceCardId);
+    }
   }
 
   async function loadCacheForCards(cards, { force = false, markBulk = false } = {}) {
@@ -201,7 +306,7 @@
 
     for (const { id } of cards) {
       if (force) cacheMemory.delete(id);
-      renderOne(id);
+      renderKnownCard(id);
     }
 
     const keys = cards.map(({ id }) => cacheKey(id));
@@ -219,7 +324,7 @@
 
       if (valid) {
         cacheMemory.set(id, entry);
-        renderOne(id);
+        renderKnownCard(id);
       } else {
         if (markBulk) bulkPendingIds.add(id);
         enqueue(id);
@@ -283,7 +388,7 @@
 
     cacheMemory.set(id, entry);
     await storageSet({ [cacheKey(id)]: entry });
-    renderOne(id);
+    renderKnownCard(id);
 
     if (bulkPendingIds.delete(id)) {
       updateBulkProgress();
@@ -326,7 +431,7 @@
     rankingButton.title = 'Affiche toute la collection triée par prix moyen décroissant';
     rankingButton.addEventListener('click', openRankingModal);
 
-    bar.append(bulkButton, rankingButton);
+    bar.append(bulkButton, rankingButton, createSponsorNote());
     header.insertAdjacentElement('afterend', bar);
   }
 
@@ -601,6 +706,19 @@
     document.body.append(overlay);
   }
 
+  window.addEventListener('wm-average-marketplace-detail', (event) => {
+    const card = event.detail?.card;
+    if (!card?.id || !card?.title) return;
+
+    marketplaceCardId = card.id;
+    registerCards([card]);
+    renderMarketplaceAverage(card.id);
+
+    loadCacheForCards([card]).catch((err) => {
+      console.error('[WM Average] marketplace', err);
+    });
+  });
+
   window.addEventListener('wm-average-collection', (event) => {
     const cards = event.detail?.cards;
     if (!Array.isArray(cards) || !cards.length) return;
@@ -658,7 +776,7 @@
       console.debug('[WM Average] navigation SPA détectée:', currentPath);
     }
 
-    if (!isCollectionPage()) return;
+    if (!isCollectionPage() && !isMarketplaceDetailPage()) return;
 
     clearTimeout(renderTimer);
     renderTimer = setTimeout(renderAll, 80);
@@ -676,10 +794,10 @@
 
   window.addEventListener('popstate', () => {
     previousPath = location.pathname;
-    if (isCollectionPage()) {
+    if (isCollectionPage() || isMarketplaceDetailPage()) {
       setTimeout(renderAll, 0);
     }
   });
 
-  console.debug('[WM Average] content script v3.3.2 chargé');
+  console.debug('[WM Average] content script v3.4 chargé');
 })();
