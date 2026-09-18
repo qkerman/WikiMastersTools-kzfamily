@@ -5,14 +5,13 @@
   const CACHE_TTL = 24 * 60 * 60 * 1000; // 24 h
   const CACHE_PREFIX = 'wm_avg_v3_';
   const MAX_CONCURRENT = 3;
-  const BULK_LAST_CLICK_KEY = 'wm_bulk_last_click_v1'; // legacy, conservé pour compatibilité
   const BULK_RARITY_LAST_LOAD_KEY = 'wm_bulk_rarity_last_load_v1';
   const ALL_COLLECTION_KEY = 'wm_all_collection_v1';
   const RARITIES = ['L', 'UR', 'SR', 'R', 'PC', 'C'];
   const DEFAULT_RARE_RARITIES = ['L', 'UR', 'SR', 'R'];
 
-  const titleById = new Map();
   const cardMetaById = new Map();
+  const idByTitle = new Map();
   const cacheMemory = new Map();
   const queued = [];
   const queuedIds = new Set();
@@ -21,7 +20,6 @@
 
   let activeRequests = 0;
   let bulkActive = false;
-  let bulkForce = false;
   let bulkRequestId = null;
   let bulkTotal = 0;
   let bulkSelectedRarities = new Set(DEFAULT_RARE_RARITIES);
@@ -70,7 +68,7 @@
     }
   }
 
-  async function storageGet(keys) {
+  function storageGet(keys) {
     const list = Array.isArray(keys) ? keys : [keys];
     const result = {};
 
@@ -84,10 +82,19 @@
     return result;
   }
 
-  async function storageSet(values) {
+  function storageSet(values) {
     for (const [key, value] of Object.entries(values || {})) {
       writeLocalValue(key, value);
     }
+  }
+
+  function isContextInvalidatedError(error) {
+    return String(error?.message || error).includes('Extension context invalidated');
+  }
+
+  function reportError(scope, error) {
+    if (isContextInvalidatedError(error)) return;
+    console.error(`[WM Average] ${scope}`, error);
   }
 
   function registerCards(cards) {
@@ -100,8 +107,8 @@
         imageUrl: meta.imageUrl || null,
         count: Number(meta.count) || 1
       };
-      titleById.set(normalized.id, normalized.title);
       cardMetaById.set(normalized.id, normalized);
+      idByTitle.set(normalizeTitle(normalized.title), normalized.id);
     }
   }
 
@@ -142,11 +149,10 @@
     if (!isCollectionPage()) return null;
 
     const target = normalizeTitle(title);
-    const headings = document.querySelectorAll('h3');
-    for (const h3 of headings) {
+    for (const h3 of document.querySelectorAll('h3')) {
       if (normalizeTitle(h3.textContent) !== target) continue;
       const card = h3.closest('div[class*="rounded-2xl"][class*="overflow-hidden"][class*="cursor-pointer"]');
-      if (card) return { card, h3 };
+      if (card) return card;
     }
     return null;
   }
@@ -189,16 +195,7 @@
     return values.length === 1 ? values[0] : null;
   }
 
-  function renderOne(id) {
-    if (!isCollectionPage()) return;
-
-    const title = titleById.get(id);
-    if (!title) return;
-
-    const found = findCardByTitle(title);
-    if (!found) return;
-
-    const { card } = found;
+  function renderCollectionCard(id, card) {
     const badge = getOrCreateBadge(card);
     const cacheEntry = cacheMemory.get(id);
 
@@ -218,6 +215,27 @@
     }
   }
 
+  function renderOne(id) {
+    if (!isCollectionPage()) return;
+    const meta = cardMetaById.get(id);
+    if (!meta?.title) return;
+
+    const card = findCardByTitle(meta.title);
+    if (card) renderCollectionCard(id, card);
+  }
+
+  function renderVisibleCollectionCards() {
+    if (!isCollectionPage()) return;
+
+    for (const h3 of document.querySelectorAll('h3')) {
+      const id = idByTitle.get(normalizeTitle(h3.textContent));
+      if (!id) continue;
+
+      const card = h3.closest('div[class*="rounded-2xl"][class*="overflow-hidden"][class*="cursor-pointer"]');
+      if (card) renderCollectionCard(id, card);
+    }
+  }
+
   function renderMarketplaceAverage(id) {
     if (!isMarketplaceDetailPage() || marketplaceCardId !== id) return;
 
@@ -230,8 +248,7 @@
 
     const headingRow = h1.parentElement;
     const titleBlock = headingRow?.parentElement;
-    const infoColumn = titleBlock?.parentElement;
-    if (!titleBlock || !infoColumn) return;
+    if (!titleBlock) return;
 
     let wrap = document.getElementById('wm-marketplace-average');
     if (!wrap) {
@@ -301,7 +318,7 @@
   function renderAll() {
     if (isCollectionPage()) {
       ensureToolbar();
-      for (const id of titleById.keys()) renderOne(id);
+      renderVisibleCollectionCards();
     }
 
     if (isMarketplaceDetailPage() && marketplaceCardId) {
@@ -309,17 +326,17 @@
     }
   }
 
-  async function loadCacheForCards(cards, { force = false, forceRarities = null, markBulk = false } = {}) {
+  function loadCacheForCards(cards, { forceRarities = null, markBulk = false } = {}) {
     registerCards(cards);
 
     for (const card of cards) {
-      const forceCard = force || Boolean(forceRarities?.has(card.rarity));
+      const forceCard = Boolean(forceRarities?.has(card.rarity));
       if (forceCard) cacheMemory.delete(card.id);
       renderKnownCard(card.id);
     }
 
     const keys = cards.map(({ id }) => cacheKey(id));
-    const stored = await storageGet(keys);
+    const stored = storageGet(keys);
     const now = Date.now();
 
     if (markBulk) {
@@ -329,7 +346,7 @@
 
     for (const card of cards) {
       const { id } = card;
-      const forceCard = force || Boolean(forceRarities?.has(card.rarity));
+      const forceCard = Boolean(forceRarities?.has(card.rarity));
       const entry = stored[cacheKey(id)];
       const valid = !forceCard && entry && Number.isFinite(entry.fetchedAt) && now - entry.fetchedAt < CACHE_TTL;
 
@@ -377,7 +394,7 @@
     }));
   }
 
-  async function finishRequest(detail) {
+  function finishRequest(detail) {
     const id = pendingByRequestId.get(detail.requestId) || detail.id;
     if (!id) return;
 
@@ -392,13 +409,14 @@
     };
 
     if (detail.title) {
-      titleById.set(id, detail.title);
       const oldMeta = cardMetaById.get(id) || { id };
-      cardMetaById.set(id, { ...oldMeta, title: detail.title });
+      const updatedMeta = { ...oldMeta, title: detail.title };
+      cardMetaById.set(id, updatedMeta);
+      idByTitle.set(normalizeTitle(detail.title), id);
     }
 
     cacheMemory.set(id, entry);
-    await storageSet({ [cacheKey(id)]: entry });
+    storageSet({ [cacheKey(id)]: entry });
     renderKnownCard(id);
 
     if (bulkPendingIds.delete(id)) {
@@ -433,14 +451,22 @@
     bulkButton.className = 'wm-tool-button';
     bulkButton.textContent = 'Charger les prix';
     bulkButton.title = 'Choisir les raretés dont tu veux charger ou actualiser les prix';
-    bulkButton.addEventListener('click', handleBulkClick);
+    bulkButton.addEventListener('click', () => {
+      handleBulkClick().catch((error) => reportError('chargement', error));
+    });
 
     rankingButton = document.createElement('button');
     rankingButton.type = 'button';
     rankingButton.className = 'wm-tool-button';
     rankingButton.textContent = 'Plus chères';
     rankingButton.title = 'Affiche toute la collection triée par prix moyen décroissant';
-    rankingButton.addEventListener('click', openRankingModal);
+    rankingButton.addEventListener('click', () => {
+      try {
+        openRankingModal();
+      } catch (error) {
+        reportError('classement', error);
+      }
+    });
 
     bar.append(bulkButton, rankingButton, createSponsorNote());
     header.insertAdjacentElement('afterend', bar);
@@ -449,7 +475,7 @@
   async function handleBulkClick() {
     if (bulkActive) return;
 
-    const lastLoadsData = await storageGet(BULK_RARITY_LAST_LOAD_KEY);
+    const lastLoadsData = storageGet(BULK_RARITY_LAST_LOAD_KEY);
     const lastLoads = lastLoadsData[BULK_RARITY_LAST_LOAD_KEY] || {};
 
     const selected = await showRaritySelectionModal(lastLoads);
@@ -469,7 +495,6 @@
     }
 
     bulkActive = true;
-    bulkForce = false;
     bulkSelectedRarities = new Set(selected);
     bulkForceRarities = forceRarities;
     bulkPendingIds.clear();
@@ -618,20 +643,19 @@
     setBulkButtonState(`Prix ${completed}/${bulkTotal}`, true);
   }
 
-  async function finishBulkLoad() {
+  function finishBulkLoad() {
     if (!bulkActive) return;
 
     const selectedRarities = [...bulkSelectedRarities];
-    const data = await storageGet(BULK_RARITY_LAST_LOAD_KEY);
+    const data = storageGet(BULK_RARITY_LAST_LOAD_KEY);
     const lastLoads = { ...(data[BULK_RARITY_LAST_LOAD_KEY] || {}) };
     const now = Date.now();
     selectedRarities.forEach((rarity) => {
       lastLoads[rarity] = now;
     });
-    await storageSet({ [BULK_RARITY_LAST_LOAD_KEY]: lastLoads });
+    storageSet({ [BULK_RARITY_LAST_LOAD_KEY]: lastLoads });
 
     bulkActive = false;
-    bulkForce = false;
     bulkRequestId = null;
     bulkForceRarities.clear();
     bulkPendingIds.clear();
@@ -643,7 +667,6 @@
 
   function failBulkLoad(message) {
     bulkActive = false;
-    bulkForce = false;
     bulkRequestId = null;
     bulkPendingIds.clear();
     setBulkButtonState('Erreur', false);
@@ -742,18 +765,18 @@
     document.body.append(overlay);
   }
 
-  async function openRankingModal() {
-    const storedCollection = await storageGet(ALL_COLLECTION_KEY);
+  function openRankingModal() {
+    const storedCollection = storageGet(ALL_COLLECTION_KEY);
     const collectionEntry = storedCollection[ALL_COLLECTION_KEY];
     const cards = Array.isArray(collectionEntry?.cards) ? collectionEntry.cards : [];
 
     if (!cards.length) {
-      showInfoModal('Collection non chargée', 'Clique d’abord sur « Tout charger » pour récupérer toute la collection et pouvoir la trier par prix moyen.');
+      showInfoModal('Collection non chargée', 'Clique d’abord sur « Charger les prix » pour récupérer toute la collection et pouvoir la trier par prix moyen.');
       return;
     }
 
     const priceKeys = cards.map((card) => cacheKey(card.id));
-    const prices = await storageGet(priceKeys);
+    const prices = storageGet(priceKeys);
 
     const rows = cards.map((card) => {
       const entry = prices[cacheKey(card.id)];
@@ -914,20 +937,30 @@
     registerCards([card]);
     renderMarketplaceAverage(card.id);
 
-    loadCacheForCards([card]).catch((err) => {
-      console.error('[WM Average] marketplace', err);
-    });
+    try {
+      loadCacheForCards([card]);
+    } catch (error) {
+      reportError('marketplace', error);
+    }
   });
 
   window.addEventListener('wm-average-collection', (event) => {
     const cards = event.detail?.cards;
     if (!Array.isArray(cards) || !cards.length) return;
     console.debug(`[WM Average] ${cards.length} cartes détectées`, cards);
-    loadCacheForCards(cards).catch((err) => console.error('[WM Average] cache', err));
+    try {
+      loadCacheForCards(cards);
+    } catch (error) {
+      reportError('cache', error);
+    }
   });
 
   window.addEventListener('wm-average-response', (event) => {
-    finishRequest(event.detail || {}).catch((err) => console.error('[WM Average] réponse', err));
+    try {
+      finishRequest(event.detail || {});
+    } catch (error) {
+      reportError('réponse', error);
+    }
   });
 
   window.addEventListener('wm-average-all-collection-progress', (event) => {
@@ -939,7 +972,7 @@
     }
   });
 
-  window.addEventListener('wm-average-all-collection', async (event) => {
+  window.addEventListener('wm-average-all-collection', (event) => {
     const detail = event.detail || {};
     if (!bulkActive || detail.requestId !== bulkRequestId) return;
 
@@ -951,7 +984,7 @@
     const cards = Array.isArray(detail.cards) ? detail.cards : [];
     const fetchedAt = Date.now();
 
-    await storageSet({
+    storageSet({
       [ALL_COLLECTION_KEY]: { fetchedAt, cards }
     });
 
@@ -968,28 +1001,43 @@
     }
 
     setBulkButtonState(`Préparation (${selectedCards.length})…`, true);
-    loadCacheForCards(selectedCards, {
-      force: bulkForce,
-      forceRarities: bulkForceRarities,
-      markBulk: true
-    }).catch((error) => failBulkLoad(String(error?.message || error)));
+    try {
+      loadCacheForCards(selectedCards, {
+        forceRarities: bulkForceRarities,
+        markBulk: true
+      });
+    } catch (error) {
+      if (!isContextInvalidatedError(error)) {
+        failBulkLoad(String(error?.message || error));
+      }
+    }
   });
 
   let renderTimer = null;
   let previousPath = location.pathname;
 
   const observer = new MutationObserver(() => {
-    const currentPath = location.pathname;
+    try {
+      const currentPath = location.pathname;
 
-    if (currentPath !== previousPath) {
-      previousPath = currentPath;
-      console.debug('[WM Average] navigation SPA détectée:', currentPath);
+      if (currentPath !== previousPath) {
+        previousPath = currentPath;
+        console.debug('[WM Average] navigation SPA détectée:', currentPath);
+      }
+
+      if (!isCollectionPage() && !isMarketplaceDetailPage()) return;
+
+      clearTimeout(renderTimer);
+      renderTimer = setTimeout(() => {
+        try {
+          renderAll();
+        } catch (error) {
+          reportError('rendu', error);
+        }
+      }, 80);
+    } catch (error) {
+      reportError('observation', error);
     }
-
-    if (!isCollectionPage() && !isMarketplaceDetailPage()) return;
-
-    clearTimeout(renderTimer);
-    renderTimer = setTimeout(renderAll, 80);
   });
 
   function startObserver() {
@@ -1005,9 +1053,15 @@
   window.addEventListener('popstate', () => {
     previousPath = location.pathname;
     if (isCollectionPage() || isMarketplaceDetailPage()) {
-      setTimeout(renderAll, 0);
+      setTimeout(() => {
+        try {
+          renderAll();
+        } catch (error) {
+          reportError('navigation', error);
+        }
+      }, 0);
     }
   });
 
-  console.debug('[WM Average] content script v3.5 chargé');
+  console.debug('[WM Average] content script v3.6 chargé');
 })();
