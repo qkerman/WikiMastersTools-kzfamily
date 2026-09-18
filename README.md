@@ -1,6 +1,6 @@
 # WikiMastersTools-kzfamily
 
-Extension Chromium (Manifest V3) pour afficher directement dans la page **Collection** de [WikiMasters](https://www.wiki-masters.com/) le **prix moyen de vente** de chaque carte.
+Extension Chromium (Manifest V3) pour afficher le **prix moyen de vente** des cartes sur la page **Collection** et sur les pages de détail du **Marketplace** de [WikiMasters](https://www.wiki-masters.com/).
 
 ## Fonctionnement
 
@@ -93,7 +93,7 @@ WM Average
 Les messages principaux sont :
 
 ```text
-[WM Average] content script v3.3.2 chargé
+[WM Average] content script v3.4 chargé
 [WM Average] bridge installé
 [WM Average] navigation SPA détectée: /collection
 [WM Average] N cartes détectées
@@ -108,7 +108,7 @@ Les messages principaux sont :
 
 ## Version
 
-Version actuelle : **3.3.2**
+Version actuelle : **3.4.0**
 
 
 ## Chargement complet et classement par prix
@@ -144,3 +144,28 @@ Depuis la version **3.3.2**, `page-bridge.js` est injecté directement par Manif
 Le content script n'utilise plus `chrome.runtime.getURL` et la migration temporaire depuis `chrome.storage.local` a été supprimée. Après le démarrage de la page, le fonctionnement courant de l'extension ne dépend donc plus des API `chrome.*`.
 
 Les anciennes erreurs affichées dans `chrome://extensions/` restent enregistrées par Chromium jusqu'à ce qu'elles soient effacées manuellement avec **Clear all / Tout effacer**. Après mise à jour vers 3.3.2, effacer les anciennes erreurs permet de vérifier uniquement les nouvelles occurrences.
+
+
+## Pages Marketplace
+
+Depuis la version **3.4.0**, l'extension intercepte aussi les réponses de détail :
+
+```text
+/api/marketplace/<AUCTION_ID>
+```
+
+Elle récupère `auction.card_id`, le titre et la rareté de la carte, puis réutilise le même endpoint de résumé des ventes et le même cache 24 h que sur la collection.
+
+Un encart **Prix moyen** est ajouté directement dans la colonne d'informations de la page `/marketplace/<AUCTION_ID>`.
+
+## Apparence et sponsor
+
+Les boutons ajoutés par l'extension utilisent la couleur `#bf94ff`.
+
+Sous les boutons de la Collection et sous l'encart de prix moyen des pages Marketplace, l'extension affiche :
+
+```text
+bouton sponsorisé par https://www.twitch.tv/botkz
+```
+
+Le lien Twitch est cliquable et s'ouvre dans un nouvel onglet.
