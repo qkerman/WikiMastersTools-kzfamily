@@ -12,11 +12,13 @@ Add on créé par la kzfamily.
 git clone https://github.com/qkerman/WikiMastersTools-kzfamily.git
 ```
 
+Ou dl en haut a droite "code" > telecharger le zip
+
 2. Ouvrir `chrome://extensions/` dans Chrome / Chromium.
 3. Activer **Mode développeur**.
 4. Cliquer sur **Charger l’extension non empaquetée**.
-5. Sélectionner le dossier `WikiMastersTools-kzfamily` qui contient `manifest.json`.
-6. Recharger une fois WikiMasters.
+5. Sélectionner le dossier `WikiMastersTools-kzfamily` (dézippé) qui contient `manifest.json`.
+6. Refresh WikiMasters.
 
 ### Mise à jour
 
@@ -24,5 +26,7 @@ git clone https://github.com/qkerman/WikiMastersTools-kzfamily.git
 cd ~/Downloads/WikiMastersTools-kzfamily
 git pull
 ```
+
+Ou re dl a la main et remplace le dosser
 
 Puis cliquer sur **Recharger** dans `chrome://extensions/` et faire un F5 sur WikiMasters.
