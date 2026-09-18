@@ -23,11 +23,6 @@
   let bulkButton = null;
   let rankingButton = null;
 
-  const bridge = document.createElement('script');
-  bridge.src = chrome.runtime.getURL('page-bridge.js');
-  bridge.onload = () => bridge.remove();
-  (document.documentElement || document.head).appendChild(bridge);
-
   function isCollectionPage() {
     return location.pathname === '/collection' || location.pathname.startsWith('/collection/');
   }
@@ -65,34 +60,11 @@
   async function storageGet(keys) {
     const list = Array.isArray(keys) ? keys : [keys];
     const result = {};
-    const missing = [];
 
     for (const key of list) {
       const value = readLocalValue(key);
       if (value !== undefined) {
         result[key] = value;
-      } else {
-        missing.push(key);
-      }
-    }
-
-    // Migration best-effort depuis les anciennes versions qui utilisaient
-    // chrome.storage.local. Si l'extension vient d'être rechargée, son ancien
-    // content script peut avoir un contexte invalidé : on ignore alors
-    // silencieusement l'API Chromium au lieu de casser l'extension.
-    if (missing.length > 0) {
-      try {
-        if (chrome?.runtime?.id && chrome?.storage?.local) {
-          const legacy = await chrome.storage.local.get(missing);
-          for (const key of missing) {
-            if (legacy?.[key] !== undefined) {
-              result[key] = legacy[key];
-              writeLocalValue(key, legacy[key]);
-            }
-          }
-        }
-      } catch (_) {
-        // Contexte d'extension invalidé : localStorage reste pleinement utilisable.
       }
     }
 
@@ -709,5 +681,5 @@
     }
   });
 
-  console.debug('[WM Average] content script v3.3.1 chargé');
+  console.debug('[WM Average] content script v3.3.2 chargé');
 })();
