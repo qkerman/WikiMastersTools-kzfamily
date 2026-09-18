@@ -24,6 +24,7 @@
   let bulkTotal = 0;
   let bulkSelectedRarities = new Set(DEFAULT_RARE_RARITIES);
   let bulkForceRarities = new Set();
+  let bulkOnlyUnloaded = false;
   const bulkPendingIds = new Set();
 
   let bulkButton = null;
@@ -478,25 +479,31 @@
     const lastLoadsData = storageGet(BULK_RARITY_LAST_LOAD_KEY);
     const lastLoads = lastLoadsData[BULK_RARITY_LAST_LOAD_KEY] || {};
 
-    const selected = await showRaritySelectionModal(lastLoads);
-    if (!selected?.length) return;
+    const selection = await showRaritySelectionModal(lastLoads);
+    if (!selection?.rarities?.length) return;
 
+    const selected = selection.rarities;
+    const onlyUnloaded = Boolean(selection.onlyUnloaded);
     const now = Date.now();
-    const recentRarities = selected.filter((rarity) => {
-      const timestamp = Number(lastLoads[rarity]) || 0;
-      return timestamp > 0 && now - timestamp < CACHE_TTL;
-    });
 
     const forceRarities = new Set();
-    if (recentRarities.length > 0) {
-      const confirmed = await showReloadConfirmation(recentRarities, lastLoads);
-      if (!confirmed) return;
-      recentRarities.forEach((rarity) => forceRarities.add(rarity));
+    if (!onlyUnloaded) {
+      const recentRarities = selected.filter((rarity) => {
+        const timestamp = Number(lastLoads[rarity]) || 0;
+        return timestamp > 0 && now - timestamp < CACHE_TTL;
+      });
+
+      if (recentRarities.length > 0) {
+        const confirmed = await showReloadConfirmation(recentRarities, lastLoads);
+        if (!confirmed) return;
+        recentRarities.forEach((rarity) => forceRarities.add(rarity));
+      }
     }
 
     bulkActive = true;
     bulkSelectedRarities = new Set(selected);
     bulkForceRarities = forceRarities;
+    bulkOnlyUnloaded = onlyUnloaded;
     bulkPendingIds.clear();
     bulkTotal = 0;
     bulkRequestId = `bulk:${now}:${Math.random().toString(36).slice(2)}`;
@@ -543,6 +550,8 @@
         }
       };
 
+      let onlyUnloaded = false;
+
       const makePreset = (label, rarities) => {
         const button = document.createElement('button');
         button.type = 'button';
@@ -556,10 +565,48 @@
         return button;
       };
 
+      const missingOption = document.createElement('label');
+      missingOption.className = 'wm-missing-option';
+
+      const missingInput = document.createElement('input');
+      missingInput.type = 'checkbox';
+
+      const missingText = document.createElement('span');
+      missingText.className = 'wm-missing-text';
+
+      const missingTitle = document.createElement('strong');
+      missingTitle.textContent = 'Uniquement les cartes non chargées';
+
+      const missingDescription = document.createElement('span');
+      missingDescription.textContent = 'Idéal après avoir ajouté de nouvelles cartes : seules celles qui n’ont encore aucun prix en cache seront chargées.';
+
+      missingText.append(missingTitle, missingDescription);
+      missingOption.append(missingInput, missingText);
+
+      const updateMissingState = () => {
+        onlyUnloaded = missingInput.checked;
+        missingOption.classList.toggle('is-selected', onlyUnloaded);
+      };
+
+      missingInput.addEventListener('change', updateMissingState);
+
+      const missingPreset = document.createElement('button');
+      missingPreset.type = 'button';
+      missingPreset.className = 'wm-tool-button wm-rarity-preset';
+      missingPreset.textContent = 'Non chargées';
+      missingPreset.addEventListener('click', () => {
+        selected.clear();
+        RARITIES.forEach((rarity) => selected.add(rarity));
+        updateChecks();
+        missingInput.checked = true;
+        updateMissingState();
+      });
+
       presets.append(
         makePreset('Rares', ['L', 'UR', 'SR', 'R']),
         makePreset('Courantes', ['PC', 'C']),
-        makePreset('Toutes', RARITIES)
+        makePreset('Toutes', RARITIES),
+        missingPreset
       );
 
       for (const rarity of RARITIES) {
@@ -617,14 +664,14 @@
           confirm.textContent = 'Choisis au moins une rareté';
           return;
         }
-        close(values);
+        close({ rarities: values, onlyUnloaded });
       });
       overlay.addEventListener('click', (event) => {
         if (event.target === overlay) close(null);
       });
 
       actions.append(cancel, confirm);
-      modal.append(title, text, tip, presets, grid, actions);
+      modal.append(title, text, tip, presets, missingOption, grid, actions);
       overlay.append(modal);
       document.body.append(overlay);
     });
@@ -640,26 +687,30 @@
   function updateBulkProgress() {
     if (!bulkActive || !bulkTotal) return;
     const completed = Math.max(0, bulkTotal - bulkPendingIds.size);
-    setBulkButtonState(`Prix ${completed}/${bulkTotal}`, true);
+    const label = bulkOnlyUnloaded ? 'Nouvelles' : 'Prix';
+    setBulkButtonState(`${label} ${completed}/${bulkTotal}`, true);
   }
 
-  function finishBulkLoad() {
+  function finishBulkLoad(doneLabel = 'Chargé ✓') {
     if (!bulkActive) return;
 
-    const selectedRarities = [...bulkSelectedRarities];
-    const data = storageGet(BULK_RARITY_LAST_LOAD_KEY);
-    const lastLoads = { ...(data[BULK_RARITY_LAST_LOAD_KEY] || {}) };
-    const now = Date.now();
-    selectedRarities.forEach((rarity) => {
-      lastLoads[rarity] = now;
-    });
-    storageSet({ [BULK_RARITY_LAST_LOAD_KEY]: lastLoads });
+    if (!bulkOnlyUnloaded) {
+      const selectedRarities = [...bulkSelectedRarities];
+      const data = storageGet(BULK_RARITY_LAST_LOAD_KEY);
+      const lastLoads = { ...(data[BULK_RARITY_LAST_LOAD_KEY] || {}) };
+      const now = Date.now();
+      selectedRarities.forEach((rarity) => {
+        lastLoads[rarity] = now;
+      });
+      storageSet({ [BULK_RARITY_LAST_LOAD_KEY]: lastLoads });
+    }
 
     bulkActive = false;
     bulkRequestId = null;
     bulkForceRarities.clear();
     bulkPendingIds.clear();
-    setBulkButtonState('Chargé ✓', false);
+    bulkOnlyUnloaded = false;
+    setBulkButtonState(doneLabel, false);
     setTimeout(() => {
       if (!bulkActive) setBulkButtonState('Charger les prix', false);
     }, 2200);
@@ -669,6 +720,7 @@
     bulkActive = false;
     bulkRequestId = null;
     bulkPendingIds.clear();
+    bulkOnlyUnloaded = false;
     setBulkButtonState('Erreur', false);
     showInfoModal('Chargement impossible', message || 'Impossible de charger toute la collection pour le moment.');
     setTimeout(() => {
@@ -993,17 +1045,28 @@
       return;
     }
 
-    const selectedCards = cards.filter((card) => bulkSelectedRarities.has(card.rarity));
+    let selectedCards = cards.filter((card) => bulkSelectedRarities.has(card.rarity));
+
+    if (bulkOnlyUnloaded && selectedCards.length) {
+      const cached = storageGet(selectedCards.map((card) => cacheKey(card.id)));
+      selectedCards = selectedCards.filter((card) => cached[cacheKey(card.id)] === undefined);
+    }
 
     if (!selectedCards.length) {
-      finishBulkLoad();
+      finishBulkLoad(bulkOnlyUnloaded ? 'Aucune nouvelle ✓' : 'Chargé ✓');
       return;
     }
 
-    setBulkButtonState(`Préparation (${selectedCards.length})…`, true);
+    setBulkButtonState(
+      bulkOnlyUnloaded
+        ? `Nouvelles (${selectedCards.length})…`
+        : `Préparation (${selectedCards.length})…`,
+      true
+    );
+
     try {
       loadCacheForCards(selectedCards, {
-        forceRarities: bulkForceRarities,
+        forceRarities: bulkOnlyUnloaded ? null : bulkForceRarities,
         markBulk: true
       });
     } catch (error) {
@@ -1063,5 +1126,5 @@
     }
   });
 
-  console.debug('[WM Average] page runtime v3.7 chargé');
+  console.debug('[WM Average] page runtime v3.8 chargé');
 })();
