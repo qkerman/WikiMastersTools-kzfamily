@@ -4,10 +4,12 @@ Extension Chromium (Manifest V3) pour afficher directement dans la page **Collec
 
 ## Fonctionnement
 
+L'extension est chargée sur tout `wiki-masters.com` afin de rester active pendant les navigations internes de l'application Next.js. Elle fonctionne donc aussi lorsqu'on arrive sur `/collection` depuis une autre page via le menu, sans avoir besoin de faire F5.
+
 WikiMasters charge les cartes de la collection via :
 
 ```text
-/api/my-collection?... 
+/api/my-collection?...
 ```
 
 Cette réponse contient notamment :
@@ -52,6 +54,12 @@ Pour éviter de solliciter inutilement l'API WikiMasters :
 
 Les tests effectués sur le frontend WikiMasters n'ont pas mis en évidence d'endpoint batch pour obtenir plusieurs moyennes en une seule requête ; l'API de ventes est actuellement appelée carte par carte.
 
+## Navigation SPA
+
+WikiMasters utilise une navigation côté client. Depuis la version **3.1.0**, le content script et le bridge réseau sont chargés dès l'ouverture de n'importe quelle page WikiMasters.
+
+Cela permet d'intercepter `/api/my-collection` quand l'utilisateur clique ensuite sur **Collection** dans le menu, même si le navigateur n'effectue aucun rechargement complet de la page.
+
 ## Installation
 
 1. Télécharger ou cloner ce dépôt.
@@ -60,8 +68,17 @@ Les tests effectués sur le frontend WikiMasters n'ont pas mis en évidence d'en
 4. Activer **Mode développeur**.
 5. Cliquer sur **Charger l'extension non empaquetée**.
 6. Sélectionner le dossier du dépôt, celui qui contient directement `manifest.json`.
-7. Ouvrir ou recharger :
-   `https://www.wiki-masters.com/collection`
+7. Recharger une fois un onglet WikiMasters après installation ou mise à jour de l'extension.
+
+## Mise à jour
+
+Dans le dépôt local :
+
+```bash
+git pull
+```
+
+Puis dans `chrome://extensions/`, cliquer sur le bouton **Recharger** de l'extension. Enfin, recharger une fois l'onglet WikiMasters déjà ouvert afin que le nouveau content script soit injecté.
 
 ## Debug
 
@@ -74,18 +91,19 @@ WM Average
 Les messages principaux sont :
 
 ```text
-[WM Average] content script v3 chargé
+[WM Average] content script v3.1 chargé
 [WM Average] bridge installé
+[WM Average] navigation SPA détectée: /collection
 [WM Average] N cartes détectées
 ```
 
 ## Fichiers
 
 - `manifest.json` — manifeste Chromium Manifest V3
-- `content.js` — cache, file de requêtes et injection des badges
+- `content.js` — cache, détection SPA, file de requêtes et injection des badges
 - `page-bridge.js` — interception de `/api/my-collection` et appels à l'API de résumé des ventes
 - `styles.css` — apparence du badge de prix moyen
 
 ## Version
 
-Version actuelle : **3.0.0**
+Version actuelle : **3.1.0**
