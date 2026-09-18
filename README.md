@@ -93,7 +93,7 @@ WM Average
 Les messages principaux sont :
 
 ```text
-[WM Average] content script v3.3.1 chargé
+[WM Average] content script v3.3.2 chargé
 [WM Average] bridge installé
 [WM Average] navigation SPA détectée: /collection
 [WM Average] N cartes détectées
@@ -108,7 +108,7 @@ Les messages principaux sont :
 
 ## Version
 
-Version actuelle : **3.3.1**
+Version actuelle : **3.3.2**
 
 
 ## Chargement complet et classement par prix
@@ -135,3 +135,12 @@ Depuis la version **3.3.1**, le cache principal utilise `localStorage` sur `wiki
 Cela évite l'erreur Chromium `Extension context invalidated` lorsqu'une extension est rechargée depuis `chrome://extensions/` alors qu'un onglet WikiMasters contenant un ancien content script est encore ouvert.
 
 Au premier démarrage de la 3.3.1, l'extension tente également de migrer automatiquement les anciennes valeurs de `chrome.storage.local` vers `localStorage` quand le contexte Chromium est disponible.
+
+
+## Injection sans dépendance au contexte d'extension
+
+Depuis la version **3.3.2**, `page-bridge.js` est injecté directement par Manifest V3 dans le **MAIN world** de WikiMasters.
+
+Le content script n'utilise plus `chrome.runtime.getURL` et la migration temporaire depuis `chrome.storage.local` a été supprimée. Après le démarrage de la page, le fonctionnement courant de l'extension ne dépend donc plus des API `chrome.*`.
+
+Les anciennes erreurs affichées dans `chrome://extensions/` restent enregistrées par Chromium jusqu'à ce qu'elles soient effacées manuellement avec **Clear all / Tout effacer**. Après mise à jour vers 3.3.2, effacer les anciennes erreurs permet de vérifier uniquement les nouvelles occurrences.
