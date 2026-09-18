@@ -63,6 +63,31 @@
     return null;
   }
 
+  function getOrCreateBadge(card) {
+    let badge = card.querySelector(':scope > .wm-average-badge');
+    if (!badge) {
+      badge = document.createElement('div');
+      badge.className = 'wm-average-badge';
+      card.appendChild(badge);
+    }
+    return badge;
+  }
+
+  function renderLoadingBadge(badge) {
+    badge.className = 'wm-average-badge wm-average-loading';
+    badge.title = 'Chargement du prix moyen…';
+    badge.replaceChildren();
+
+    const spinner = document.createElement('span');
+    spinner.className = 'wm-average-spinner';
+    spinner.setAttribute('aria-hidden', 'true');
+
+    const label = document.createElement('span');
+    label.textContent = 'Prix…';
+
+    badge.append(spinner, label);
+  }
+
   function chooseAverage(cacheEntry, cardEl) {
     const rarity = getRarityFromCard(cardEl);
     const averages = cacheEntry?.averages || {};
@@ -80,28 +105,28 @@
     if (!isCollectionPage()) return;
 
     const title = titleById.get(id);
-    const cacheEntry = cacheMemory.get(id);
-    if (!title || !cacheEntry) return;
+    if (!title) return;
 
     const found = findCardByTitle(title);
     if (!found) return;
 
     const { card } = found;
-    let badge = card.querySelector(':scope > .wm-average-badge');
-    if (!badge) {
-      badge = document.createElement('div');
-      badge.className = 'wm-average-badge';
-      badge.title = 'Prix moyen des ventes (cache 24 h)';
-      card.appendChild(badge);
+    const badge = getOrCreateBadge(card);
+    const cacheEntry = cacheMemory.get(id);
+
+    if (!cacheEntry) {
+      renderLoadingBadge(badge);
+      return;
     }
 
+    badge.title = 'Prix moyen des ventes (cache 24 h)';
     const average = chooseAverage(cacheEntry, card);
     if (average == null) {
+      badge.className = 'wm-average-badge wm-average-empty';
       badge.textContent = 'Moy. —';
-      badge.classList.add('wm-average-empty');
     } else {
+      badge.className = 'wm-average-badge';
       badge.textContent = `Moy. ${formatAverage(average)} W`;
-      badge.classList.remove('wm-average-empty');
     }
   }
 
@@ -111,14 +136,17 @@
   }
 
   async function loadCacheForCards(cards) {
+    for (const { id, title } of cards) {
+      titleById.set(id, title);
+      idByTitle.set(normalizeTitle(title), id);
+      renderOne(id);
+    }
+
     const keys = cards.map(({ id }) => cacheKey(id));
     const stored = await chrome.storage.local.get(keys);
     const now = Date.now();
 
-    for (const { id, title } of cards) {
-      titleById.set(id, title);
-      idByTitle.set(normalizeTitle(title), id);
-
+    for (const { id } of cards) {
       const entry = stored[cacheKey(id)];
       if (entry && Number.isFinite(entry.fetchedAt) && now - entry.fetchedAt < CACHE_TTL) {
         cacheMemory.set(id, entry);
@@ -233,5 +261,5 @@
     }
   });
 
-  console.debug('[WM Average] content script v3.1 chargé');
+  console.debug('[WM Average] content script v3.2 chargé');
 })();
