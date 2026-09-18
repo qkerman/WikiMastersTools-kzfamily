@@ -48,7 +48,7 @@ Pour éviter de solliciter inutilement l'API WikiMasters :
 
 - cache **individuel par `card_id`**
 - durée : **24 heures**
-- stockage : **`chrome.storage.local`**
+- stockage principal : **`localStorage`** sur `wiki-masters.com`
 - le cache survit à la fermeture de l'onglet et au redémarrage du navigateur
 - maximum **3 requêtes de prix simultanées**
 - les erreurs et réponses sans prix sont également mises en cache 24 h afin d'éviter les boucles de requêtes
@@ -93,7 +93,7 @@ WM Average
 Les messages principaux sont :
 
 ```text
-[WM Average] content script v3.3 chargé
+[WM Average] content script v3.3.1 chargé
 [WM Average] bridge installé
 [WM Average] navigation SPA détectée: /collection
 [WM Average] N cartes détectées
@@ -108,7 +108,7 @@ Les messages principaux sont :
 
 ## Version
 
-Version actuelle : **3.3.0**
+Version actuelle : **3.3.1**
 
 
 ## Chargement complet et classement par prix
@@ -126,3 +126,12 @@ Pour limiter la charge sur WikiMasters :
 - si **Tout charger** a déjà été lancé il y a moins de 24 h, une confirmation est demandée avant de forcer un nouveau chargement complet des prix.
 
 La liste complète des cartes est également conservée localement afin que le classement **Plus chères** puisse être rouvert sans recharger toute la collection.
+
+
+## Robustesse après rechargement de l'extension
+
+Depuis la version **3.3.1**, le cache principal utilise `localStorage` sur `wiki-masters.com` au lieu de dépendre directement de `chrome.storage.local`.
+
+Cela évite l'erreur Chromium `Extension context invalidated` lorsqu'une extension est rechargée depuis `chrome://extensions/` alors qu'un onglet WikiMasters contenant un ancien content script est encore ouvert.
+
+Au premier démarrage de la 3.3.1, l'extension tente également de migrer automatiquement les anciennes valeurs de `chrome.storage.local` vers `localStorage` quand le contexte Chromium est disponible.
