@@ -278,7 +278,8 @@
             openedPacks,
             cardsCount: allCards.length,
             packsRemaining: Number.isFinite(packsRemaining) ? packsRemaining : null,
-            waiting: false
+            waiting: false,
+            cards
           }
         }));
 
