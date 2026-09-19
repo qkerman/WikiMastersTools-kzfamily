@@ -381,7 +381,12 @@
 
     label.classList.toggle('is-enabled', pullRecapEnabled);
     label.append(textWrap, input, track);
-    tools.append(label, createSponsorNote());
+
+    const cacheNote = document.createElement('div');
+    cacheNote.className = 'wm-pulls-cache-note';
+    cacheNote.textContent = 'À chaque ouverture, le prix moyen des cartes obtenues est automatiquement ajouté au cache local (24 h).';
+
+    tools.append(label, cacheNote, createSponsorNote());
     header.append(tools);
   }
 
@@ -1349,5 +1354,5 @@
     }
   });
 
-  console.debug('[WM Average] page runtime v3.9 chargé');
+  console.debug('[WM Average] page runtime v3.9.1 chargé');
 })();
