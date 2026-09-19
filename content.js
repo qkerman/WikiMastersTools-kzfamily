@@ -34,6 +34,12 @@
   let pullRecapEnabled = readLocalValue(PULL_RECAP_ENABLED_KEY) !== false;
   let activePackRecap = null;
   let packRecapDismissed = false;
+  let openAllActive = false;
+  let openAllRequestId = null;
+  let openAllButton = null;
+  let openAllSummaryCards = [];
+  let openAllOpenedPacks = 0;
+  let openAllError = null;
 
   function isCollectionPage() {
     return location.pathname === '/collection' || location.pathname.startsWith('/collection/');
@@ -345,6 +351,10 @@
     if (activePackRecap?.cards?.some((card) => card.id === id)) {
       renderPackRecap();
     }
+
+    if (openAllSummaryCards.some((card) => card.id === id)) {
+      renderOpenAllSummary();
+    }
   }
 
   function ensurePullsToolbar() {
@@ -410,7 +420,17 @@
     cacheNote.className = 'wm-pulls-cache-note';
     cacheNote.textContent = 'À chaque ouverture, le prix moyen des cartes obtenues est automatiquement ajouté au cache local.';
 
-    info.append(cacheNote, createSponsorNote());
+    openAllButton = document.createElement('button');
+    openAllButton.type = 'button';
+    openAllButton.className = 'wm-tool-button wm-open-all-button';
+    openAllButton.textContent = openAllActive ? 'Ouverture…' : 'Tout ouvrir';
+    openAllButton.disabled = openAllActive;
+    openAllButton.title = 'Ouvrir tous les paquets disponibles sans afficher les animations';
+    openAllButton.addEventListener('click', () => {
+      handleOpenAllPacksClick().catch((error) => reportError('tout ouvrir', error));
+    });
+
+    info.append(openAllButton, cacheNote, createSponsorNote());
 
     const pageSubtitle = [...header.children]
       .find((el) => el.tagName === 'P');
@@ -419,6 +439,244 @@
     } else {
       header.append(info);
     }
+  }
+
+  function showOpenAllConfirmation() {
+    return new Promise((resolve) => {
+      const overlay = document.createElement('div');
+      overlay.className = 'wm-modal-overlay';
+
+      const modal = document.createElement('div');
+      modal.className = 'wm-modal wm-confirm-modal';
+
+      const title = document.createElement('h2');
+      title.textContent = 'Ouvrir tous les paquets ?';
+
+      const text = document.createElement('p');
+      text.textContent = 'Tous les paquets disponibles vont être ouverts immédiatement, sans animation. Cette action consomme les paquets.';
+
+      const actions = document.createElement('div');
+      actions.className = 'wm-modal-actions';
+
+      const cancel = document.createElement('button');
+      cancel.type = 'button';
+      cancel.className = 'wm-tool-button wm-secondary-button';
+      cancel.textContent = 'Annuler';
+
+      const confirm = document.createElement('button');
+      confirm.type = 'button';
+      confirm.className = 'wm-tool-button';
+      confirm.textContent = 'Tout ouvrir';
+
+      const close = (value) => {
+        overlay.remove();
+        resolve(value);
+      };
+
+      cancel.addEventListener('click', () => close(false));
+      confirm.addEventListener('click', () => close(true));
+      overlay.addEventListener('click', (event) => {
+        if (event.target === overlay) close(false);
+      });
+
+      actions.append(cancel, confirm);
+      modal.append(title, text, actions);
+      overlay.append(modal);
+      document.body.append(overlay);
+    });
+  }
+
+  async function handleOpenAllPacksClick() {
+    if (openAllActive) return;
+
+    const confirmed = await showOpenAllConfirmation();
+    if (!confirmed) return;
+
+    openAllActive = true;
+    openAllSummaryCards = [];
+    openAllOpenedPacks = 0;
+    openAllError = null;
+    openAllRequestId = `packs:${Date.now()}:${Math.random().toString(36).slice(2)}`;
+
+    if (openAllButton) {
+      openAllButton.disabled = true;
+      openAllButton.textContent = 'Ouverture…';
+    }
+
+    document.getElementById('wm-pack-recap')?.remove();
+
+    window.dispatchEvent(new CustomEvent('wm-average-open-all-packs', {
+      detail: { requestId: openAllRequestId }
+    }));
+  }
+
+  function setOpenAllButtonProgress(openedPacks, packsRemaining = null) {
+    if (!openAllButton) return;
+
+    if (Number.isFinite(Number(packsRemaining))) {
+      openAllButton.textContent = `Ouverts ${openedPacks} • reste ${Number(packsRemaining)}`;
+    } else {
+      openAllButton.textContent = `Ouverts ${openedPacks}`;
+    }
+  }
+
+  function renderOpenAllSummary() {
+    const overlay = document.getElementById('wm-open-all-overlay');
+    if (!overlay || !openAllSummaryCards.length) return;
+
+    const list = overlay.querySelector('.wm-open-all-list');
+    const subtitle = overlay.querySelector('[data-role="subtitle"]');
+    const footer = overlay.querySelector('[data-role="footer"]');
+    if (!list || !subtitle || !footer) return;
+
+    const rows = openAllSummaryCards.map((card, index) => {
+      const entry = cacheMemory.get(card.id);
+      const loaded = Boolean(entry);
+      const average = entry ? chooseAverage(entry, null, card.rarity || null) : null;
+      return { ...card, _originalIndex: index, loaded, average };
+    });
+
+    rows.sort((a, b) => {
+      const aPrice = Number.isFinite(a.average) ? a.average : -Infinity;
+      const bPrice = Number.isFinite(b.average) ? b.average : -Infinity;
+      if (bPrice !== aPrice) return bPrice - aPrice;
+
+      if (a.loaded !== b.loaded) return a.loaded ? 1 : -1;
+      return a._originalIndex - b._originalIndex;
+    });
+
+    const loadedCount = rows.filter((row) => row.loaded).length;
+    const pricedRows = rows.filter((row) => Number.isFinite(row.average));
+    const total = pricedRows.reduce((sum, row) => sum + row.average, 0);
+
+    subtitle.textContent =
+      `${openAllOpenedPacks} paquet${openAllOpenedPacks > 1 ? 's' : ''} • ${rows.length} cartes • ${loadedCount}/${rows.length} prix chargés`;
+
+    list.replaceChildren();
+    const fragment = document.createDocumentFragment();
+
+    rows.forEach((row, index) => {
+      const item = document.createElement('div');
+      item.className = 'wm-open-all-row';
+
+      const rank = document.createElement('span');
+      rank.className = 'wm-open-all-rank';
+      rank.textContent = String(index + 1);
+
+      const thumb = document.createElement('span');
+      thumb.className = 'wm-open-all-thumb';
+      if (row.imageUrl) {
+        const img = document.createElement('img');
+        img.src = row.imageUrl;
+        img.alt = '';
+        img.loading = 'lazy';
+        thumb.append(img);
+      }
+
+      const info = document.createElement('span');
+      info.className = 'wm-open-all-info';
+
+      const name = document.createElement('strong');
+      name.textContent = row.title;
+
+      const meta = document.createElement('span');
+      meta.textContent = row.rarity || '—';
+
+      info.append(name, meta);
+
+      const value = document.createElement('span');
+      value.className = 'wm-open-all-price';
+
+      if (!row.loaded) {
+        value.classList.add('is-loading');
+        const spinner = document.createElement('span');
+        spinner.className = 'wm-average-spinner';
+        value.append(spinner, document.createTextNode('…'));
+      } else if (Number.isFinite(row.average)) {
+        value.textContent = `${formatAverage(row.average)} W`;
+      } else {
+        value.textContent = '—';
+        value.classList.add('is-empty');
+      }
+
+      item.append(rank, thumb, info, value);
+      fragment.append(item);
+    });
+
+    list.append(fragment);
+
+    if (loadedCount < rows.length) {
+      footer.textContent = 'Chargement des prix moyens…';
+    } else if (!pricedRows.length) {
+      footer.textContent = 'Aucune carte n’a de prix moyen';
+    } else {
+      footer.textContent = `Total des prix moyens connus : ${formatAverage(total)} W`;
+    }
+
+    if (openAllError) {
+      const error = document.createElement('div');
+      error.className = 'wm-open-all-error';
+      error.textContent = openAllError;
+      footer.append(document.createElement('br'), error);
+    }
+  }
+
+  function openOpenAllSummary(cards, openedPacks, error = null) {
+    document.getElementById('wm-open-all-overlay')?.remove();
+
+    openAllSummaryCards = cards;
+    openAllOpenedPacks = openedPacks;
+    openAllError = error;
+
+    const overlay = document.createElement('div');
+    overlay.id = 'wm-open-all-overlay';
+    overlay.className = 'wm-modal-overlay';
+
+    const modal = document.createElement('div');
+    modal.className = 'wm-modal wm-open-all-modal';
+
+    const header = document.createElement('div');
+    header.className = 'wm-open-all-header';
+
+    const headingWrap = document.createElement('div');
+
+    const title = document.createElement('h2');
+    title.textContent = 'Cartes obtenues';
+
+    const subtitle = document.createElement('p');
+    subtitle.dataset.role = 'subtitle';
+
+    headingWrap.append(title, subtitle);
+
+    const closeButton = document.createElement('button');
+    closeButton.type = 'button';
+    closeButton.className = 'wm-ranking-close';
+    closeButton.textContent = '×';
+    closeButton.setAttribute('aria-label', 'Fermer');
+
+    const close = () => {
+      overlay.remove();
+      openAllSummaryCards = [];
+      openAllError = null;
+      location.reload();
+    };
+
+    closeButton.addEventListener('click', close);
+
+    header.append(headingWrap, closeButton);
+
+    const list = document.createElement('div');
+    list.className = 'wm-open-all-list';
+
+    const footer = document.createElement('div');
+    footer.className = 'wm-open-all-footer';
+    footer.dataset.role = 'footer';
+
+    modal.append(header, list, footer);
+    overlay.append(modal);
+    document.body.append(overlay);
+
+    renderOpenAllSummary();
   }
 
   function mergePulledCardsIntoCollectionCache(cards) {
@@ -1257,6 +1515,53 @@
     }
   }, true);
 
+  window.addEventListener('wm-average-open-all-packs-progress', (event) => {
+    const detail = event.detail || {};
+    if (!openAllActive || detail.requestId !== openAllRequestId) return;
+
+    openAllOpenedPacks = Number(detail.openedPacks) || 0;
+    setOpenAllButtonProgress(openAllOpenedPacks, detail.packsRemaining);
+  });
+
+  window.addEventListener('wm-average-open-all-packs-result', (event) => {
+    const detail = event.detail || {};
+    if (!openAllActive || detail.requestId !== openAllRequestId) return;
+
+    openAllActive = false;
+    openAllRequestId = null;
+
+    if (openAllButton) {
+      openAllButton.disabled = false;
+      openAllButton.textContent = 'Tout ouvrir';
+    }
+
+    const cards = Array.isArray(detail.cards) ? detail.cards : [];
+    const openedPacks = Number(detail.openedPacks) || 0;
+
+    if (!cards.length) {
+      showInfoModal(
+        detail.ok ? 'Aucun paquet ouvert' : 'Ouverture impossible',
+        detail.error || 'Aucun paquet disponible.'
+      );
+      return;
+    }
+
+    mergePulledCardsIntoCollectionCache(cards);
+
+    const uniqueCards = [...new Map(cards.map((card) => [card.id, card])).values()];
+    try {
+      loadCacheForCards(uniqueCards);
+    } catch (error) {
+      reportError('prix après tout ouvrir', error);
+    }
+
+    openOpenAllSummary(
+      cards,
+      openedPacks,
+      detail.ok ? null : `Ouverture interrompue : ${detail.error || 'erreur inconnue'}`
+    );
+  });
+
   window.addEventListener('wm-average-pack-opened', (event) => {
     const cards = event.detail?.cards;
     if (!Array.isArray(cards) || !cards.length) return;
@@ -1408,5 +1713,5 @@
     }
   });
 
-  console.debug('[WM Average] page runtime v3.9.5 chargé');
+  console.debug('[WM Average] page runtime v3.10 chargé');
 })();
