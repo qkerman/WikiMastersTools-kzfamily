@@ -396,24 +396,28 @@
     }
   }
 
-  window.fetch = async (...args) => {
-    const response = await originalFetch(...args);
+  window.fetch = (...args) => {
+    const fetchPromise = originalFetch(...args);
 
-    try {
-      const input = args[0];
-      const url = typeof input === 'string' ? input : input?.url;
-      if (url && url.includes('/api/my-collection')) {
-        response.clone().json().then(emitCollection).catch(() => {});
-      } else if (url && isTradesApi(url)) {
-        response.clone().json().then(emitTrades).catch(() => {});
-      } else if (url && isMarketplaceDetailApi(url)) {
-        response.clone().json().then(emitMarketplaceDetail).catch(() => {});
-      } else if (url && isPacksOpenApi(url)) {
-        response.clone().json().then(emitPackOpened).catch(() => {});
-      }
-    } catch (_) {}
+    fetchPromise.then((response) => {
+      try {
+        const input = args[0];
+        const url = typeof input === 'string' ? input : input?.url;
+        if (url && url.includes('/api/my-collection')) {
+          response.clone().json().then(emitCollection).catch(() => {});
+        } else if (url && isTradesApi(url)) {
+          response.clone().json().then(emitTrades).catch(() => {});
+        } else if (url && isMarketplaceDetailApi(url)) {
+          response.clone().json().then(emitMarketplaceDetail).catch(() => {});
+        } else if (url && isPacksOpenApi(url)) {
+          response.clone().json().then(emitPackOpened).catch(() => {});
+        }
+      } catch (_) {}
+    }).catch(() => {
+      // Ne pas transformer une erreur réseau du site en erreur de l'extension.
+    });
 
-    return response;
+    return fetchPromise;
   };
 
   const OriginalXHR = window.XMLHttpRequest;
