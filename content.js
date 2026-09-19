@@ -7,6 +7,7 @@
   const MAX_CONCURRENT = 3;
   const BULK_RARITY_LAST_LOAD_KEY = 'wm_bulk_rarity_last_load_v1';
   const ALL_COLLECTION_KEY = 'wm_all_collection_v1';
+  const PULL_RECAP_ENABLED_KEY = 'wm_pull_recap_enabled_v1';
   const RARITIES = ['L', 'UR', 'SR', 'R', 'PC', 'C'];
   const DEFAULT_RARE_RARITIES = ['L', 'UR', 'SR', 'R'];
 
@@ -30,6 +31,8 @@
   let bulkButton = null;
   let rankingButton = null;
   let marketplaceCardId = null;
+  let pullRecapEnabled = readLocalValue(PULL_RECAP_ENABLED_KEY) !== false;
+  let activePackRecap = null;
 
   function isCollectionPage() {
     return location.pathname === '/collection' || location.pathname.startsWith('/collection/');
@@ -37,6 +40,10 @@
 
   function isMarketplaceDetailPage() {
     return /^\/marketplace\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/?$/i.test(location.pathname);
+  }
+
+  function isPullsPage() {
+    return location.pathname === '/pulls' || location.pathname.startsWith('/pulls/');
   }
 
   function normalizeTitle(value) {
@@ -314,6 +321,205 @@
   function renderKnownCard(id) {
     renderOne(id);
     renderMarketplaceAverage(id);
+
+    if (activePackRecap?.cards?.some((card) => card.id === id)) {
+      renderPackRecap();
+    }
+  }
+
+  function ensurePullsToolbar() {
+    if (!isPullsPage() || document.getElementById('wm-pulls-tools')) return;
+
+    const h1 = [...document.querySelectorAll('h1')]
+      .find((el) => normalizeTitle(el.textContent) === 'Ouvrir un paquet');
+    if (!h1) return;
+
+    const header = h1.parentElement;
+    if (!header) return;
+
+    const tools = document.createElement('div');
+    tools.id = 'wm-pulls-tools';
+    tools.className = 'wm-pulls-tools';
+
+    const label = document.createElement('label');
+    label.className = 'wm-pulls-toggle';
+
+    const textWrap = document.createElement('span');
+    textWrap.className = 'wm-pulls-toggle-text';
+
+    const title = document.createElement('strong');
+    title.textContent = 'Récap des prix après ouverture';
+
+    const description = document.createElement('span');
+    description.textContent = 'Les nouvelles cartes sont toujours mises en cache, même si le récap est masqué.';
+
+    textWrap.append(title, description);
+
+    const input = document.createElement('input');
+    input.type = 'checkbox';
+    input.checked = pullRecapEnabled;
+
+    const track = document.createElement('span');
+    track.className = 'wm-toggle-track';
+    const knob = document.createElement('span');
+    knob.className = 'wm-toggle-knob';
+    track.append(knob);
+
+    input.addEventListener('change', () => {
+      pullRecapEnabled = input.checked;
+      writeLocalValue(PULL_RECAP_ENABLED_KEY, pullRecapEnabled);
+      label.classList.toggle('is-enabled', pullRecapEnabled);
+
+      if (pullRecapEnabled) {
+        renderPackRecap();
+      } else {
+        document.getElementById('wm-pack-recap')?.remove();
+      }
+    });
+
+    label.classList.toggle('is-enabled', pullRecapEnabled);
+    label.append(textWrap, input, track);
+    tools.append(label, createSponsorNote());
+    header.append(tools);
+  }
+
+  function mergePulledCardsIntoCollectionCache(cards) {
+    const stored = storageGet(ALL_COLLECTION_KEY);
+    const entry = stored[ALL_COLLECTION_KEY];
+    if (!Array.isArray(entry?.cards) || !entry.cards.length) return;
+
+    const byId = new Map(entry.cards.map((card) => [card.id, { ...card }]));
+    const addedCounts = new Map();
+
+    for (const card of cards) {
+      addedCounts.set(card.id, (addedCounts.get(card.id) || 0) + 1);
+      const existing = byId.get(card.id);
+      if (!existing) {
+        byId.set(card.id, { ...card, count: 0 });
+      }
+    }
+
+    for (const [id, amount] of addedCounts) {
+      const current = byId.get(id);
+      current.count = (Number(current.count) || 0) + amount;
+    }
+
+    storageSet({
+      [ALL_COLLECTION_KEY]: {
+        ...entry,
+        fetchedAt: Date.now(),
+        cards: [...byId.values()]
+      }
+    });
+  }
+
+  function renderPackRecap() {
+    const existing = document.getElementById('wm-pack-recap');
+
+    if (!isPullsPage() || !pullRecapEnabled || !activePackRecap?.cards?.length) {
+      existing?.remove();
+      return;
+    }
+
+    const panel = existing || document.createElement('aside');
+    panel.id = 'wm-pack-recap';
+    panel.className = 'wm-pack-recap';
+    panel.replaceChildren();
+
+    const header = document.createElement('div');
+    header.className = 'wm-pack-recap-header';
+
+    const headingWrap = document.createElement('div');
+    const title = document.createElement('strong');
+    title.textContent = 'Prix moyens du paquet';
+
+    const subtitle = document.createElement('span');
+    const loaded = activePackRecap.cards.filter((card) => cacheMemory.has(card.id)).length;
+    subtitle.textContent = `${loaded}/${activePackRecap.cards.length} chargées`;
+
+    headingWrap.append(title, subtitle);
+
+    const close = document.createElement('button');
+    close.type = 'button';
+    close.className = 'wm-pack-recap-close';
+    close.textContent = '×';
+    close.setAttribute('aria-label', 'Fermer le récap');
+    close.addEventListener('click', () => panel.remove());
+
+    header.append(headingWrap, close);
+
+    const list = document.createElement('div');
+    list.className = 'wm-pack-recap-list';
+
+    let total = 0;
+    let priced = 0;
+
+    for (const card of activePackRecap.cards) {
+      const row = document.createElement('div');
+      row.className = 'wm-pack-recap-row';
+
+      const rarity = document.createElement('span');
+      rarity.className = 'wm-pack-recap-rarity';
+      rarity.textContent = card.rarity || '—';
+
+      const name = document.createElement('span');
+      name.className = 'wm-pack-recap-name';
+      name.textContent = card.title;
+
+      const value = document.createElement('span');
+      value.className = 'wm-pack-recap-price';
+
+      const cacheEntry = cacheMemory.get(card.id);
+      if (!cacheEntry) {
+        value.classList.add('is-loading');
+        const spinner = document.createElement('span');
+        spinner.className = 'wm-average-spinner';
+        value.append(spinner, document.createTextNode('…'));
+      } else {
+        const average = chooseAverage(cacheEntry, null, card.rarity || null);
+        if (Number.isFinite(average)) {
+          total += average;
+          priced += 1;
+          value.textContent = `${formatAverage(average)} W`;
+        } else {
+          value.textContent = '—';
+          value.classList.add('is-empty');
+        }
+      }
+
+      row.append(rarity, name, value);
+      list.append(row);
+    }
+
+    const footer = document.createElement('div');
+    footer.className = 'wm-pack-recap-footer';
+    footer.textContent = priced
+      ? `Total des prix moyens connus : ${formatAverage(total)} W`
+      : 'Chargement des prix moyens…';
+
+    panel.append(header, list, footer);
+
+    if (!existing) {
+      document.body.append(panel);
+    }
+  }
+
+  function handlePackOpened(cards) {
+    if (!Array.isArray(cards) || !cards.length) return;
+
+    activePackRecap = {
+      openedAt: Date.now(),
+      cards
+    };
+
+    mergePulledCardsIntoCollectionCache(cards);
+
+    try {
+      loadCacheForCards(cards);
+      renderPackRecap();
+    } catch (error) {
+      reportError('paquet', error);
+    }
   }
 
   function renderAll() {
@@ -324,6 +530,11 @@
 
     if (isMarketplaceDetailPage() && marketplaceCardId) {
       renderMarketplaceAverage(marketplaceCardId);
+    }
+
+    if (isPullsPage()) {
+      ensurePullsToolbar();
+      renderPackRecap();
     }
   }
 
@@ -981,6 +1192,12 @@
     document.body.append(overlay);
   }
 
+  window.addEventListener('wm-average-pack-opened', (event) => {
+    const cards = event.detail?.cards;
+    if (!Array.isArray(cards) || !cards.length) return;
+    handlePackOpened(cards);
+  });
+
   window.addEventListener('wm-average-marketplace-detail', (event) => {
     const card = event.detail?.card;
     if (!card?.id || !card?.title) return;
@@ -1088,7 +1305,7 @@
         console.debug('[WM Average] navigation SPA détectée:', currentPath);
       }
 
-      if (!isCollectionPage() && !isMarketplaceDetailPage()) return;
+      if (!isCollectionPage() && !isMarketplaceDetailPage() && !isPullsPage()) return;
 
       clearTimeout(renderTimer);
       renderTimer = setTimeout(() => {
@@ -1115,7 +1332,7 @@
 
   window.addEventListener('popstate', () => {
     previousPath = location.pathname;
-    if (isCollectionPage() || isMarketplaceDetailPage()) {
+    if (isCollectionPage() || isMarketplaceDetailPage() || isPullsPage()) {
       setTimeout(() => {
         try {
           renderAll();
@@ -1126,5 +1343,5 @@
     }
   });
 
-  console.debug('[WM Average] page runtime v3.8 chargé');
+  console.debug('[WM Average] page runtime v3.9 chargé');
 })();
