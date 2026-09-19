@@ -209,23 +209,58 @@
 
     try {
       for (let index = 0; index < MAX_BULK_PACKS; index += 1) {
-        const response = await originalFetch('/api/packs/open', {
-          method: 'POST',
-          credentials: 'include',
-          headers: { accept: '*/*' }
-        });
-
         let json = null;
-        try {
-          json = await response.json();
-        } catch (_) {}
 
-        if (!response.ok) {
-          const message =
-            json?.error ||
-            json?.message ||
-            (response.status === 400 ? 'Aucun paquet disponible.' : `HTTP ${response.status}`);
-          throw new Error(message);
+        while (true) {
+          const response = await originalFetch('/api/packs/open', {
+            method: 'POST',
+            credentials: 'include',
+            headers: { accept: '*/*' }
+          });
+
+          try {
+            json = await response.json();
+          } catch (_) {
+            json = null;
+          }
+
+          const retryAt = Date.parse(json?.retry_after || '');
+          const canRetryRateLimit =
+            Boolean(json?.rate_limited) &&
+            !json?.rate_limit_daily &&
+            Number.isFinite(retryAt);
+
+          if (canRetryRateLimit) {
+            packsRemaining = Number(json?.packs_remaining);
+
+            const waitMs = Math.max(250, retryAt - Date.now() + 200);
+
+            window.dispatchEvent(new CustomEvent('wm-average-open-all-packs-progress', {
+              detail: {
+                requestId,
+                openedPacks,
+                cardsCount: allCards.length,
+                packsRemaining: Number.isFinite(packsRemaining) ? packsRemaining : null,
+                waiting: true,
+                retryAfter: json.retry_after,
+                waitMs
+              }
+            }));
+
+            await new Promise((resolve) => setTimeout(resolve, waitMs));
+            continue;
+          }
+
+          if (!response.ok) {
+            const message =
+              json?.error ||
+              json?.message ||
+              (json?.rate_limit_daily ? 'Limite quotidienne atteinte.' : null) ||
+              (response.status === 400 ? 'Aucun paquet disponible.' : `HTTP ${response.status}`);
+            throw new Error(message);
+          }
+
+          break;
         }
 
         const cards = mapPackCards(json);
@@ -242,7 +277,8 @@
             requestId,
             openedPacks,
             cardsCount: allCards.length,
-            packsRemaining: Number.isFinite(packsRemaining) ? packsRemaining : null
+            packsRemaining: Number.isFinite(packsRemaining) ? packsRemaining : null,
+            waiting: false
           }
         }));
 
