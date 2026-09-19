@@ -384,7 +384,7 @@
 
     const cacheNote = document.createElement('div');
     cacheNote.className = 'wm-pulls-cache-note';
-    cacheNote.textContent = 'À chaque ouverture, le prix moyen des cartes obtenues est automatiquement ajouté au cache local (24 h).';
+    cacheNote.textContent = 'À chaque ouverture, le prix moyen des cartes obtenues est automatiquement ajouté au cache local.';
 
     tools.append(label, cacheNote, createSponsorNote());
     header.append(tools);
@@ -1354,5 +1354,5 @@
     }
   });
 
-  console.debug('[WM Average] page runtime v3.9.1 chargé');
+  console.debug('[WM Average] page runtime v3.9.2 chargé');
 })();
