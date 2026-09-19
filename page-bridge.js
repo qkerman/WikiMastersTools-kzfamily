@@ -54,6 +54,15 @@
     }
   }
 
+  function isTradesApi(url) {
+    try {
+      const parsed = new URL(url, location.origin);
+      return parsed.pathname === '/api/trades';
+    } catch (_) {
+      return false;
+    }
+  }
+
   function mapPackCards(json) {
     if (!Array.isArray(json?.cards)) return [];
 
@@ -81,6 +90,82 @@
         packsRemaining: Number(json?.packs_remaining)
       }
     }));
+  }
+
+  function mapTrade(raw) {
+    if (!raw?.id || !raw?.initiator_id || !raw?.recipient_id) return null;
+
+    const items = Array.isArray(raw.items)
+      ? raw.items.map((item) => {
+          const card = item?.card;
+          const id = item?.card_id || card?.id;
+          const title = card?.wikipedia_title;
+          if (!id || !title) return null;
+
+          return {
+            id: item?.id || null,
+            offeredBy: item?.offered_by || null,
+            card: {
+              id,
+              title,
+              rarity: item?.snapshot_rarity || card?.rarity || null,
+              imageUrl: card?.image_url || null,
+              count: 1
+            }
+          };
+        }).filter(Boolean)
+      : [];
+
+    return {
+      id: raw.id,
+      status: raw.status || null,
+      initiatorId: raw.initiator_id,
+      recipientId: raw.recipient_id,
+      initiatorWikibidous: Number(raw.initiator_wikibidous) || 0,
+      recipientWikibidous: Number(raw.recipient_wikibidous) || 0,
+      initiator: {
+        id: raw.initiator?.id || raw.initiator_id,
+        username: raw.initiator?.username || 'Initiateur'
+      },
+      recipient: {
+        id: raw.recipient?.id || raw.recipient_id,
+        username: raw.recipient?.username || 'Destinataire'
+      },
+      items
+    };
+  }
+
+  function emitTrades(json) {
+    const trades = Array.isArray(json?.trades)
+      ? json.trades.map(mapTrade).filter(Boolean)
+      : [];
+
+    window.dispatchEvent(new CustomEvent('wm-average-trades', {
+      detail: { trades }
+    }));
+  }
+
+  async function fetchTrades() {
+    try {
+      const response = await originalFetch('/api/trades', {
+        method: 'GET',
+        credentials: 'include',
+        headers: { accept: '*/*' }
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      emitTrades(await response.json());
+    } catch (error) {
+      window.dispatchEvent(new CustomEvent('wm-average-trades', {
+        detail: {
+          trades: [],
+          error: String(error?.message || error)
+        }
+      }));
+    }
   }
 
   function emitMarketplaceDetail(json) {
@@ -319,6 +404,8 @@
       const url = typeof input === 'string' ? input : input?.url;
       if (url && url.includes('/api/my-collection')) {
         response.clone().json().then(emitCollection).catch(() => {});
+      } else if (url && isTradesApi(url)) {
+        response.clone().json().then(emitTrades).catch(() => {});
       } else if (url && isMarketplaceDetailApi(url)) {
         response.clone().json().then(emitMarketplaceDetail).catch(() => {});
       } else if (url && isPacksOpenApi(url)) {
@@ -344,6 +431,7 @@
         this.__wmUrl &&
         (
           this.__wmUrl.includes('/api/my-collection') ||
+          isTradesApi(this.__wmUrl) ||
           isMarketplaceDetailApi(this.__wmUrl) ||
           isPacksOpenApi(this.__wmUrl)
         )
@@ -353,6 +441,8 @@
             const json = JSON.parse(this.responseText);
             if (this.__wmUrl.includes('/api/my-collection')) {
               emitCollection(json);
+            } else if (isTradesApi(this.__wmUrl)) {
+              emitTrades(json);
             } else if (isMarketplaceDetailApi(this.__wmUrl)) {
               emitMarketplaceDetail(json);
             } else if (isPacksOpenApi(this.__wmUrl)) {
@@ -375,6 +465,10 @@
     const requestId = event.detail?.requestId;
     if (!requestId) return;
     openAllPacks(requestId);
+  });
+
+  window.addEventListener('wm-average-load-trades', () => {
+    fetchTrades();
   });
 
   window.addEventListener('wm-average-request', async (event) => {
