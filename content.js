@@ -199,12 +199,23 @@
   }
 
   function getOrCreateBadge(card) {
-    let badge = card.querySelector(':scope > .wm-average-badge');
+    let badge = card.querySelector('.wm-average-badge');
     if (!badge) {
       badge = document.createElement('div');
       badge.className = 'wm-average-badge';
+    }
+
+    const title = card.querySelector('h3');
+    const textArea = title?.parentElement;
+
+    if (title && textArea) {
+      if (badge.parentElement !== textArea || title.nextElementSibling !== badge) {
+        title.insertAdjacentElement('afterend', badge);
+      }
+    } else if (!badge.parentElement) {
       card.appendChild(badge);
     }
+
     return badge;
   }
 
@@ -363,6 +374,8 @@
       renderOpenAllSummary();
     }
 
+    renderTradeDetailCard(id);
+
     for (const tradeId of activeTradeValueIds) {
       const trade = tradesById.get(tradeId);
       if (trade?.items?.some((item) => item.card?.id === id)) {
@@ -375,6 +388,66 @@
     if (!isTradesPage() || tradesRequested) return;
     tradesRequested = true;
     window.dispatchEvent(new CustomEvent('wm-average-load-trades'));
+  }
+
+  function getTradeDetailModal() {
+    if (!isTradesPage()) return null;
+
+    const heading = [...document.querySelectorAll('h2')]
+      .find((el) => normalizeTitle(el.textContent) === "Détail de l'échange");
+
+    if (!heading) return null;
+
+    return heading.closest('div[class*="fixed"][class*="inset-0"]') || heading.parentElement?.parentElement || null;
+  }
+
+  function renderTradeDetailCard(id) {
+    if (!isTradesPage()) return;
+
+    const meta = cardMetaById.get(id);
+    if (!meta?.title) return;
+
+    const modal = getTradeDetailModal();
+    if (!modal) return;
+
+    for (const h3 of modal.querySelectorAll('h3')) {
+      if (normalizeTitle(h3.textContent) !== normalizeTitle(meta.title)) continue;
+
+      const card = h3.closest('div[class*="rounded-2xl"][class*="overflow-hidden"][class*="cursor-pointer"]');
+      if (card) {
+        renderCollectionCard(id, card);
+      }
+    }
+  }
+
+  function renderTradeDetailCards() {
+    const modal = getTradeDetailModal();
+    if (!modal) return;
+
+    const cardsToLoad = new Map();
+
+    for (const h3 of modal.querySelectorAll('h3')) {
+      const id = idByTitle.get(normalizeTitle(h3.textContent));
+      if (!id) continue;
+
+      const card = h3.closest('div[class*="rounded-2xl"][class*="overflow-hidden"][class*="cursor-pointer"]');
+      if (!card) continue;
+
+      renderCollectionCard(id, card);
+
+      const meta = cardMetaById.get(id);
+      if (meta?.id && meta?.title) {
+        cardsToLoad.set(id, meta);
+      }
+    }
+
+    if (!cardsToLoad.size) return;
+
+    try {
+      loadCacheForCards([...cardsToLoad.values()]);
+    } catch (error) {
+      reportError('prix cartes détail échange', error);
+    }
   }
 
   function getTradeCardElements() {
@@ -1158,6 +1231,7 @@
     if (isTradesPage()) {
       ensureTradesLoaded();
       renderTradeButtons();
+      renderTradeDetailCards();
     }
   }
 
@@ -1840,6 +1914,7 @@
     }
 
     renderTradeButtons();
+    renderTradeDetailCards();
   });
 
   window.addEventListener('wm-average-open-all-packs-progress', (event) => {
@@ -2051,5 +2126,5 @@
     }
   });
 
-  console.debug('[WM Average] page runtime v3.11 chargé');
+  console.debug('[WM Average] page runtime v3.11.2 chargé');
 })();
