@@ -831,3 +831,163 @@
     font-size: 11px;
   }
 }
+
+
+.wm-trade-values-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding-top: 2px;
+}
+
+.wm-trade-values-button {
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-size: 11px;
+}
+
+.wm-trade-values-controls .wm-sponsor-note {
+  flex-basis: auto;
+  width: auto;
+  margin: 0;
+  font-size: 8px;
+}
+
+.wm-trade-values-panel {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  padding-top: 4px;
+}
+
+.wm-trade-side {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid rgba(191, 148, 255, 0.24);
+  border-radius: 10px;
+  background: rgba(191, 148, 255, 0.055);
+}
+
+.wm-trade-side-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px 6px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.wm-trade-side-heading strong {
+  overflow: hidden;
+  color: #f8fafc;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wm-trade-side-heading span {
+  flex: 0 0 auto;
+  color: #94a3b8;
+  font-size: 9px;
+}
+
+.wm-trade-value-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.wm-trade-value-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  padding: 5px 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.055);
+}
+
+.wm-trade-value-info {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.wm-trade-value-title {
+  overflow: hidden;
+  color: #e2e8f0;
+  font-size: 10px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wm-trade-value-rarity {
+  flex: 0 0 auto;
+  color: #bf94ff;
+  font-size: 9px;
+  font-weight: 900;
+}
+
+.wm-trade-value-price {
+  color: #86efac;
+  font-size: 10px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.wm-trade-value-price.is-loading,
+.wm-trade-total .is-loading {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: #94a3b8;
+}
+
+.wm-trade-value-price.is-empty {
+  color: #64748b;
+}
+
+.wm-trade-currency-row .wm-trade-value-title {
+  color: #c4b5fd;
+  font-weight: 800;
+}
+
+.wm-trade-empty {
+  padding: 8px 10px;
+  color: #64748b;
+  font-size: 10px;
+}
+
+.wm-trade-total {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 10px 8px;
+  color: #c4b5fd;
+  font-size: 11px;
+}
+
+.wm-trade-total strong:last-child {
+  color: #bf94ff;
+  font-size: 12px;
+}
+
+.wm-trade-missing-note {
+  padding: 0 10px 8px;
+  color: #94a3b8;
+  font-size: 8px;
+}
+
+@media (max-width: 640px) {
+  .wm-trade-values-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .wm-trade-values-controls .wm-sponsor-note {
+    flex-basis: 100%;
+    width: 100%;
+  }
+}
