@@ -44,6 +44,41 @@
     }
   }
 
+  function isPacksOpenApi(url) {
+    try {
+      const parsed = new URL(url, location.origin);
+      return parsed.pathname === '/api/packs/open';
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function emitPackOpened(json) {
+    if (!Array.isArray(json?.cards) || !json.cards.length) return;
+
+    const cards = json.cards
+      .map((card) => {
+        if (!card?.id || !card?.wikipedia_title) return null;
+        return {
+          id: card.id,
+          title: card.wikipedia_title,
+          rarity: card.rarity || null,
+          imageUrl: card.image_url || null,
+          count: 1
+        };
+      })
+      .filter(Boolean);
+
+    if (!cards.length) return;
+
+    window.dispatchEvent(new CustomEvent('wm-average-pack-opened', {
+      detail: {
+        cards,
+        packsRemaining: Number(json?.packs_remaining)
+      }
+    }));
+  }
+
   function emitMarketplaceDetail(json) {
     const auction = json?.auction;
     const card = auction?.card;
@@ -173,6 +208,8 @@
         response.clone().json().then(emitCollection).catch(() => {});
       } else if (url && isMarketplaceDetailApi(url)) {
         response.clone().json().then(emitMarketplaceDetail).catch(() => {});
+      } else if (url && isPacksOpenApi(url)) {
+        response.clone().json().then(emitPackOpened).catch(() => {});
       }
     } catch (_) {}
 
@@ -192,7 +229,11 @@
     OriginalXHR.prototype.send = function(...args) {
       if (
         this.__wmUrl &&
-        (this.__wmUrl.includes('/api/my-collection') || isMarketplaceDetailApi(this.__wmUrl))
+        (
+          this.__wmUrl.includes('/api/my-collection') ||
+          isMarketplaceDetailApi(this.__wmUrl) ||
+          isPacksOpenApi(this.__wmUrl)
+        )
       ) {
         this.addEventListener('load', () => {
           try {
@@ -201,6 +242,8 @@
               emitCollection(json);
             } else if (isMarketplaceDetailApi(this.__wmUrl)) {
               emitMarketplaceDetail(json);
+            } else if (isPacksOpenApi(this.__wmUrl)) {
+              emitPackOpened(json);
             }
           } catch (_) {}
         }, { once: true });
