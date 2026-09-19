@@ -37,9 +37,9 @@ Puis cliquer sur **Recharger** dans `chrome://extensions/` et faire un F5 sur Wi
 
 *Heure de Paris*
 
-- **19/09/2026 — 09:26** — Ouverture de paquets : mise en cache automatique des cartes obtenues, récap des prix optionnel affiché uniquement sur la dernière carte et fermé avec « Continuer ».
-- **18/09/2026 — 19:58** — Ajout du chargement « Non chargées » pour récupérer uniquement les prix des nouvelles cartes sans recharger le cache existant.
-- **18/09/2026 — 19:07** — Ajout du chargement sélectif par rareté avec suivi du dernier chargement.
-- **18/09/2026 — 19:00** — Ajout du prix moyen directement sur les pages Marketplace.
-- **18/09/2026 — 18:48** — Ajout du chargement en masse de la collection et du classement « Plus chères ».
-- **18/09/2026 — 18:30** — Première version : affichage des prix moyens dans la collection avec cache local.
+- **19/09/2026 — 09:26** — Ajout de l’affichage du prix moyen à chaque paquet ouvert.
+- **18/09/2026 — 19:58** — Ajout d’une option pour charger uniquement le prix des nouvelles cartes.
+- **18/09/2026 — 19:07** — Ajout du choix des raretés à charger.
+- **18/09/2026 — 19:00** — Ajout du prix moyen sur les annonces Marketplace.
+- **18/09/2026 — 18:48** — Ajout du classement des cartes les plus chères.
+- **18/09/2026 — 18:30** — Ajout de l’affichage du prix moyen dans la collection.
