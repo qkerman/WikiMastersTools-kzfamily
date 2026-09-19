@@ -5,6 +5,7 @@
   const originalFetch = window.fetch.bind(window);
   const COLLECTION_FETCH_CONCURRENCY = 2;
   const MAX_COLLECTION_PAGES = 200;
+  const MAX_BULK_PACKS = 100;
 
   function mapEntry(entry) {
     const card = entry && entry.card;
@@ -53,10 +54,10 @@
     }
   }
 
-  function emitPackOpened(json) {
-    if (!Array.isArray(json?.cards) || !json.cards.length) return;
+  function mapPackCards(json) {
+    if (!Array.isArray(json?.cards)) return [];
 
-    const cards = json.cards
+    return json.cards
       .map((card) => {
         if (!card?.id || !card?.wikipedia_title) return null;
         return {
@@ -68,7 +69,10 @@
         };
       })
       .filter(Boolean);
+  }
 
+  function emitPackOpened(json) {
+    const cards = mapPackCards(json);
     if (!cards.length) return;
 
     window.dispatchEvent(new CustomEvent('wm-average-pack-opened', {
@@ -198,6 +202,78 @@
     }
   }
 
+  async function openAllPacks(requestId) {
+    const allCards = [];
+    let openedPacks = 0;
+    let packsRemaining = null;
+
+    try {
+      for (let index = 0; index < MAX_BULK_PACKS; index += 1) {
+        const response = await originalFetch('/api/packs/open', {
+          method: 'POST',
+          credentials: 'include',
+          headers: { accept: '*/*' }
+        });
+
+        let json = null;
+        try {
+          json = await response.json();
+        } catch (_) {}
+
+        if (!response.ok) {
+          const message =
+            json?.error ||
+            json?.message ||
+            (response.status === 400 ? 'Aucun paquet disponible.' : `HTTP ${response.status}`);
+          throw new Error(message);
+        }
+
+        const cards = mapPackCards(json);
+        if (!cards.length) {
+          throw new Error('Le paquet ouvert ne contient aucune carte.');
+        }
+
+        openedPacks += 1;
+        allCards.push(...cards);
+        packsRemaining = Number(json?.packs_remaining);
+
+        window.dispatchEvent(new CustomEvent('wm-average-open-all-packs-progress', {
+          detail: {
+            requestId,
+            openedPacks,
+            cardsCount: allCards.length,
+            packsRemaining: Number.isFinite(packsRemaining) ? packsRemaining : null
+          }
+        }));
+
+        if (Number.isFinite(packsRemaining) && packsRemaining <= 0) {
+          break;
+        }
+      }
+
+      window.dispatchEvent(new CustomEvent('wm-average-open-all-packs-result', {
+        detail: {
+          requestId,
+          ok: true,
+          openedPacks,
+          cards: allCards,
+          packsRemaining: Number.isFinite(packsRemaining) ? packsRemaining : null
+        }
+      }));
+    } catch (error) {
+      window.dispatchEvent(new CustomEvent('wm-average-open-all-packs-result', {
+        detail: {
+          requestId,
+          ok: false,
+          openedPacks,
+          cards: allCards,
+          packsRemaining: Number.isFinite(packsRemaining) ? packsRemaining : null,
+          error: String(error?.message || error)
+        }
+      }));
+    }
+  }
+
   window.fetch = async (...args) => {
     const response = await originalFetch(...args);
 
@@ -256,6 +332,12 @@
     const requestId = event.detail?.requestId;
     if (!requestId) return;
     fetchAllCollection(requestId);
+  });
+
+  window.addEventListener('wm-average-open-all-packs', (event) => {
+    const requestId = event.detail?.requestId;
+    if (!requestId) return;
+    openAllPacks(requestId);
   });
 
   window.addEventListener('wm-average-request', async (event) => {
