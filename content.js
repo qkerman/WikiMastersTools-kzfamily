@@ -520,6 +520,12 @@
     }
   }
 
+  function setOpenAllButtonWaiting(waitMs) {
+    if (!openAllButton) return;
+    const seconds = Math.max(1, Math.ceil(Number(waitMs || 0) / 1000));
+    openAllButton.textContent = `Attente ${seconds}s…`;
+  }
+
   function renderOpenAllSummary() {
     const overlay = document.getElementById('wm-open-all-overlay');
     if (!overlay || !openAllSummaryCards.length) return;
@@ -1520,7 +1526,12 @@
     if (!openAllActive || detail.requestId !== openAllRequestId) return;
 
     openAllOpenedPacks = Number(detail.openedPacks) || 0;
-    setOpenAllButtonProgress(openAllOpenedPacks, detail.packsRemaining);
+
+    if (detail.waiting) {
+      setOpenAllButtonWaiting(detail.waitMs);
+    } else {
+      setOpenAllButtonProgress(openAllOpenedPacks, detail.packsRemaining);
+    }
   });
 
   window.addEventListener('wm-average-open-all-packs-result', (event) => {
@@ -1713,5 +1724,5 @@
     }
   });
 
-  console.debug('[WM Average] page runtime v3.10 chargé');
+  console.debug('[WM Average] page runtime v3.10.1 chargé');
 })();
