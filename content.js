@@ -528,9 +528,14 @@
 
     const footer = document.createElement('div');
     footer.className = 'wm-pack-recap-footer';
-    footer.textContent = priced
-      ? `Total des prix moyens connus : ${formatAverage(total)} W`
-      : 'Chargement des prix moyens…';
+
+    if (loaded < activePackRecap.cards.length) {
+      footer.textContent = 'Chargement des prix moyens…';
+    } else if (priced === 0) {
+      footer.textContent = 'Aucune carte n’a de prix moyen';
+    } else {
+      footer.textContent = `Total des prix moyens connus : ${formatAverage(total)} W`;
+    }
 
     panel.append(header, list, footer);
 
@@ -1391,5 +1396,5 @@
     }
   });
 
-  console.debug('[WM Average] page runtime v3.9.3 chargé');
+  console.debug('[WM Average] page runtime v3.9.4 chargé');
 })();
