@@ -47,6 +47,25 @@
     return location.pathname === '/pulls' || location.pathname.startsWith('/pulls/');
   }
 
+  function isLastPullCardVisible() {
+    if (!isPullsPage()) return false;
+
+    for (const el of document.querySelectorAll('main div')) {
+      const text = String(el.textContent || '')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+      const match = text.match(/^Carte\s*(\d+)\s*\/\s*(\d+)$/i);
+      if (!match) continue;
+
+      const current = Number(match[1]);
+      const total = Number(match[2]);
+      return total > 0 && current === total;
+    }
+
+    return false;
+  }
+
   function normalizeTitle(value) {
     return String(value || '')
       .normalize('NFC')
@@ -423,7 +442,13 @@
   function renderPackRecap() {
     const existing = document.getElementById('wm-pack-recap');
 
-    if (!isPullsPage() || !pullRecapEnabled || packRecapDismissed || !activePackRecap?.cards?.length) {
+    if (
+      !isPullsPage() ||
+      !pullRecapEnabled ||
+      packRecapDismissed ||
+      !activePackRecap?.cards?.length ||
+      !isLastPullCardVisible()
+    ) {
       existing?.remove();
       return;
     }
@@ -1203,6 +1228,18 @@
     document.body.append(overlay);
   }
 
+  document.addEventListener('click', (event) => {
+    if (!isPullsPage() || !activePackRecap) return;
+
+    const button = event.target?.closest?.('button');
+    if (!button) return;
+
+    if (normalizeTitle(button.textContent) === 'Continuer') {
+      packRecapDismissed = true;
+      document.getElementById('wm-pack-recap')?.remove();
+    }
+  }, true);
+
   window.addEventListener('wm-average-pack-opened', (event) => {
     const cards = event.detail?.cards;
     if (!Array.isArray(cards) || !cards.length) return;
@@ -1354,5 +1391,5 @@
     }
   });
 
-  console.debug('[WM Average] page runtime v3.9.2 chargé');
+  console.debug('[WM Average] page runtime v3.9.3 chargé');
 })();
