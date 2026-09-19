@@ -1529,8 +1529,22 @@
 
     if (detail.waiting) {
       setOpenAllButtonWaiting(detail.waitMs);
-    } else {
-      setOpenAllButtonProgress(openAllOpenedPacks, detail.packsRemaining);
+      return;
+    }
+
+    setOpenAllButtonProgress(openAllOpenedPacks, detail.packsRemaining);
+
+    const packCards = Array.isArray(detail.cards) ? detail.cards : [];
+    if (!packCards.length) return;
+
+    openAllSummaryCards.push(...packCards);
+    mergePulledCardsIntoCollectionCache(packCards);
+
+    const uniquePackCards = [...new Map(packCards.map((card) => [card.id, card])).values()];
+    try {
+      loadCacheForCards(uniquePackCards);
+    } catch (error) {
+      reportError('prix pendant tout ouvrir', error);
     }
   });
 
@@ -1555,15 +1569,6 @@
         detail.error || 'Aucun paquet disponible.'
       );
       return;
-    }
-
-    mergePulledCardsIntoCollectionCache(cards);
-
-    const uniqueCards = [...new Map(cards.map((card) => [card.id, card])).values()];
-    try {
-      loadCacheForCards(uniqueCards);
-    } catch (error) {
-      reportError('prix après tout ouvrir', error);
     }
 
     openOpenAllSummary(
@@ -1724,5 +1729,5 @@
     }
   });
 
-  console.debug('[WM Average] page runtime v3.10.1 chargé');
+  console.debug('[WM Average] page runtime v3.10.2 chargé');
 })();
