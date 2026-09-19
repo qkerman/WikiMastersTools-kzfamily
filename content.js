@@ -33,6 +33,7 @@
   let marketplaceCardId = null;
   let pullRecapEnabled = readLocalValue(PULL_RECAP_ENABLED_KEY) !== false;
   let activePackRecap = null;
+  let packRecapDismissed = false;
 
   function isCollectionPage() {
     return location.pathname === '/collection' || location.pathname.startsWith('/collection/');
@@ -371,6 +372,7 @@
       label.classList.toggle('is-enabled', pullRecapEnabled);
 
       if (pullRecapEnabled) {
+        packRecapDismissed = false;
         renderPackRecap();
       } else {
         document.getElementById('wm-pack-recap')?.remove();
@@ -416,7 +418,7 @@
   function renderPackRecap() {
     const existing = document.getElementById('wm-pack-recap');
 
-    if (!isPullsPage() || !pullRecapEnabled || !activePackRecap?.cards?.length) {
+    if (!isPullsPage() || !pullRecapEnabled || packRecapDismissed || !activePackRecap?.cards?.length) {
       existing?.remove();
       return;
     }
@@ -444,7 +446,10 @@
     close.className = 'wm-pack-recap-close';
     close.textContent = '×';
     close.setAttribute('aria-label', 'Fermer le récap');
-    close.addEventListener('click', () => panel.remove());
+    close.addEventListener('click', () => {
+      packRecapDismissed = true;
+      panel.remove();
+    });
 
     header.append(headingWrap, close);
 
@@ -511,6 +516,7 @@
       openedAt: Date.now(),
       cards
     };
+    packRecapDismissed = false;
 
     mergePulledCardsIntoCollectionCache(cards);
 
