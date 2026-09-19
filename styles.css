@@ -686,3 +686,148 @@
   }
 }
 
+
+
+.wm-open-all-button {
+  margin-top: 6px;
+  padding: 6px 10px;
+  font-size: 11px;
+}
+
+.wm-open-all-modal {
+  width: min(760px, calc(100vw - 28px));
+  max-height: min(88vh, 900px);
+  display: flex;
+  flex-direction: column;
+}
+
+.wm-open-all-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 18px 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.wm-open-all-header h2 {
+  margin: 0;
+}
+
+.wm-open-all-header p {
+  margin-top: 4px;
+  color: #94a3b8;
+  font-size: 11px;
+}
+
+.wm-open-all-list {
+  min-height: 0;
+  overflow: auto;
+  padding: 6px 10px;
+}
+
+.wm-open-all-row {
+  display: grid;
+  grid-template-columns: 30px 40px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 9px;
+  min-height: 54px;
+  padding: 6px 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.wm-open-all-rank {
+  color: #94a3b8;
+  font-size: 11px;
+  font-weight: 800;
+  text-align: center;
+}
+
+.wm-open-all-thumb {
+  width: 40px;
+  height: 40px;
+  overflow: hidden;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.wm-open-all-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.wm-open-all-info {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.wm-open-all-info strong {
+  overflow: hidden;
+  color: #f1f5f9;
+  font-size: 12px;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wm-open-all-info span {
+  color: #bf94ff;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.wm-open-all-price {
+  color: #86efac;
+  font-size: 13px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.wm-open-all-price.is-loading {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #94a3b8;
+}
+
+.wm-open-all-price.is-empty {
+  color: #64748b;
+}
+
+.wm-open-all-footer {
+  padding: 10px 18px 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  color: #c4b5fd;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.wm-open-all-error {
+  margin-top: 4px;
+  color: #fca5a5;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+@media (max-width: 520px) {
+  .wm-open-all-row {
+    grid-template-columns: 24px 34px minmax(0, 1fr) auto;
+    gap: 6px;
+  }
+
+  .wm-open-all-thumb {
+    width: 34px;
+    height: 34px;
+  }
+
+  .wm-open-all-info strong {
+    font-size: 11px;
+  }
+
+  .wm-open-all-price {
+    font-size: 11px;
+  }
+}
