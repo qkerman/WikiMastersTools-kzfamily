@@ -357,23 +357,22 @@
     const header = h1.parentElement;
     if (!header) return;
 
+    header.classList.add('wm-pulls-header');
+
     const tools = document.createElement('div');
     tools.id = 'wm-pulls-tools';
     tools.className = 'wm-pulls-tools';
 
     const label = document.createElement('label');
     label.className = 'wm-pulls-toggle';
+    label.title = 'Afficher le récapitulatif des prix après chaque paquet';
 
     const textWrap = document.createElement('span');
     textWrap.className = 'wm-pulls-toggle-text';
 
     const title = document.createElement('strong');
-    title.textContent = 'Récap des prix après ouverture';
-
-    const description = document.createElement('span');
-    description.textContent = 'Les nouvelles cartes sont toujours mises en cache, même si le récap est masqué.';
-
-    textWrap.append(title, description);
+    title.textContent = 'Récap prix';
+    textWrap.append(title);
 
     const input = document.createElement('input');
     input.type = 'checkbox';
@@ -400,13 +399,26 @@
 
     label.classList.toggle('is-enabled', pullRecapEnabled);
     label.append(textWrap, input, track);
+    tools.append(label);
+    h1.insertAdjacentElement('afterend', tools);
+
+    const info = document.createElement('div');
+    info.id = 'wm-pulls-info';
+    info.className = 'wm-pulls-info';
 
     const cacheNote = document.createElement('div');
     cacheNote.className = 'wm-pulls-cache-note';
     cacheNote.textContent = 'À chaque ouverture, le prix moyen des cartes obtenues est automatiquement ajouté au cache local.';
 
-    tools.append(label, cacheNote, createSponsorNote());
-    header.append(tools);
+    info.append(cacheNote, createSponsorNote());
+
+    const pageSubtitle = [...header.children]
+      .find((el) => el.tagName === 'P');
+    if (pageSubtitle) {
+      pageSubtitle.insertAdjacentElement('afterend', info);
+    } else {
+      header.append(info);
+    }
   }
 
   function mergePulledCardsIntoCollectionCache(cards) {
@@ -1396,5 +1408,5 @@
     }
   });
 
-  console.debug('[WM Average] page runtime v3.9.4 chargé');
+  console.debug('[WM Average] page runtime v3.9.5 chargé');
 })();
