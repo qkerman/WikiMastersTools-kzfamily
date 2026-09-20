@@ -1,5 +1,7 @@
 PATCH NOTE EN BAS
 
+chromeb webstore: https://chromewebstore.google.com/detail/wikimasters-prix-moyen-co/pkcnhclbagpfmlmolfcgedcmbccffgci
+
 # WikiMastersTools-kzfamily
 
 Add on créé par la kzfamily.
