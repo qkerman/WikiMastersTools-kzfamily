@@ -177,9 +177,80 @@
   padding: 6px 10px 12px;
 }
 
+.wm-ranking-sale-controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 8px 10px;
+  padding: 10px 18px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(191, 148, 255, 0.045);
+}
+
+.wm-ranking-sale-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.wm-ranking-sale-field > span {
+  color: #94a3b8;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.wm-ranking-sale-field input {
+  width: 100%;
+  min-width: 0;
+  padding: 7px 9px;
+  border: 1px solid rgba(191, 148, 255, 0.32);
+  border-radius: 8px;
+  outline: none;
+  background: rgba(255, 255, 255, 0.045);
+  color: #f8fafc;
+  font: inherit;
+  font-size: 12px;
+}
+
+.wm-ranking-sale-field input:focus {
+  border-color: #bf94ff;
+}
+
+.wm-ranking-sale-hint {
+  grid-column: 1 / -1;
+  color: rgba(226, 232, 240, 0.5);
+  font-size: 9px;
+}
+
+.wm-ranking-sell-button {
+  padding: 6px 9px;
+  border-radius: 8px;
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.wm-ranking-sell-button[data-state="success"] {
+  border-color: rgba(134, 239, 172, 0.6);
+  background: rgba(134, 239, 172, 0.16);
+  color: #86efac;
+  opacity: 1;
+}
+
+.wm-ranking-sell-button[data-state="error"] {
+  border-color: rgba(252, 165, 165, 0.55);
+  background: rgba(252, 165, 165, 0.12);
+  color: #fca5a5;
+}
+
+@media (max-width: 520px) {
+  .wm-ranking-sale-controls {
+    grid-template-columns: 1fr 1fr;
+    padding: 9px 12px;
+  }
+}
+
 .wm-ranking-row {
   display: grid;
-  grid-template-columns: 34px 42px minmax(0, 1fr) auto;
+  grid-template-columns: 34px 42px minmax(0, 1fr) auto auto;
   align-items: center;
   gap: 10px;
   min-height: 58px;
@@ -247,6 +318,11 @@
   .wm-ranking-row {
     grid-template-columns: 28px 36px minmax(0, 1fr) auto;
     gap: 7px;
+  }
+
+  .wm-ranking-sell-button {
+    grid-column: 3 / -1;
+    justify-self: end;
   }
 
   .wm-ranking-thumb {
