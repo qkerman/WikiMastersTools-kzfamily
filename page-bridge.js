@@ -519,7 +519,7 @@
     fetchTrades();
   });
 
-  async function fetchOwnedCardId(catalogueCardId, title) {
+  async function fetchOwnedCardId(catalogueCardId, title, excludeOwnedCardId = null) {
     if (!catalogueCardId || !title) {
       throw new Error('Carte invalide.');
     }
@@ -565,7 +565,12 @@
       }
 
       const cards = extractCards(json);
-      const exact = cards.find((card) => card.id === catalogueCardId && card.ownedCardId);
+      const exact = cards.find(
+        (card) =>
+          card.id === catalogueCardId &&
+          card.ownedCardId &&
+          card.ownedCardId !== excludeOwnedCardId
+      );
       if (exact?.ownedCardId) {
         return exact.ownedCardId;
       }
@@ -583,6 +588,35 @@
     }
 
     throw new Error('Impossible de trouver ta copie de cette carte.');
+  }
+
+  async function submitMarketplaceListing(cardId, amount, duration) {
+    const response = await originalFetch('/api/marketplace', {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        accept: '*/*',
+        'content-type': 'application/json'
+      },
+      body: JSON.stringify({
+        card_id: cardId,
+        base_amount: amount,
+        duration_minutes: duration
+      })
+    });
+
+    let json = null;
+    try {
+      json = await response.json();
+    } catch (_) {}
+
+    return { response, json };
+  }
+
+  function isOwnershipListingError(json) {
+    const message = String(json?.error || json?.message || '').toLocaleLowerCase('fr');
+    return message.includes('vous ne possédez pas cette carte') ||
+      message.includes('vous ne possedez pas cette carte');
   }
 
   window.addEventListener('wm-average-create-listing', async (event) => {
@@ -613,37 +647,61 @@
     }
 
     let resolvedOwnedCardId = ownedCardId || null;
+    let staleOwnedCardId = null;
 
     try {
       if (!resolvedOwnedCardId) {
+        window.dispatchEvent(new CustomEvent('wm-average-create-listing-progress', {
+          detail: { requestId, state: 'resolving-id' }
+        }));
         resolvedOwnedCardId = await fetchOwnedCardId(catalogueCardId, title);
       }
 
-      const response = await originalFetch('/api/marketplace', {
-        method: 'POST',
-        credentials: 'include',
-        headers: {
-          accept: '*/*',
-          'content-type': 'application/json'
-        },
-        body: JSON.stringify({
-          card_id: resolvedOwnedCardId,
-          base_amount: amount,
-          duration_minutes: duration
-        })
-      });
+      let { response, json } = await submitMarketplaceListing(
+        resolvedOwnedCardId,
+        amount,
+        duration
+      );
 
-      let json = null;
-      try {
-        json = await response.json();
-      } catch (_) {}
+      if (!response.ok && isOwnershipListingError(json)) {
+        staleOwnedCardId = resolvedOwnedCardId;
+
+        window.dispatchEvent(new CustomEvent('wm-average-create-listing-progress', {
+          detail: {
+            requestId,
+            state: 'refreshing-id',
+            staleOwnedCardId
+          }
+        }));
+
+        resolvedOwnedCardId = await fetchOwnedCardId(
+          catalogueCardId,
+          title,
+          staleOwnedCardId
+        );
+
+        ({ response, json } = await submitMarketplaceListing(
+          resolvedOwnedCardId,
+          amount,
+          duration
+        ));
+      }
 
       if (!response.ok) {
-        throw new Error(
-          json?.error ||
-          json?.message ||
-          `HTTP ${response.status}`
-        );
+        const ownershipError = isOwnershipListingError(json);
+
+        window.dispatchEvent(new CustomEvent('wm-average-create-listing-result', {
+          detail: {
+            requestId,
+            catalogueCardId,
+            ownedCardId: resolvedOwnedCardId,
+            staleOwnedCardId,
+            ownershipError,
+            ok: false,
+            error: json?.error || json?.message || `HTTP ${response.status}`
+          }
+        }));
+        return;
       }
 
       window.dispatchEvent(new CustomEvent('wm-average-create-listing-result', {
@@ -651,6 +709,7 @@
           requestId,
           catalogueCardId,
           ownedCardId: resolvedOwnedCardId,
+          staleOwnedCardId,
           ok: true,
           listing: json
         }
@@ -661,6 +720,10 @@
           requestId,
           catalogueCardId,
           ownedCardId: resolvedOwnedCardId,
+          staleOwnedCardId,
+          ownershipError: String(error?.message || '')
+            .toLocaleLowerCase('fr')
+            .includes('vous ne possédez pas cette carte'),
           ok: false,
           error: String(error?.message || error)
         }
