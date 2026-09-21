@@ -1732,16 +1732,10 @@
     return new Promise((resolve, reject) => {
       const requestId = `ranking:${Date.now()}:${Math.random().toString(36).slice(2)}`;
 
-      const timeout = setTimeout(() => {
-        window.removeEventListener('wm-average-all-collection', onResult);
-        reject(new Error('Le chargement de la collection a expiré.'));
-      }, 30000);
-
       const onResult = (event) => {
         const detail = event.detail || {};
         if (detail.requestId !== requestId) return;
 
-        clearTimeout(timeout);
         window.removeEventListener('wm-average-all-collection', onResult);
 
         if (!detail.ok) {
@@ -1983,7 +1977,7 @@
 
       quickSaleLoading = true;
       quickSaleInput.disabled = true;
-      quickSaleStatus.textContent = 'Chargement des IDs…';
+      quickSaleStatus.textContent = 'Chargement des IDs… (retry auto si erreur serveur)';
       refreshSaleButtons();
 
       try {
@@ -2459,5 +2453,5 @@
     }
   });
 
-  console.debug('[WM Average] page runtime v3.12.3 chargé');
+  console.debug('[WM Average] page runtime v3.12.4 chargé');
 })();
