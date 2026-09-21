@@ -1728,49 +1728,6 @@
     document.body.append(overlay);
   }
 
-  function requestFreshCollectionForRanking(onProgress = null) {
-    return new Promise((resolve, reject) => {
-      const requestId = `ranking:${Date.now()}:${Math.random().toString(36).slice(2)}`;
-
-      const cleanup = () => {
-        window.removeEventListener('wm-average-all-collection', onResult);
-        window.removeEventListener('wm-average-all-collection-progress', onProgressEvent);
-      };
-
-      const onProgressEvent = (event) => {
-        const detail = event.detail || {};
-        if (detail.requestId !== requestId) return;
-        if (typeof onProgress === 'function') onProgress(detail);
-      };
-
-      const onResult = (event) => {
-        const detail = event.detail || {};
-        if (detail.requestId !== requestId) return;
-
-        cleanup();
-
-        if (!detail.ok) {
-          reject(new Error(detail.error || 'Impossible de charger la collection.'));
-          return;
-        }
-
-        const cards = Array.isArray(detail.cards) ? detail.cards : [];
-        const entry = {
-          fetchedAt: Date.now(),
-          cards
-        };
-
-        storageSet({ [ALL_COLLECTION_KEY]: entry });
-        resolve(entry);
-      };
-
-      window.addEventListener('wm-average-all-collection', onResult);
-      window.addEventListener('wm-average-all-collection-progress', onProgressEvent);
-      window.dispatchEvent(new CustomEvent('wm-average-load-all-collection', {
-        detail: { requestId }
-      }));
-    });
-  }
 
   async function openRankingModal() {
     const storedCollection = storageGet(ALL_COLLECTION_KEY);
@@ -1808,7 +1765,7 @@
     overlay.className = 'wm-modal-overlay wm-ranking-overlay';
 
     const modal = document.createElement('div');
-    modal.className = 'wm-modal wm-ranking-modal';
+    modal.className = 'wm-modal wm-ranking-modal wm-ranking-sales-enabled';
 
     const header = document.createElement('div');
     header.className = 'wm-ranking-header';
@@ -1830,49 +1787,6 @@
     closeButton.textContent = '×';
 
     header.append(headingWrap, closeButton);
-
-    const quickSaleBar = document.createElement('div');
-    quickSaleBar.className = 'wm-ranking-quick-sale';
-
-    const quickSaleLabel = document.createElement('label');
-    quickSaleLabel.className = 'wm-ranking-quick-sale-toggle';
-
-    const quickSaleText = document.createElement('span');
-    quickSaleText.className = 'wm-ranking-quick-sale-text';
-
-    const quickSaleTitle = document.createElement('strong');
-    quickSaleTitle.textContent = 'Vente rapide';
-
-    const quickSaleDescription = document.createElement('span');
-    quickSaleDescription.textContent = 'Active pour charger les IDs de tes copies et afficher les boutons de mise en vente.';
-
-    quickSaleText.append(quickSaleTitle, quickSaleDescription);
-
-    const quickSaleInput = document.createElement('input');
-    quickSaleInput.type = 'checkbox';
-
-    const quickSaleTrack = document.createElement('span');
-    quickSaleTrack.className = 'wm-ranking-quick-sale-track';
-
-    const quickSaleKnob = document.createElement('span');
-    quickSaleKnob.className = 'wm-ranking-quick-sale-knob';
-    quickSaleTrack.append(quickSaleKnob);
-
-    quickSaleLabel.append(quickSaleText, quickSaleInput, quickSaleTrack);
-
-    const quickSaleStatus = document.createElement('span');
-    quickSaleStatus.className = 'wm-ranking-quick-sale-status';
-    quickSaleStatus.textContent = 'Désactivée';
-
-    const quickSaleProgress = document.createElement('div');
-    quickSaleProgress.className = 'wm-ranking-quick-sale-progress';
-    quickSaleProgress.hidden = true;
-
-    const quickSaleProgressFill = document.createElement('div');
-    quickSaleProgressFill.className = 'wm-ranking-quick-sale-progress-fill';
-    quickSaleProgress.append(quickSaleProgressFill);
-
-    quickSaleBar.append(quickSaleLabel, quickSaleStatus, quickSaleProgress);
 
     const saleControls = document.createElement('div');
     saleControls.className = 'wm-ranking-sale-controls';
@@ -1932,10 +1846,6 @@
 
     const PAGE_SIZE = 50;
     let renderedCount = 0;
-    let quickSaleEnabled = false;
-    let quickSaleLoading = false;
-
-    const rowsById = new Map(rows.map((row) => [row.id, row]));
 
     const saleInputsAreValid = () => {
       const amount = Number(priceInput.value);
@@ -1943,125 +1853,14 @@
       return Number.isFinite(amount) && amount > 0 && Number.isFinite(duration) && duration > 0;
     };
 
-    const syncOwnedIdsToButtons = () => {
-      for (const button of list.querySelectorAll('.wm-ranking-sell-button')) {
-        const row = rowsById.get(button.dataset.cardId);
-        const ownershipId = row?.ownedCardId || row?.ownedCardIds?.[0] || '';
-        button.dataset.ownedCardId = ownershipId;
-        if (!ownershipId) {
-          button.title = 'Identifiant de la copie possédée indisponible.';
-        } else if (button.dataset.state !== 'success') {
-          button.title = '';
-        }
-      }
-    };
-
     const refreshSaleButtons = () => {
       const valid = saleInputsAreValid();
 
       for (const button of list.querySelectorAll('.wm-ranking-sell-button')) {
         if (button.dataset.state === 'pending' || button.dataset.state === 'success') continue;
-        const hasOwnedCardId = Boolean(button.dataset.ownedCardId);
-        button.disabled = !quickSaleEnabled || quickSaleLoading || !valid || !hasOwnedCardId;
+        button.disabled = !valid;
       }
     };
-
-    const applyFreshOwnershipIds = (freshCards) => {
-      const freshById = new Map(
-        freshCards
-          .filter((card) => card?.id)
-          .map((card) => [card.id, card])
-      );
-
-      for (const row of rows) {
-        const fresh = freshById.get(row.id);
-        if (!fresh) continue;
-
-        row.ownedCardId = fresh.ownedCardId || fresh.ownedCardIds?.[0] || null;
-        row.ownedCardIds = Array.isArray(fresh.ownedCardIds)
-          ? [...fresh.ownedCardIds]
-          : (row.ownedCardId ? [row.ownedCardId] : []);
-        row.count = Number(fresh.count) || row.count || 1;
-      }
-
-      syncOwnedIdsToButtons();
-    };
-
-    const ensureQuickSaleIds = async () => {
-      const missingBefore = rows.filter((row) => !(row.ownedCardId || row.ownedCardIds?.[0])).length;
-      if (!missingBefore) {
-        quickSaleStatus.textContent = 'IDs déjà en cache';
-        syncOwnedIdsToButtons();
-        return;
-      }
-
-      quickSaleLoading = true;
-      quickSaleInput.disabled = true;
-      quickSaleStatus.textContent = 'Chargement des IDs…';
-      quickSaleProgress.hidden = false;
-      quickSaleProgressFill.style.width = '0%';
-      refreshSaleButtons();
-
-      try {
-        const freshEntry = await requestFreshCollectionForRanking((progress) => {
-          const loadedPages = Number(progress.loadedPages) || 0;
-          const totalPages = Number(progress.totalPages) || 0;
-
-          if (totalPages > 0) {
-            const percent = Math.max(0, Math.min(100, (loadedPages / totalPages) * 100));
-            quickSaleStatus.textContent = `IDs ${loadedPages}/${totalPages}`;
-            quickSaleProgressFill.style.width = `${percent}%`;
-          } else {
-            quickSaleStatus.textContent = `IDs : ${loadedPages} page(s)`;
-            quickSaleProgressFill.style.width = '20%';
-          }
-        });
-
-        const freshCards = Array.isArray(freshEntry?.cards) ? freshEntry.cards : [];
-        applyFreshOwnershipIds(freshCards);
-
-        quickSaleProgressFill.style.width = '100%';
-
-        const missingAfter = rows.filter((row) => !(row.ownedCardId || row.ownedCardIds?.[0])).length;
-        quickSaleStatus.textContent = missingAfter
-          ? `Activée • ${missingAfter} copie(s) sans ID`
-          : 'Activée • IDs chargés';
-      } finally {
-        quickSaleLoading = false;
-        quickSaleInput.disabled = false;
-        setTimeout(() => {
-          if (!quickSaleLoading) quickSaleProgress.hidden = true;
-        }, 350);
-        refreshSaleButtons();
-      }
-    };
-
-    quickSaleInput.addEventListener('change', async () => {
-      if (!quickSaleInput.checked) {
-        quickSaleEnabled = false;
-        modal.classList.remove('wm-ranking-sales-enabled');
-        quickSaleLabel.classList.remove('is-enabled');
-        quickSaleStatus.textContent = 'Désactivée';
-        refreshSaleButtons();
-        return;
-      }
-
-      quickSaleLabel.classList.add('is-enabled');
-
-      try {
-        await ensureQuickSaleIds();
-        quickSaleEnabled = true;
-        modal.classList.add('wm-ranking-sales-enabled');
-        refreshSaleButtons();
-      } catch (error) {
-        quickSaleEnabled = false;
-        quickSaleInput.checked = false;
-        quickSaleLabel.classList.remove('is-enabled');
-        modal.classList.remove('wm-ranking-sales-enabled');
-        quickSaleStatus.textContent = `Erreur : ${String(error?.message || error)}`;
-        refreshSaleButtons();
-      }
-    });
 
     const createRankingRow = (row, index) => {
       const item = document.createElement('div');
@@ -2109,20 +1908,11 @@
       sellButton.className = 'wm-tool-button wm-ranking-sell-button';
       sellButton.textContent = 'Mettre en vente';
       sellButton.dataset.cardId = row.id;
-
-      const ownershipId = row.ownedCardId || row.ownedCardIds?.[0] || '';
-      sellButton.dataset.ownedCardId = ownershipId;
-      sellButton.disabled = true;
-
-      if (!ownershipId) {
-        sellButton.title = 'Active « Vente rapide » pour charger l’identifiant de ta copie.';
-      }
+      sellButton.disabled = !saleInputsAreValid();
 
       sellButton.addEventListener('click', () => {
         const amount = Number(priceInput.value);
         const duration = Number(durationInput.value);
-
-        if (!quickSaleEnabled) return;
 
         if (!Number.isFinite(amount) || amount <= 0) {
           priceInput.focus();
@@ -2135,32 +1925,25 @@
         }
 
         const ownedCardId = row.ownedCardId || row.ownedCardIds?.[0] || null;
-        if (!ownedCardId) {
-          sellButton.dataset.state = 'error';
-          sellButton.disabled = true;
-          sellButton.textContent = 'Copie introuvable';
-          sellButton.title = 'Désactive puis réactive Vente rapide pour recharger les IDs.';
-          return;
-        }
-
-        const requestId = `listing:${ownedCardId}:${Date.now()}:${Math.random().toString(36).slice(2)}`;
+        const requestId = `listing:${row.id}:${Date.now()}:${Math.random().toString(36).slice(2)}`;
 
         sellButton.disabled = true;
         sellButton.dataset.state = 'pending';
-        sellButton.textContent = 'Mise en vente…';
+        sellButton.textContent = ownedCardId ? 'Mise en vente…' : 'Recherche ID…';
 
         pendingMarketplaceListings.set(requestId, {
           button: sellButton,
           row,
           amount,
-          duration,
-          ownedCardId
+          duration
         });
 
         window.dispatchEvent(new CustomEvent('wm-average-create-listing', {
           detail: {
             requestId,
-            cardId: ownedCardId,
+            ownedCardId,
+            catalogueCardId: row.id,
+            title: row.title,
             baseAmount: amount,
             durationMinutes: duration
           }
@@ -2195,7 +1978,6 @@
         list.append(sentinel);
       }
 
-      syncOwnedIdsToButtons();
       refreshSaleButtons();
     };
 
@@ -2227,7 +2009,7 @@
       if (event.target === overlay) close();
     });
 
-    modal.append(header, quickSaleBar, saleControls, list);
+    modal.append(header, saleControls, list);
     overlay.append(modal);
     document.body.append(overlay);
   }
@@ -2243,6 +2025,31 @@
     if (!button?.isConnected) return;
 
     if (detail.ok) {
+      if (detail.ownedCardId) {
+        row.ownedCardId = detail.ownedCardId;
+        row.ownedCardIds = [
+          ...new Set([
+            ...(Array.isArray(row.ownedCardIds) ? row.ownedCardIds : []),
+            detail.ownedCardId
+          ])
+        ];
+
+        const stored = storageGet(ALL_COLLECTION_KEY)[ALL_COLLECTION_KEY];
+        if (Array.isArray(stored?.cards)) {
+          const target = stored.cards.find((card) => card?.id === row.id);
+          if (target) {
+            target.ownedCardId = detail.ownedCardId;
+            target.ownedCardIds = [
+              ...new Set([
+                ...(Array.isArray(target.ownedCardIds) ? target.ownedCardIds : []),
+                detail.ownedCardId
+              ])
+            ];
+            storageSet({ [ALL_COLLECTION_KEY]: stored });
+          }
+        }
+      }
+
       button.dataset.state = 'success';
       button.disabled = true;
       button.textContent = 'En vente ✓';
@@ -2493,5 +2300,5 @@
     }
   });
 
-  console.debug('[WM Average] page runtime v3.12.5 chargé');
+  console.debug('[WM Average] page runtime v3.13 chargé');
 })();
