@@ -2014,6 +2014,18 @@
     document.body.append(overlay);
   }
 
+  window.addEventListener('wm-average-create-listing-progress', (event) => {
+    const detail = event.detail || {};
+    const pending = pendingMarketplaceListings.get(detail.requestId);
+    if (!pending?.button?.isConnected) return;
+
+    if (detail.state === 'refreshing-id') {
+      pending.button.textContent = 'ID expiré • recherche…';
+    } else if (detail.state === 'resolving-id') {
+      pending.button.textContent = 'Recherche ID…';
+    }
+  });
+
   window.addEventListener('wm-average-create-listing-result', (event) => {
     const detail = event.detail || {};
     const pending = pendingMarketplaceListings.get(detail.requestId);
@@ -2026,10 +2038,13 @@
 
     if (detail.ok) {
       if (detail.ownedCardId) {
+        const staleId = detail.staleOwnedCardId || null;
+
         row.ownedCardId = detail.ownedCardId;
         row.ownedCardIds = [
           ...new Set([
-            ...(Array.isArray(row.ownedCardIds) ? row.ownedCardIds : []),
+            ...(Array.isArray(row.ownedCardIds) ? row.ownedCardIds : [])
+              .filter((id) => id && id !== staleId),
             detail.ownedCardId
           ])
         ];
@@ -2041,7 +2056,8 @@
             target.ownedCardId = detail.ownedCardId;
             target.ownedCardIds = [
               ...new Set([
-                ...(Array.isArray(target.ownedCardIds) ? target.ownedCardIds : []),
+                ...(Array.isArray(target.ownedCardIds) ? target.ownedCardIds : [])
+                  .filter((id) => id && id !== staleId),
                 detail.ownedCardId
               ])
             ];
@@ -2057,9 +2073,34 @@
       return;
     }
 
+    const staleId = detail.staleOwnedCardId || (detail.ownershipError ? detail.ownedCardId : null);
+
+    if (staleId) {
+      if (row.ownedCardId === staleId) {
+        row.ownedCardId = null;
+      }
+      row.ownedCardIds = (Array.isArray(row.ownedCardIds) ? row.ownedCardIds : [])
+        .filter((id) => id && id !== staleId);
+
+      const stored = storageGet(ALL_COLLECTION_KEY)[ALL_COLLECTION_KEY];
+      if (Array.isArray(stored?.cards)) {
+        const target = stored.cards.find((card) => card?.id === row.id);
+        if (target) {
+          if (target.ownedCardId === staleId) {
+            target.ownedCardId = null;
+          }
+          target.ownedCardIds = (Array.isArray(target.ownedCardIds) ? target.ownedCardIds : [])
+            .filter((id) => id && id !== staleId);
+          storageSet({ [ALL_COLLECTION_KEY]: stored });
+        }
+      }
+    }
+
     button.dataset.state = 'error';
     button.disabled = false;
-    button.textContent = 'Erreur — réessayer';
+    button.textContent = detail.ownershipError
+      ? 'ID invalide — réessayer'
+      : 'Erreur — réessayer';
     button.title = detail.error || 'Impossible de mettre cette carte en vente.';
   });
 
@@ -2300,5 +2341,5 @@
     }
   });
 
-  console.debug('[WM Average] page runtime v3.13 chargé');
+  console.debug('[WM Average] page runtime v3.13.1 chargé');
 })();
