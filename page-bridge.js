@@ -3,7 +3,7 @@
   window.__wmAveragePriceBridgeInstalled = true;
 
   const originalFetch = window.fetch.bind(window);
-  const COLLECTION_FETCH_CONCURRENCY = 2;
+  const COLLECTION_FETCH_CONCURRENCY = 1;
   const MAX_COLLECTION_PAGES = 200;
   const MAX_BULK_PACKS = 100;
 
@@ -193,10 +193,11 @@
   }
 
   async function fetchCollectionPage(page, stats = false) {
-    const maxAttempts = 5;
-    let lastError = null;
+    let attempt = 0;
 
-    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    while (true) {
+      attempt += 1;
+
       try {
         const response = await originalFetch(
           `/api/my-collection?sort=rarity&page=${encodeURIComponent(page)}&stats=${stats ? 1 : 0}`,
@@ -211,31 +212,33 @@
           return response.json();
         }
 
-        lastError = new Error(`Collection page ${page}: HTTP ${response.status}`);
-
         const retryable = response.status >= 500 && response.status <= 599;
-        if (!retryable || attempt >= maxAttempts) {
-          throw lastError;
+        if (!retryable) {
+          throw new Error(`Collection page ${page}: HTTP ${response.status}`);
         }
-      } catch (error) {
-        lastError = error;
 
+        console.warn(
+          `[WM Average] Collection page ${page}: HTTP ${response.status}, retry ${attempt}`
+        );
+      } catch (error) {
         const statusMatch = String(error?.message || '').match(/HTTP\s+(\d+)/);
         const status = statusMatch ? Number(statusMatch[1]) : null;
         const retryable =
           status == null ||
           (status >= 500 && status <= 599);
 
-        if (!retryable || attempt >= maxAttempts) {
+        if (!retryable) {
           throw error;
         }
+
+        console.warn(
+          `[WM Average] Collection page ${page}: erreur réseau, retry ${attempt}`
+        );
       }
 
-      const delayMs = Math.min(4000, 400 * (2 ** (attempt - 1)));
+      const delayMs = Math.min(5000, 500 * (2 ** Math.min(attempt - 1, 4)));
       await new Promise((resolve) => setTimeout(resolve, delayMs));
     }
-
-    throw lastError || new Error(`Collection page ${page}: erreur inconnue`);
   }
 
   async function fetchAllCollection(requestId) {
