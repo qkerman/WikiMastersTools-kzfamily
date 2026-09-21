@@ -10,11 +10,14 @@
   function mapEntry(entry) {
     const card = entry && entry.card;
     const id = (entry && entry.card_id) || (card && card.id);
+    const ownedCardId = entry?.id || null;
     const title = card && card.wikipedia_title;
     if (!id || !title) return null;
 
     return {
       id,
+      ownedCardId,
+      ownedCardIds: ownedCardId ? [ownedCardId] : [],
       title,
       rarity: card?.rarity || null,
       imageUrl: card?.image_url || null,
@@ -262,6 +265,15 @@
           const existing = deduped.get(card.id);
           if (existing) {
             existing.count = Math.max(existing.count || 1, card.count || 1);
+            const ownershipIds = new Set([
+              ...(Array.isArray(existing.ownedCardIds) ? existing.ownedCardIds : []),
+              ...(Array.isArray(card.ownedCardIds) ? card.ownedCardIds : []),
+              card.ownedCardId
+            ].filter(Boolean));
+            existing.ownedCardIds = [...ownershipIds];
+            if (!existing.ownedCardId && existing.ownedCardIds.length) {
+              existing.ownedCardId = existing.ownedCardIds[0];
+            }
           } else {
             deduped.set(card.id, { ...card });
           }
