@@ -198,7 +198,8 @@
   font-weight: 700;
 }
 
-.wm-ranking-sale-field input {
+.wm-ranking-sale-field input,
+.wm-ranking-sale-field select {
   width: 100%;
   min-width: 0;
   padding: 7px 9px;
@@ -211,8 +212,14 @@
   font-size: 12px;
 }
 
-.wm-ranking-sale-field input:focus {
+.wm-ranking-sale-field input:focus,
+.wm-ranking-sale-field select:focus {
   border-color: #bf94ff;
+}
+
+.wm-ranking-sale-field select {
+  appearance: auto;
+  cursor: pointer;
 }
 
 .wm-ranking-sale-hint {
