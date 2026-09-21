@@ -1728,15 +1728,26 @@
     document.body.append(overlay);
   }
 
-  function requestFreshCollectionForRanking() {
+  function requestFreshCollectionForRanking(onProgress = null) {
     return new Promise((resolve, reject) => {
       const requestId = `ranking:${Date.now()}:${Math.random().toString(36).slice(2)}`;
+
+      const cleanup = () => {
+        window.removeEventListener('wm-average-all-collection', onResult);
+        window.removeEventListener('wm-average-all-collection-progress', onProgressEvent);
+      };
+
+      const onProgressEvent = (event) => {
+        const detail = event.detail || {};
+        if (detail.requestId !== requestId) return;
+        if (typeof onProgress === 'function') onProgress(detail);
+      };
 
       const onResult = (event) => {
         const detail = event.detail || {};
         if (detail.requestId !== requestId) return;
 
-        window.removeEventListener('wm-average-all-collection', onResult);
+        cleanup();
 
         if (!detail.ok) {
           reject(new Error(detail.error || 'Impossible de charger la collection.'));
@@ -1754,6 +1765,7 @@
       };
 
       window.addEventListener('wm-average-all-collection', onResult);
+      window.addEventListener('wm-average-all-collection-progress', onProgressEvent);
       window.dispatchEvent(new CustomEvent('wm-average-load-all-collection', {
         detail: { requestId }
       }));
@@ -1852,7 +1864,15 @@
     quickSaleStatus.className = 'wm-ranking-quick-sale-status';
     quickSaleStatus.textContent = 'Désactivée';
 
-    quickSaleBar.append(quickSaleLabel, quickSaleStatus);
+    const quickSaleProgress = document.createElement('div');
+    quickSaleProgress.className = 'wm-ranking-quick-sale-progress';
+    quickSaleProgress.hidden = true;
+
+    const quickSaleProgressFill = document.createElement('div');
+    quickSaleProgressFill.className = 'wm-ranking-quick-sale-progress-fill';
+    quickSaleProgress.append(quickSaleProgressFill);
+
+    quickSaleBar.append(quickSaleLabel, quickSaleStatus, quickSaleProgress);
 
     const saleControls = document.createElement('div');
     saleControls.className = 'wm-ranking-sale-controls';
@@ -1977,13 +1997,30 @@
 
       quickSaleLoading = true;
       quickSaleInput.disabled = true;
-      quickSaleStatus.textContent = 'Chargement des IDs… (retry auto si erreur serveur)';
+      quickSaleStatus.textContent = 'Chargement des IDs…';
+      quickSaleProgress.hidden = false;
+      quickSaleProgressFill.style.width = '0%';
       refreshSaleButtons();
 
       try {
-        const freshEntry = await requestFreshCollectionForRanking();
+        const freshEntry = await requestFreshCollectionForRanking((progress) => {
+          const loadedPages = Number(progress.loadedPages) || 0;
+          const totalPages = Number(progress.totalPages) || 0;
+
+          if (totalPages > 0) {
+            const percent = Math.max(0, Math.min(100, (loadedPages / totalPages) * 100));
+            quickSaleStatus.textContent = `IDs ${loadedPages}/${totalPages}`;
+            quickSaleProgressFill.style.width = `${percent}%`;
+          } else {
+            quickSaleStatus.textContent = `IDs : ${loadedPages} page(s)`;
+            quickSaleProgressFill.style.width = '20%';
+          }
+        });
+
         const freshCards = Array.isArray(freshEntry?.cards) ? freshEntry.cards : [];
         applyFreshOwnershipIds(freshCards);
+
+        quickSaleProgressFill.style.width = '100%';
 
         const missingAfter = rows.filter((row) => !(row.ownedCardId || row.ownedCardIds?.[0])).length;
         quickSaleStatus.textContent = missingAfter
@@ -1992,6 +2029,9 @@
       } finally {
         quickSaleLoading = false;
         quickSaleInput.disabled = false;
+        setTimeout(() => {
+          if (!quickSaleLoading) quickSaleProgress.hidden = true;
+        }, 350);
         refreshSaleButtons();
       }
     };
@@ -2453,5 +2493,5 @@
     }
   });
 
-  console.debug('[WM Average] page runtime v3.12.4 chargé');
+  console.debug('[WM Average] page runtime v3.12.5 chargé');
 })();
