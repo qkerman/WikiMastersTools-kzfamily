@@ -177,6 +177,93 @@
   padding: 6px 10px 12px;
 }
 
+.wm-ranking-modal:not(.wm-ranking-sales-enabled) .wm-ranking-sale-controls,
+.wm-ranking-modal:not(.wm-ranking-sales-enabled) .wm-ranking-sell-button {
+  display: none;
+}
+
+.wm-ranking-quick-sale {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 18px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.018);
+}
+
+.wm-ranking-quick-sale-toggle {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 9px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.wm-ranking-quick-sale-text {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.wm-ranking-quick-sale-text strong {
+  color: #f1f5f9;
+  font-size: 11px;
+}
+
+.wm-ranking-quick-sale-text span {
+  color: #94a3b8;
+  font-size: 9px;
+  line-height: 1.25;
+}
+
+.wm-ranking-quick-sale-toggle input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.wm-ranking-quick-sale-track {
+  position: relative;
+  width: 32px;
+  height: 18px;
+  flex: 0 0 32px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.3);
+  transition: background 0.16s ease;
+}
+
+.wm-ranking-quick-sale-knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #f8fafc;
+  transition: transform 0.16s ease;
+}
+
+.wm-ranking-quick-sale-toggle.is-enabled .wm-ranking-quick-sale-track {
+  background: #bf94ff;
+}
+
+.wm-ranking-quick-sale-toggle.is-enabled .wm-ranking-quick-sale-knob {
+  transform: translateX(14px);
+}
+
+.wm-ranking-quick-sale-status {
+  flex: 0 0 auto;
+  max-width: 240px;
+  color: #c4b5fd;
+  font-size: 9px;
+  text-align: right;
+}
+
 .wm-ranking-sale-controls {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
@@ -1075,5 +1162,18 @@
   .wm-trade-values-controls .wm-sponsor-note {
     flex-basis: 100%;
     width: 100%;
+  }
+}
+
+
+@media (max-width: 520px) {
+  .wm-ranking-quick-sale {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .wm-ranking-quick-sale-status {
+    max-width: 100%;
+    text-align: left;
   }
 }
