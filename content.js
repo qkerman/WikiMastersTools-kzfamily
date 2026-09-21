@@ -1371,11 +1371,13 @@
     rankingButton.textContent = 'Plus chères';
     rankingButton.title = 'Affiche toute la collection triée par prix moyen décroissant';
     rankingButton.addEventListener('click', () => {
-      try {
-        openRankingModal();
-      } catch (error) {
+      openRankingModal().catch((error) => {
         reportError('classement', error);
-      }
+        showInfoModal(
+          'Classement impossible',
+          String(error?.message || error || 'Impossible de charger la collection.')
+        );
+      });
     });
 
     bar.append(bulkButton, rankingButton, createSponsorNote());
@@ -1726,14 +1728,70 @@
     document.body.append(overlay);
   }
 
-  function openRankingModal() {
+  function requestFreshCollectionForRanking() {
+    return new Promise((resolve, reject) => {
+      const requestId = `ranking:${Date.now()}:${Math.random().toString(36).slice(2)}`;
+
+      const timeout = setTimeout(() => {
+        window.removeEventListener('wm-average-all-collection', onResult);
+        reject(new Error('Le chargement de la collection a expiré.'));
+      }, 30000);
+
+      const onResult = (event) => {
+        const detail = event.detail || {};
+        if (detail.requestId !== requestId) return;
+
+        clearTimeout(timeout);
+        window.removeEventListener('wm-average-all-collection', onResult);
+
+        if (!detail.ok) {
+          reject(new Error(detail.error || 'Impossible de charger la collection.'));
+          return;
+        }
+
+        const cards = Array.isArray(detail.cards) ? detail.cards : [];
+        const entry = {
+          fetchedAt: Date.now(),
+          cards
+        };
+
+        storageSet({ [ALL_COLLECTION_KEY]: entry });
+        resolve(entry);
+      };
+
+      window.addEventListener('wm-average-all-collection', onResult);
+      window.dispatchEvent(new CustomEvent('wm-average-load-all-collection', {
+        detail: { requestId }
+      }));
+    });
+  }
+
+  async function openRankingModal() {
     const storedCollection = storageGet(ALL_COLLECTION_KEY);
-    const collectionEntry = storedCollection[ALL_COLLECTION_KEY];
-    const cards = Array.isArray(collectionEntry?.cards) ? collectionEntry.cards : [];
+    let collectionEntry = storedCollection[ALL_COLLECTION_KEY];
+    let cards = Array.isArray(collectionEntry?.cards) ? collectionEntry.cards : [];
 
     if (!cards.length) {
       showInfoModal('Collection non chargée', 'Clique d’abord sur « Charger les prix » pour récupérer toute la collection et pouvoir la trier par prix moyen.');
       return;
+    }
+
+    const needsOwnershipRefresh = cards.some((card) => !card?.ownedCardId);
+    if (needsOwnershipRefresh) {
+      if (rankingButton) {
+        rankingButton.disabled = true;
+        rankingButton.textContent = 'Collection…';
+      }
+
+      try {
+        collectionEntry = await requestFreshCollectionForRanking();
+        cards = Array.isArray(collectionEntry?.cards) ? collectionEntry.cards : [];
+      } finally {
+        if (rankingButton) {
+          rankingButton.disabled = false;
+          rankingButton.textContent = 'Plus chères';
+        }
+      }
     }
 
     const priceKeys = cards.map((card) => cacheKey(card.id));
@@ -1754,7 +1812,7 @@
       return a.title.localeCompare(b.title, 'fr');
     });
 
-    renderRankingModal(rows, collectionEntry.fetchedAt || 0);
+    renderRankingModal(rows, collectionEntry?.fetchedAt || 0);
   }
 
   function renderRankingModal(rows, collectionFetchedAt) {
@@ -1840,7 +1898,8 @@
       const valid = saleInputsAreValid();
       for (const button of list.querySelectorAll('.wm-ranking-sell-button')) {
         if (button.dataset.state === 'pending' || button.dataset.state === 'success') continue;
-        button.disabled = !valid;
+        const hasOwnedCardId = Boolean(button.dataset.ownedCardId);
+        button.disabled = !valid || !hasOwnedCardId;
       }
     };
 
@@ -1889,7 +1948,13 @@
       sellButton.type = 'button';
       sellButton.className = 'wm-tool-button wm-ranking-sell-button';
       sellButton.textContent = 'Mettre en vente';
-      sellButton.disabled = !saleInputsAreValid();
+      const ownershipId = row.ownedCardId || row.ownedCardIds?.[0] || '';
+      const hasOwnedCardId = Boolean(ownershipId);
+      sellButton.dataset.ownedCardId = ownershipId;
+      sellButton.disabled = !saleInputsAreValid() || !hasOwnedCardId;
+      if (!hasOwnedCardId) {
+        sellButton.title = 'Identifiant de la copie possédée indisponible.';
+      }
 
       sellButton.addEventListener('click', () => {
         const amount = Number(priceInput.value);
@@ -1905,7 +1970,16 @@
           return;
         }
 
-        const requestId = `listing:${row.id}:${Date.now()}:${Math.random().toString(36).slice(2)}`;
+        const ownedCardId = row.ownedCardId || row.ownedCardIds?.[0] || null;
+        if (!ownedCardId) {
+          sellButton.dataset.state = 'error';
+          sellButton.disabled = true;
+          sellButton.textContent = 'Copie introuvable';
+          sellButton.title = 'Recharge la collection pour récupérer l’identifiant de ta copie.';
+          return;
+        }
+
+        const requestId = `listing:${ownedCardId}:${Date.now()}:${Math.random().toString(36).slice(2)}`;
 
         sellButton.disabled = true;
         sellButton.dataset.state = 'pending';
@@ -1915,13 +1989,14 @@
           button: sellButton,
           row,
           amount,
-          duration
+          duration,
+          ownedCardId
         });
 
         window.dispatchEvent(new CustomEvent('wm-average-create-listing', {
           detail: {
             requestId,
-            cardId: row.id,
+            cardId: ownedCardId,
             baseAmount: amount,
             durationMinutes: duration
           }
@@ -2252,5 +2327,5 @@
     }
   });
 
-  console.debug('[WM Average] page runtime v3.12 chargé');
+  console.debug('[WM Average] page runtime v3.12.1 chargé');
 })();
