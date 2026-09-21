@@ -519,9 +519,83 @@
     fetchTrades();
   });
 
+  async function fetchOwnedCardId(catalogueCardId, title) {
+    if (!catalogueCardId || !title) {
+      throw new Error('Carte invalide.');
+    }
+
+    const query = String(title).trim();
+    let page = 0;
+    let totalPages = 1;
+
+    while (page < Math.min(totalPages, MAX_COLLECTION_PAGES)) {
+      let attempt = 0;
+      let json = null;
+
+      while (true) {
+        attempt += 1;
+
+        try {
+          const response = await originalFetch(
+            `/api/my-collection?sort=rarity&q=${encodeURIComponent(query)}&page=${page}&stats=${page === 0 ? 1 : 0}`,
+            {
+              method: 'GET',
+              credentials: 'include',
+              headers: { accept: '*/*' }
+            }
+          );
+
+          if (response.ok) {
+            json = await response.json();
+            break;
+          }
+
+          if (response.status < 500 || response.status > 599) {
+            throw new Error(`Recherche copie: HTTP ${response.status}`);
+          }
+        } catch (error) {
+          const statusMatch = String(error?.message || '').match(/HTTP\s+(\d+)/);
+          const status = statusMatch ? Number(statusMatch[1]) : null;
+          const retryable = status == null || (status >= 500 && status <= 599);
+          if (!retryable) throw error;
+        }
+
+        const delayMs = Math.min(5000, 500 * (2 ** Math.min(attempt - 1, 4)));
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+      }
+
+      const cards = extractCards(json);
+      const exact = cards.find((card) => card.id === catalogueCardId && card.ownedCardId);
+      if (exact?.ownedCardId) {
+        return exact.ownedCardId;
+      }
+
+      if (page === 0) {
+        const total = Number(json?.total);
+        const pageSize = cards.length;
+        totalPages =
+          Number.isFinite(total) && total > 0 && pageSize > 0
+            ? Math.max(1, Math.ceil(total / pageSize))
+            : 1;
+      }
+
+      page += 1;
+    }
+
+    throw new Error('Impossible de trouver ta copie de cette carte.');
+  }
+
   window.addEventListener('wm-average-create-listing', async (event) => {
-    const { requestId, cardId, baseAmount, durationMinutes } = event.detail || {};
-    if (!requestId || !cardId) return;
+    const {
+      requestId,
+      ownedCardId,
+      catalogueCardId,
+      title,
+      baseAmount,
+      durationMinutes
+    } = event.detail || {};
+
+    if (!requestId || !catalogueCardId) return;
 
     const amount = Number(baseAmount);
     const duration = Number(durationMinutes);
@@ -530,7 +604,7 @@
       window.dispatchEvent(new CustomEvent('wm-average-create-listing-result', {
         detail: {
           requestId,
-          cardId,
+          catalogueCardId,
           ok: false,
           error: 'Prix ou durée invalide.'
         }
@@ -538,7 +612,13 @@
       return;
     }
 
+    let resolvedOwnedCardId = ownedCardId || null;
+
     try {
+      if (!resolvedOwnedCardId) {
+        resolvedOwnedCardId = await fetchOwnedCardId(catalogueCardId, title);
+      }
+
       const response = await originalFetch('/api/marketplace', {
         method: 'POST',
         credentials: 'include',
@@ -547,7 +627,7 @@
           'content-type': 'application/json'
         },
         body: JSON.stringify({
-          card_id: cardId,
+          card_id: resolvedOwnedCardId,
           base_amount: amount,
           duration_minutes: duration
         })
@@ -569,7 +649,8 @@
       window.dispatchEvent(new CustomEvent('wm-average-create-listing-result', {
         detail: {
           requestId,
-          cardId,
+          catalogueCardId,
+          ownedCardId: resolvedOwnedCardId,
           ok: true,
           listing: json
         }
@@ -578,7 +659,8 @@
       window.dispatchEvent(new CustomEvent('wm-average-create-listing-result', {
         detail: {
           requestId,
-          cardId,
+          catalogueCardId,
+          ownedCardId: resolvedOwnedCardId,
           ok: false,
           error: String(error?.message || error)
         }
