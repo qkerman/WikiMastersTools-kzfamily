@@ -193,20 +193,49 @@
   }
 
   async function fetchCollectionPage(page, stats = false) {
-    const response = await originalFetch(
-      `/api/my-collection?sort=rarity&page=${encodeURIComponent(page)}&stats=${stats ? 1 : 0}`,
-      {
-        method: 'GET',
-        credentials: 'include',
-        headers: { accept: '*/*' }
-      }
-    );
+    const maxAttempts = 5;
+    let lastError = null;
 
-    if (!response.ok) {
-      throw new Error(`Collection page ${page}: HTTP ${response.status}`);
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      try {
+        const response = await originalFetch(
+          `/api/my-collection?sort=rarity&page=${encodeURIComponent(page)}&stats=${stats ? 1 : 0}`,
+          {
+            method: 'GET',
+            credentials: 'include',
+            headers: { accept: '*/*' }
+          }
+        );
+
+        if (response.ok) {
+          return response.json();
+        }
+
+        lastError = new Error(`Collection page ${page}: HTTP ${response.status}`);
+
+        const retryable = response.status >= 500 && response.status <= 599;
+        if (!retryable || attempt >= maxAttempts) {
+          throw lastError;
+        }
+      } catch (error) {
+        lastError = error;
+
+        const statusMatch = String(error?.message || '').match(/HTTP\s+(\d+)/);
+        const status = statusMatch ? Number(statusMatch[1]) : null;
+        const retryable =
+          status == null ||
+          (status >= 500 && status <= 599);
+
+        if (!retryable || attempt >= maxAttempts) {
+          throw error;
+        }
+      }
+
+      const delayMs = Math.min(4000, 400 * (2 ** (attempt - 1)));
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
     }
 
-    return response.json();
+    throw lastError || new Error(`Collection page ${page}: erreur inconnue`);
   }
 
   async function fetchAllCollection(requestId) {
