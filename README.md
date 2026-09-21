@@ -39,6 +39,7 @@ Puis cliquer sur **Recharger** dans `chrome://extensions/` et faire un F5 sur Wi
 
 *Heure de Paris*
 
+- **21/09/2026 — 08:35** — Ajout de la mise en vente directe depuis le classement des cartes les plus chères.
 - **19/09/2026 — 17:45** — Ajout de l’estimation des échanges avec le prix de chaque carte et le total de chaque côté.
 - **19/09/2026 — 12:01** — Ajout du bouton « Tout ouvrir » pour ouvrir tous les paquets et afficher les cartes obtenues triées par prix moyen.
 - **19/09/2026 — 09:26** — Ajout de l’affichage du prix moyen à chaque paquet ouvert.
