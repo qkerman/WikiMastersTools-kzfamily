@@ -1768,30 +1768,12 @@
 
   async function openRankingModal() {
     const storedCollection = storageGet(ALL_COLLECTION_KEY);
-    let collectionEntry = storedCollection[ALL_COLLECTION_KEY];
-    let cards = Array.isArray(collectionEntry?.cards) ? collectionEntry.cards : [];
+    const collectionEntry = storedCollection[ALL_COLLECTION_KEY];
+    const cards = Array.isArray(collectionEntry?.cards) ? collectionEntry.cards : [];
 
     if (!cards.length) {
       showInfoModal('Collection non chargée', 'Clique d’abord sur « Charger les prix » pour récupérer toute la collection et pouvoir la trier par prix moyen.');
       return;
-    }
-
-    const needsOwnershipRefresh = cards.some((card) => !card?.ownedCardId);
-    if (needsOwnershipRefresh) {
-      if (rankingButton) {
-        rankingButton.disabled = true;
-        rankingButton.textContent = 'Collection…';
-      }
-
-      try {
-        collectionEntry = await requestFreshCollectionForRanking();
-        cards = Array.isArray(collectionEntry?.cards) ? collectionEntry.cards : [];
-      } finally {
-        if (rankingButton) {
-          rankingButton.disabled = false;
-          rankingButton.textContent = 'Plus chères';
-        }
-      }
     }
 
     const priceKeys = cards.map((card) => cacheKey(card.id));
@@ -1843,6 +1825,41 @@
 
     header.append(headingWrap, closeButton);
 
+    const quickSaleBar = document.createElement('div');
+    quickSaleBar.className = 'wm-ranking-quick-sale';
+
+    const quickSaleLabel = document.createElement('label');
+    quickSaleLabel.className = 'wm-ranking-quick-sale-toggle';
+
+    const quickSaleText = document.createElement('span');
+    quickSaleText.className = 'wm-ranking-quick-sale-text';
+
+    const quickSaleTitle = document.createElement('strong');
+    quickSaleTitle.textContent = 'Vente rapide';
+
+    const quickSaleDescription = document.createElement('span');
+    quickSaleDescription.textContent = 'Active pour charger les IDs de tes copies et afficher les boutons de mise en vente.';
+
+    quickSaleText.append(quickSaleTitle, quickSaleDescription);
+
+    const quickSaleInput = document.createElement('input');
+    quickSaleInput.type = 'checkbox';
+
+    const quickSaleTrack = document.createElement('span');
+    quickSaleTrack.className = 'wm-ranking-quick-sale-track';
+
+    const quickSaleKnob = document.createElement('span');
+    quickSaleKnob.className = 'wm-ranking-quick-sale-knob';
+    quickSaleTrack.append(quickSaleKnob);
+
+    quickSaleLabel.append(quickSaleText, quickSaleInput, quickSaleTrack);
+
+    const quickSaleStatus = document.createElement('span');
+    quickSaleStatus.className = 'wm-ranking-quick-sale-status';
+    quickSaleStatus.textContent = 'Désactivée';
+
+    quickSaleBar.append(quickSaleLabel, quickSaleStatus);
+
     const saleControls = document.createElement('div');
     saleControls.className = 'wm-ranking-sale-controls';
 
@@ -1865,7 +1882,7 @@
     durationField.className = 'wm-ranking-sale-field';
 
     const durationLabel = document.createElement('span');
-    durationLabel.textContent = 'Durée (minutes)';
+    durationLabel.textContent = 'Durée';
 
     const durationInput = document.createElement('select');
 
@@ -1892,7 +1909,7 @@
 
     const hint = document.createElement('div');
     hint.className = 'wm-ranking-sale-hint';
-    hint.textContent = 'Le bouton de chaque carte utilise ces deux valeurs.';
+    hint.textContent = 'Chaque bouton utilise ces deux valeurs.';
 
     saleControls.append(priceField, durationField, hint);
 
@@ -1901,6 +1918,10 @@
 
     const PAGE_SIZE = 50;
     let renderedCount = 0;
+    let quickSaleEnabled = false;
+    let quickSaleLoading = false;
+
+    const rowsById = new Map(rows.map((row) => [row.id, row]));
 
     const saleInputsAreValid = () => {
       const amount = Number(priceInput.value);
@@ -1908,14 +1929,105 @@
       return Number.isFinite(amount) && amount > 0 && Number.isFinite(duration) && duration > 0;
     };
 
+    const syncOwnedIdsToButtons = () => {
+      for (const button of list.querySelectorAll('.wm-ranking-sell-button')) {
+        const row = rowsById.get(button.dataset.cardId);
+        const ownershipId = row?.ownedCardId || row?.ownedCardIds?.[0] || '';
+        button.dataset.ownedCardId = ownershipId;
+        if (!ownershipId) {
+          button.title = 'Identifiant de la copie possédée indisponible.';
+        } else if (button.dataset.state !== 'success') {
+          button.title = '';
+        }
+      }
+    };
+
     const refreshSaleButtons = () => {
       const valid = saleInputsAreValid();
+
       for (const button of list.querySelectorAll('.wm-ranking-sell-button')) {
         if (button.dataset.state === 'pending' || button.dataset.state === 'success') continue;
         const hasOwnedCardId = Boolean(button.dataset.ownedCardId);
-        button.disabled = !valid || !hasOwnedCardId;
+        button.disabled = !quickSaleEnabled || quickSaleLoading || !valid || !hasOwnedCardId;
       }
     };
+
+    const applyFreshOwnershipIds = (freshCards) => {
+      const freshById = new Map(
+        freshCards
+          .filter((card) => card?.id)
+          .map((card) => [card.id, card])
+      );
+
+      for (const row of rows) {
+        const fresh = freshById.get(row.id);
+        if (!fresh) continue;
+
+        row.ownedCardId = fresh.ownedCardId || fresh.ownedCardIds?.[0] || null;
+        row.ownedCardIds = Array.isArray(fresh.ownedCardIds)
+          ? [...fresh.ownedCardIds]
+          : (row.ownedCardId ? [row.ownedCardId] : []);
+        row.count = Number(fresh.count) || row.count || 1;
+      }
+
+      syncOwnedIdsToButtons();
+    };
+
+    const ensureQuickSaleIds = async () => {
+      const missingBefore = rows.filter((row) => !(row.ownedCardId || row.ownedCardIds?.[0])).length;
+      if (!missingBefore) {
+        quickSaleStatus.textContent = 'IDs déjà en cache';
+        syncOwnedIdsToButtons();
+        return;
+      }
+
+      quickSaleLoading = true;
+      quickSaleInput.disabled = true;
+      quickSaleStatus.textContent = 'Chargement des IDs…';
+      refreshSaleButtons();
+
+      try {
+        const freshEntry = await requestFreshCollectionForRanking();
+        const freshCards = Array.isArray(freshEntry?.cards) ? freshEntry.cards : [];
+        applyFreshOwnershipIds(freshCards);
+
+        const missingAfter = rows.filter((row) => !(row.ownedCardId || row.ownedCardIds?.[0])).length;
+        quickSaleStatus.textContent = missingAfter
+          ? `Activée • ${missingAfter} copie(s) sans ID`
+          : 'Activée • IDs chargés';
+      } finally {
+        quickSaleLoading = false;
+        quickSaleInput.disabled = false;
+        refreshSaleButtons();
+      }
+    };
+
+    quickSaleInput.addEventListener('change', async () => {
+      if (!quickSaleInput.checked) {
+        quickSaleEnabled = false;
+        modal.classList.remove('wm-ranking-sales-enabled');
+        quickSaleLabel.classList.remove('is-enabled');
+        quickSaleStatus.textContent = 'Désactivée';
+        refreshSaleButtons();
+        return;
+      }
+
+      quickSaleLabel.classList.add('is-enabled');
+
+      try {
+        await ensureQuickSaleIds();
+        quickSaleEnabled = true;
+        modal.classList.add('wm-ranking-sales-enabled');
+        refreshSaleButtons();
+      } catch (error) {
+        quickSaleEnabled = false;
+        quickSaleInput.checked = false;
+        quickSaleLabel.classList.remove('is-enabled');
+        modal.classList.remove('wm-ranking-sales-enabled');
+        quickSaleStatus.textContent = `Erreur : ${String(error?.message || error)}`;
+        refreshSaleButtons();
+      }
+    });
 
     const createRankingRow = (row, index) => {
       const item = document.createElement('div');
@@ -1962,17 +2074,21 @@
       sellButton.type = 'button';
       sellButton.className = 'wm-tool-button wm-ranking-sell-button';
       sellButton.textContent = 'Mettre en vente';
+      sellButton.dataset.cardId = row.id;
+
       const ownershipId = row.ownedCardId || row.ownedCardIds?.[0] || '';
-      const hasOwnedCardId = Boolean(ownershipId);
       sellButton.dataset.ownedCardId = ownershipId;
-      sellButton.disabled = !saleInputsAreValid() || !hasOwnedCardId;
-      if (!hasOwnedCardId) {
-        sellButton.title = 'Identifiant de la copie possédée indisponible.';
+      sellButton.disabled = true;
+
+      if (!ownershipId) {
+        sellButton.title = 'Active « Vente rapide » pour charger l’identifiant de ta copie.';
       }
 
       sellButton.addEventListener('click', () => {
         const amount = Number(priceInput.value);
         const duration = Number(durationInput.value);
+
+        if (!quickSaleEnabled) return;
 
         if (!Number.isFinite(amount) || amount <= 0) {
           priceInput.focus();
@@ -1989,7 +2105,7 @@
           sellButton.dataset.state = 'error';
           sellButton.disabled = true;
           sellButton.textContent = 'Copie introuvable';
-          sellButton.title = 'Recharge la collection pour récupérer l’identifiant de ta copie.';
+          sellButton.title = 'Désactive puis réactive Vente rapide pour recharger les IDs.';
           return;
         }
 
@@ -2045,6 +2161,7 @@
         list.append(sentinel);
       }
 
+      syncOwnedIdsToButtons();
       refreshSaleButtons();
     };
 
@@ -2059,7 +2176,7 @@
     });
 
     priceInput.addEventListener('input', refreshSaleButtons);
-    durationInput.addEventListener('input', refreshSaleButtons);
+    durationInput.addEventListener('change', refreshSaleButtons);
 
     renderNextChunk();
     if (renderedCount < rows.length) {
@@ -2070,12 +2187,13 @@
       observer.disconnect();
       overlay.remove();
     };
+
     closeButton.addEventListener('click', close);
     overlay.addEventListener('click', (event) => {
       if (event.target === overlay) close();
     });
 
-    modal.append(header, saleControls, list);
+    modal.append(header, quickSaleBar, saleControls, list);
     overlay.append(modal);
     document.body.append(overlay);
   }
@@ -2341,5 +2459,5 @@
     }
   });
 
-  console.debug('[WM Average] page runtime v3.12.2 chargé');
+  console.debug('[WM Average] page runtime v3.12.3 chargé');
 })();
