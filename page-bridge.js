@@ -475,6 +475,73 @@
     fetchTrades();
   });
 
+  window.addEventListener('wm-average-create-listing', async (event) => {
+    const { requestId, cardId, baseAmount, durationMinutes } = event.detail || {};
+    if (!requestId || !cardId) return;
+
+    const amount = Number(baseAmount);
+    const duration = Number(durationMinutes);
+
+    if (!Number.isFinite(amount) || amount <= 0 || !Number.isFinite(duration) || duration <= 0) {
+      window.dispatchEvent(new CustomEvent('wm-average-create-listing-result', {
+        detail: {
+          requestId,
+          cardId,
+          ok: false,
+          error: 'Prix ou durée invalide.'
+        }
+      }));
+      return;
+    }
+
+    try {
+      const response = await originalFetch('/api/marketplace', {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          accept: '*/*',
+          'content-type': 'application/json'
+        },
+        body: JSON.stringify({
+          card_id: cardId,
+          base_amount: amount,
+          duration_minutes: duration
+        })
+      });
+
+      let json = null;
+      try {
+        json = await response.json();
+      } catch (_) {}
+
+      if (!response.ok) {
+        throw new Error(
+          json?.error ||
+          json?.message ||
+          `HTTP ${response.status}`
+        );
+      }
+
+      window.dispatchEvent(new CustomEvent('wm-average-create-listing-result', {
+        detail: {
+          requestId,
+          cardId,
+          ok: true,
+          listing: json
+        }
+      }));
+    } catch (error) {
+      window.dispatchEvent(new CustomEvent('wm-average-create-listing-result', {
+        detail: {
+          requestId,
+          cardId,
+          ok: false,
+          error: String(error?.message || error)
+        }
+      }));
+    }
+  });
+
   window.addEventListener('wm-average-request', async (event) => {
     const { id, requestId } = event.detail || {};
     if (!id || !requestId) return;
