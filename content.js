@@ -1856,7 +1856,7 @@
     priceInput.type = 'number';
     priceInput.min = '1';
     priceInput.step = '1';
-    priceInput.placeholder = 'Ex. 70';
+    priceInput.value = '10';
     priceInput.inputMode = 'decimal';
 
     priceField.append(priceLabel, priceInput);
@@ -1867,12 +1867,26 @@
     const durationLabel = document.createElement('span');
     durationLabel.textContent = 'Durée (minutes)';
 
-    const durationInput = document.createElement('input');
-    durationInput.type = 'number';
-    durationInput.min = '1';
-    durationInput.step = '1';
-    durationInput.value = '60';
-    durationInput.inputMode = 'numeric';
+    const durationInput = document.createElement('select');
+
+    const durationOptions = [
+      [10, '10 min'],
+      [30, '30 min'],
+      [60, '1 h'],
+      [180, '3 h'],
+      [360, '6 h'],
+      [720, '12 h'],
+      [1440, '24 h']
+    ];
+
+    for (const [value, label] of durationOptions) {
+      const option = document.createElement('option');
+      option.value = String(value);
+      option.textContent = label;
+      durationInput.append(option);
+    }
+
+    durationInput.value = '10';
 
     durationField.append(durationLabel, durationInput);
 
@@ -2327,5 +2341,5 @@
     }
   });
 
-  console.debug('[WM Average] page runtime v3.12.1 chargé');
+  console.debug('[WM Average] page runtime v3.12.2 chargé');
 })();
