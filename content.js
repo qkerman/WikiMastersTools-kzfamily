@@ -43,6 +43,7 @@
   const tradesById = new Map();
   const activeTradeValueIds = new Set();
   let tradesRequested = false;
+  const pendingMarketplaceListings = new Map();
 
   function isCollectionPage() {
     return location.pathname === '/collection' || location.pathname.startsWith('/collection/');
@@ -1784,11 +1785,64 @@
 
     header.append(headingWrap, closeButton);
 
+    const saleControls = document.createElement('div');
+    saleControls.className = 'wm-ranking-sale-controls';
+
+    const priceField = document.createElement('label');
+    priceField.className = 'wm-ranking-sale-field';
+
+    const priceLabel = document.createElement('span');
+    priceLabel.textContent = 'Prix de mise en vente';
+
+    const priceInput = document.createElement('input');
+    priceInput.type = 'number';
+    priceInput.min = '1';
+    priceInput.step = '1';
+    priceInput.placeholder = 'Ex. 70';
+    priceInput.inputMode = 'decimal';
+
+    priceField.append(priceLabel, priceInput);
+
+    const durationField = document.createElement('label');
+    durationField.className = 'wm-ranking-sale-field';
+
+    const durationLabel = document.createElement('span');
+    durationLabel.textContent = 'Durée (minutes)';
+
+    const durationInput = document.createElement('input');
+    durationInput.type = 'number';
+    durationInput.min = '1';
+    durationInput.step = '1';
+    durationInput.value = '60';
+    durationInput.inputMode = 'numeric';
+
+    durationField.append(durationLabel, durationInput);
+
+    const hint = document.createElement('div');
+    hint.className = 'wm-ranking-sale-hint';
+    hint.textContent = 'Le bouton de chaque carte utilise ces deux valeurs.';
+
+    saleControls.append(priceField, durationField, hint);
+
     const list = document.createElement('div');
     list.className = 'wm-ranking-list';
 
     const PAGE_SIZE = 50;
     let renderedCount = 0;
+
+    const saleInputsAreValid = () => {
+      const amount = Number(priceInput.value);
+      const duration = Number(durationInput.value);
+      return Number.isFinite(amount) && amount > 0 && Number.isFinite(duration) && duration > 0;
+    };
+
+    const refreshSaleButtons = () => {
+      const valid = saleInputsAreValid();
+      for (const button of list.querySelectorAll('.wm-ranking-sell-button')) {
+        if (button.dataset.state === 'pending' || button.dataset.state === 'success') continue;
+        button.disabled = !valid;
+      }
+    };
 
     const createRankingRow = (row, index) => {
       const item = document.createElement('div');
@@ -1831,7 +1885,50 @@
         price.classList.add('wm-ranking-price-empty');
       }
 
-      item.append(rank, thumb, info, price);
+      const sellButton = document.createElement('button');
+      sellButton.type = 'button';
+      sellButton.className = 'wm-tool-button wm-ranking-sell-button';
+      sellButton.textContent = 'Mettre en vente';
+      sellButton.disabled = !saleInputsAreValid();
+
+      sellButton.addEventListener('click', () => {
+        const amount = Number(priceInput.value);
+        const duration = Number(durationInput.value);
+
+        if (!Number.isFinite(amount) || amount <= 0) {
+          priceInput.focus();
+          return;
+        }
+
+        if (!Number.isFinite(duration) || duration <= 0) {
+          durationInput.focus();
+          return;
+        }
+
+        const requestId = `listing:${row.id}:${Date.now()}:${Math.random().toString(36).slice(2)}`;
+
+        sellButton.disabled = true;
+        sellButton.dataset.state = 'pending';
+        sellButton.textContent = 'Mise en vente…';
+
+        pendingMarketplaceListings.set(requestId, {
+          button: sellButton,
+          row,
+          amount,
+          duration
+        });
+
+        window.dispatchEvent(new CustomEvent('wm-average-create-listing', {
+          detail: {
+            requestId,
+            cardId: row.id,
+            baseAmount: amount,
+            durationMinutes: duration
+          }
+        }));
+      });
+
+      item.append(rank, thumb, info, price, sellButton);
       return item;
     };
 
@@ -1858,6 +1955,8 @@
       if (renderedCount < rows.length) {
         list.append(sentinel);
       }
+
+      refreshSaleButtons();
     };
 
     const observer = new IntersectionObserver((entries) => {
@@ -1869,6 +1968,9 @@
       rootMargin: '250px 0px',
       threshold: 0
     });
+
+    priceInput.addEventListener('input', refreshSaleButtons);
+    durationInput.addEventListener('input', refreshSaleButtons);
 
     renderNextChunk();
     if (renderedCount < rows.length) {
@@ -1884,10 +1986,34 @@
       if (event.target === overlay) close();
     });
 
-    modal.append(header, list);
+    modal.append(header, saleControls, list);
     overlay.append(modal);
     document.body.append(overlay);
   }
+
+  window.addEventListener('wm-average-create-listing-result', (event) => {
+    const detail = event.detail || {};
+    const pending = pendingMarketplaceListings.get(detail.requestId);
+    if (!pending) return;
+
+    pendingMarketplaceListings.delete(detail.requestId);
+
+    const { button, row, amount, duration } = pending;
+    if (!button?.isConnected) return;
+
+    if (detail.ok) {
+      button.dataset.state = 'success';
+      button.disabled = true;
+      button.textContent = 'En vente ✓';
+      button.title = `${formatAverage(amount)} W pendant ${formatAverage(duration)} min`;
+      return;
+    }
+
+    button.dataset.state = 'error';
+    button.disabled = false;
+    button.textContent = 'Erreur — réessayer';
+    button.title = detail.error || 'Impossible de mettre cette carte en vente.';
+  });
 
   document.addEventListener('click', (event) => {
     if (!isPullsPage() || !activePackRecap) return;
@@ -2126,5 +2252,5 @@
     }
   });
 
-  console.debug('[WM Average] page runtime v3.11.2 chargé');
+  console.debug('[WM Average] page runtime v3.12 chargé');
 })();
