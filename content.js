@@ -31,6 +31,7 @@
   let bulkButton = null;
   let rankingButton = null;
   let marketplaceCardId = null;
+  let globalCollectionCardId = null;
   let pullRecapEnabled = readLocalValue(PULL_RECAP_ENABLED_KEY) !== false;
   let activePackRecap = null;
   let packRecapDismissed = false;
@@ -59,6 +60,10 @@
 
   function isTradesPage() {
     return location.pathname === '/trades' || location.pathname.startsWith('/trades/');
+  }
+
+  function isGlobalCollectionPage() {
+    return location.pathname === '/global-collection' || location.pathname.startsWith('/global-collection/');
   }
 
   function isLastPullCardVisible() {
@@ -377,11 +382,69 @@
 
     renderTradeDetailCard(id);
 
+    if (id === globalCollectionCardId) {
+      renderGlobalCollectionInspectedCard();
+    }
+
     for (const tradeId of activeTradeValueIds) {
       const trade = tradesById.get(tradeId);
       if (trade?.items?.some((item) => item.card?.id === id)) {
         renderTradeValues(tradeId);
       }
+    }
+  }
+
+  function getGlobalCollectionInspection() {
+    if (!isGlobalCollectionPage()) return null;
+
+    for (const closeButton of document.querySelectorAll('button[aria-label="Fermer"]')) {
+      const modal = closeButton.closest('.card-frame');
+      if (!modal) continue;
+
+      const h3 = modal.querySelector('h3');
+      if (!h3) continue;
+
+      const card = h3.closest('div[class*="rounded-2xl"][class*="overflow-hidden"][class*="cursor-pointer"]');
+      if (card) {
+        return { modal, card, h3 };
+      }
+    }
+
+    return null;
+  }
+
+  function renderGlobalCollectionInspectedCard() {
+    if (!isGlobalCollectionPage() || !globalCollectionCardId) return;
+
+    const inspection = getGlobalCollectionInspection();
+    if (!inspection) return;
+
+    const title = normalizeTitle(inspection.h3.textContent);
+    if (!title) return;
+
+    const existingMeta = cardMetaById.get(globalCollectionCardId);
+    if (
+      existingMeta?.title &&
+      normalizeTitle(existingMeta.title) !== title
+    ) {
+      return;
+    }
+
+    const meta = {
+      id: globalCollectionCardId,
+      title,
+      rarity: getRarityFromCard(inspection.card),
+      imageUrl: inspection.card.querySelector('img[alt]')?.src || null,
+      count: 1
+    };
+
+    registerCards([meta]);
+    renderCollectionCard(meta.id, inspection.card);
+
+    try {
+      loadCacheForCards([meta]);
+    } catch (error) {
+      reportError('collection globale', error);
     }
   }
 
@@ -1233,6 +1296,10 @@
       ensureTradesLoaded();
       renderTradeButtons();
       renderTradeDetailCards();
+    }
+
+    if (isGlobalCollectionPage()) {
+      renderGlobalCollectionInspectedCard();
     }
   }
 
@@ -2195,6 +2262,14 @@
     handlePackOpened(cards);
   });
 
+  window.addEventListener('wm-average-global-card-inspected', (event) => {
+    const id = event.detail?.id;
+    if (!isGlobalCollectionPage() || !id) return;
+
+    globalCollectionCardId = id;
+    renderGlobalCollectionInspectedCard();
+  });
+
   window.addEventListener('wm-average-marketplace-detail', (event) => {
     const card = event.detail?.card;
     if (!card?.id || !card?.title) return;
@@ -2303,7 +2378,7 @@
         console.debug('[WM Average] navigation SPA détectée:', currentPath);
       }
 
-      if (!isCollectionPage() && !isMarketplaceDetailPage() && !isPullsPage() && !isTradesPage()) return;
+      if (!isCollectionPage() && !isMarketplaceDetailPage() && !isPullsPage() && !isTradesPage() && !isGlobalCollectionPage()) return;
 
       clearTimeout(renderTimer);
       renderTimer = setTimeout(() => {
@@ -2330,7 +2405,7 @@
 
   window.addEventListener('popstate', () => {
     previousPath = location.pathname;
-    if (isCollectionPage() || isMarketplaceDetailPage() || isPullsPage() || isTradesPage()) {
+    if (isCollectionPage() || isMarketplaceDetailPage() || isPullsPage() || isTradesPage() || isGlobalCollectionPage()) {
       setTimeout(() => {
         try {
           renderAll();
@@ -2341,5 +2416,5 @@
     }
   });
 
-  console.debug('[WM Average] page runtime v3.13.1 chargé');
+  console.debug('[WM Average] page runtime v3.14 chargé');
 })();
