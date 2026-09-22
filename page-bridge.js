@@ -66,6 +66,32 @@
     }
   }
 
+  function getGlobalCollectionSummaryCardId(url) {
+    try {
+      const parsed = new URL(url, location.origin);
+      if (parsed.hostname !== 'cyrxjeppjqsxxjayfrur.supabase.co') return null;
+      if (parsed.pathname !== '/rest/v1/cards') return null;
+
+      const select = parsed.searchParams.get('select') || '';
+      if (!select.split(',').map((value) => value.trim()).includes('summary')) return null;
+
+      const rawId = parsed.searchParams.get('id') || '';
+      const match = rawId.match(/^eq\.([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i);
+      return match ? match[1] : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function emitGlobalCollectionInspectedCard(url) {
+    const id = getGlobalCollectionSummaryCardId(url);
+    if (!id) return;
+
+    window.dispatchEvent(new CustomEvent('wm-average-global-card-inspected', {
+      detail: { id }
+    }));
+  }
+
   function mapPackCards(json) {
     if (!Array.isArray(json?.cards)) return [];
 
@@ -447,7 +473,9 @@
       try {
         const input = args[0];
         const url = typeof input === 'string' ? input : input?.url;
-        if (url && url.includes('/api/my-collection')) {
+        if (url && getGlobalCollectionSummaryCardId(url)) {
+          if (response.ok) emitGlobalCollectionInspectedCard(url);
+        } else if (url && url.includes('/api/my-collection')) {
           response.clone().json().then(emitCollection).catch(() => {});
         } else if (url && isTradesApi(url)) {
           response.clone().json().then(emitTrades).catch(() => {});
@@ -479,6 +507,7 @@
         this.__wmUrl &&
         (
           this.__wmUrl.includes('/api/my-collection') ||
+          Boolean(getGlobalCollectionSummaryCardId(this.__wmUrl)) ||
           isTradesApi(this.__wmUrl) ||
           isMarketplaceDetailApi(this.__wmUrl) ||
           isPacksOpenApi(this.__wmUrl)
@@ -487,7 +516,9 @@
         this.addEventListener('load', () => {
           try {
             const json = JSON.parse(this.responseText);
-            if (this.__wmUrl.includes('/api/my-collection')) {
+            if (getGlobalCollectionSummaryCardId(this.__wmUrl)) {
+              emitGlobalCollectionInspectedCard(this.__wmUrl);
+            } else if (this.__wmUrl.includes('/api/my-collection')) {
               emitCollection(json);
             } else if (isTradesApi(this.__wmUrl)) {
               emitTrades(json);
