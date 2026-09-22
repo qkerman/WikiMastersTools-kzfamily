@@ -32,6 +32,7 @@
   let rankingButton = null;
   let marketplaceCardId = null;
   let globalCollectionCardId = null;
+  let globalCollectionInitializedId = null;
   let pullRecapEnabled = readLocalValue(PULL_RECAP_ENABLED_KEY) !== false;
   let activePackRecap = null;
   let packRecapDismissed = false;
@@ -419,6 +420,22 @@
     const inspection = getGlobalCollectionInspection();
     if (!inspection) return;
 
+    const meta = cardMetaById.get(globalCollectionCardId);
+    if (!meta?.title) return;
+
+    if (normalizeTitle(inspection.h3.textContent) !== normalizeTitle(meta.title)) {
+      return;
+    }
+
+    renderCollectionCard(meta.id, inspection.card);
+  }
+
+  function ensureGlobalCollectionInspectedCard() {
+    if (!isGlobalCollectionPage() || !globalCollectionCardId) return;
+
+    const inspection = getGlobalCollectionInspection();
+    if (!inspection) return;
+
     const title = normalizeTitle(inspection.h3.textContent);
     if (!title) return;
 
@@ -441,9 +458,16 @@
     registerCards([meta]);
     renderCollectionCard(meta.id, inspection.card);
 
+    if (globalCollectionInitializedId === meta.id) return;
+
+    // Important: mark as initialized BEFORE loadCacheForCards().
+    // loadCacheForCards() calls renderKnownCard(), which can render this card again.
+    globalCollectionInitializedId = meta.id;
+
     try {
       loadCacheForCards([meta]);
     } catch (error) {
+      globalCollectionInitializedId = null;
       reportError('collection globale', error);
     }
   }
@@ -1299,6 +1323,7 @@
     }
 
     if (isGlobalCollectionPage()) {
+      ensureGlobalCollectionInspectedCard();
       renderGlobalCollectionInspectedCard();
     }
   }
@@ -2266,7 +2291,12 @@
     const id = event.detail?.id;
     if (!isGlobalCollectionPage() || !id) return;
 
+    if (globalCollectionCardId !== id) {
+      globalCollectionInitializedId = null;
+    }
+
     globalCollectionCardId = id;
+    ensureGlobalCollectionInspectedCard();
     renderGlobalCollectionInspectedCard();
   });
 
@@ -2416,5 +2446,5 @@
     }
   });
 
-  console.debug('[WM Average] page runtime v3.14 chargé');
+  console.debug('[WM Average] page runtime v3.14.1 chargé');
 })();
