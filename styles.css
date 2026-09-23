@@ -761,6 +761,10 @@
   color: #64748b;
 }
 
+.wm-pack-recap-price.is-error {
+  color: #fca5a5;
+}
+
 .wm-pack-recap-footer {
   padding: 9px 12px 10px;
   color: #c4b5fd;
@@ -886,6 +890,10 @@
 
 .wm-open-all-price.is-empty {
   color: #64748b;
+}
+
+.wm-open-all-price.is-error {
+  color: #fca5a5;
 }
 
 .wm-open-all-footer {

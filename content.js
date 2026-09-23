@@ -299,6 +299,23 @@
     badge.append(spinner, label);
   }
 
+  // Une cellule de prix a trois états distincts, longtemps affichés tous les
+  // trois comme « — » : erreur de chargement (retentée), aucune vente connue,
+  // ou prix disponible.
+  function applyPriceCellFailure(cell, cacheEntry) {
+    if (cacheEntry?.ok === false) {
+      cell.classList.add('is-error');
+      cell.title = 'Erreur temporaire lors du chargement du prix';
+      cell.textContent = 'Indispo.';
+      return true;
+    }
+
+    cell.classList.add('is-empty');
+    cell.title = 'Aucune vente enregistrée pour cette carte';
+    cell.textContent = '—';
+    return false;
+  }
+
   function resolveAverage(cacheEntry, cardEl, explicitRarity = null) {
     const rarity = explicitRarity || getRarityFromCard(cardEl);
     const averages = cacheEntry?.averages || {};
@@ -1258,8 +1275,7 @@
         value.title = resolvedAverageTitle(row.resolved);
         value.textContent = formatResolvedAverage(row.resolved);
       } else {
-        value.textContent = '—';
-        value.classList.add('is-empty');
+        applyPriceCellFailure(value, cacheMemory.get(row.id));
       }
 
       item.append(rank, thumb, info, value);
@@ -1421,6 +1437,7 @@
 
     let total = 0;
     let priced = 0;
+    let failed = 0;
 
     for (const card of activePackRecap.cards) {
       const row = document.createElement('div');
@@ -1451,9 +1468,8 @@
           priced += 1;
           value.title = resolvedAverageTitle(resolved);
           value.textContent = formatResolvedAverage(resolved);
-        } else {
-          value.textContent = '—';
-          value.classList.add('is-empty');
+        } else if (applyPriceCellFailure(value, cacheEntry)) {
+          failed += 1;
         }
       }
 
@@ -1467,9 +1483,13 @@
     if (loaded < activePackRecap.cards.length) {
       footer.textContent = 'Chargement des prix moyens…';
     } else if (priced === 0) {
-      footer.textContent = 'Aucune carte n’a de prix moyen';
+      footer.textContent = failed > 0
+        ? `Aucun prix moyen • ${failed} échec(s) de chargement`
+        : 'Aucune carte n’a de prix moyen';
     } else {
-      footer.textContent = `Total des prix moyens connus : ${formatAverage(total)} W`;
+      const suffix = failed > 0 ? ` • ${failed} échec(s)` : '';
+      footer.textContent =
+        `Total des prix moyens connus : ${formatAverage(total)} W${suffix}`;
     }
 
     panel.append(header, list, footer);
