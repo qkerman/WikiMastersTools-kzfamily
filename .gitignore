@@ -1,0 +1,4 @@
+web-ext-artifacts/
+*.zip
+.DS_Store
+Thumbs.db
