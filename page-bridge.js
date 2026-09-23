@@ -767,7 +767,7 @@
     marketplaceMineCache.text = `${marketplaceMineCache.text || ''} ${ownedCardId}`;
   }
 
-  async function fetchOwnedCardCandidates(catalogueCardId, title, excludedIds = new Set()) {
+  async function fetchOwnedCardCandidates(catalogueCardId, title) {
     if (!catalogueCardId || !title) {
       throw createSaleError('Carte invalide.', 'INVALID_CARD');
     }
@@ -822,8 +822,7 @@
       for (const card of cards) {
         if (
           card.id === catalogueCardId &&
-          card.ownedCardId &&
-          !excludedIds.has(card.ownedCardId)
+          card.ownedCardId
         ) {
           candidates.push(card);
         }
@@ -856,8 +855,7 @@
   ) {
     const candidates = await fetchOwnedCardCandidates(
       catalogueCardId,
-      title,
-      excludedIds
+      title
     );
 
     let mine = null;
@@ -867,11 +865,35 @@
       console.debug('[WM Average] /marketplace/mine indisponible, fallback copie collection', error);
     }
 
-    if (!mine) {
-      return candidates[0].ownedCardId;
+    const eligible = candidates.filter(
+      (candidate) => !excludedIds.has(candidate.ownedCardId)
+    );
+
+    if (!eligible.length) {
+      const excludedIsListed = mine && candidates.some(
+        (candidate) =>
+          excludedIds.has(candidate.ownedCardId) &&
+          mine.text.includes(candidate.ownedCardId)
+      );
+
+      if (excludedIsListed) {
+        throw createSaleError(
+          'Toutes tes copies de cette carte sont déjà en vente.',
+          'ALREADY_LISTED'
+        );
+      }
+
+      throw createSaleError(
+        'Tu ne possèdes plus cette carte.',
+        'NOT_OWNED'
+      );
     }
 
-    const available = candidates.find(
+    if (!mine) {
+      return eligible[0].ownedCardId;
+    }
+
+    const available = eligible.find(
       (candidate) => !mine.text.includes(candidate.ownedCardId)
     );
 
