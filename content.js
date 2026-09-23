@@ -322,20 +322,28 @@
     }
 
     if (cacheEntry.ok === false) {
-      badge.className = 'wm-average-badge wm-average-empty';
+      if (badge.className !== 'wm-average-badge wm-average-empty') {
+        badge.className = 'wm-average-badge wm-average-empty';
+      }
       badge.title = 'Erreur temporaire lors du chargement du prix';
-      badge.textContent = 'Prix indispo.';
+      if (badge.textContent !== 'Prix indispo.') badge.textContent = 'Prix indispo.';
       return;
     }
 
     badge.title = 'Prix moyen des ventes (cache 24 h)';
     const average = chooseAverage(cacheEntry, card, cardMetaById.get(id)?.rarity || null);
+
     if (average == null) {
-      badge.className = 'wm-average-badge wm-average-empty';
-      badge.textContent = 'Moy. —';
+      if (badge.className !== 'wm-average-badge wm-average-empty') {
+        badge.className = 'wm-average-badge wm-average-empty';
+      }
+      if (badge.textContent !== 'Moy. —') badge.textContent = 'Moy. —';
     } else {
-      badge.className = 'wm-average-badge';
-      badge.textContent = `Moy. ${formatAverage(average)} W`;
+      if (badge.className !== 'wm-average-badge') {
+        badge.className = 'wm-average-badge';
+      }
+      const text = `Moy. ${formatAverage(average)} W`;
+      if (badge.textContent !== text) badge.textContent = text;
     }
   }
 
@@ -425,7 +433,17 @@
 
     for (const card of document.querySelectorAll('[data-wm-card-id]')) {
       const id = card.dataset.wmCardId;
-      if (id) renderCollectionCard(id, card);
+      if (!id) continue;
+
+      renderCollectionCard(id, card);
+
+      if (
+        !isCacheEntryValid(cacheMemory.get(id)) &&
+        !queuedIds.has(id) &&
+        !inFlightIds.has(id)
+      ) {
+        ensureCollectionPriceObserver().observe(card);
+      }
     }
 
     for (const h3 of document.querySelectorAll('h3:not([data-wm-card-bound])')) {
@@ -2656,8 +2674,27 @@
     }, delay);
   }
 
-  const mainObserver = new MutationObserver(() => {
+  function mutationIsExtensionOwned(mutation) {
+    const target = mutation?.target?.nodeType === Node.ELEMENT_NODE
+      ? mutation.target
+      : mutation?.target?.parentElement;
+
+    return Boolean(
+      target?.closest?.(
+        '.wm-average-badge, .wm-tools-bar, .wm-modal-overlay, .wm-marketplace-average-wrap, ' +
+        '.wm-pulls-tools, .wm-pulls-info, .wm-pack-recap, .wm-trade-values-panel, ' +
+        '.wm-trade-values-controls, #wm-open-all-overlay'
+      )
+    );
+  }
+
+  const mainObserver = new MutationObserver((mutations) => {
     handlePathChange();
+
+    if (mutations.every(mutationIsExtensionOwned)) {
+      return;
+    }
+
     scheduleRender();
   });
 
@@ -2683,6 +2720,7 @@
     attachMainObserver();
 
     const hasOutsideChange = mutations.some((mutation) => {
+      if (mutationIsExtensionOwned(mutation)) return false;
       if (!previousMain) return true;
       return !previousMain.contains(mutation.target);
     });
@@ -2717,5 +2755,5 @@
     scheduleRender(0);
   });
 
-  console.debug('[WM Average] page runtime v3.15 chargé');
+  console.debug('[WM Average] page runtime v3.15.1 chargé');
 })();
