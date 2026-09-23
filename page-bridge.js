@@ -7,6 +7,13 @@
   const MAX_COLLECTION_PAGES = 200;
   const MAX_BULK_PACKS = 100;
   const RARITY_ORDER = ['L', 'UR', 'SR', 'R', 'PC', 'C'];
+  const MARKETPLACE_MINE_CACHE_TTL = 15 * 1000;
+
+  let marketplaceMineCache = {
+    fetchedAt: 0,
+    json: null,
+    text: ''
+  };
 
   function mapEntry(entry) {
     const card = entry && entry.card;
@@ -219,6 +226,109 @@
     }));
   }
 
+  async function fetchJsonRetry(url, options = {}, {
+    label = 'Requête',
+    maxAttempts = 3
+  } = {}) {
+    let lastError = null;
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      try {
+        const response = await originalFetch(url, options);
+
+        if (response.ok) {
+          return await response.json();
+        }
+
+        const retryable = response.status >= 500 && response.status <= 599;
+        lastError = new Error(`${label}: HTTP ${response.status}`);
+
+        if (!retryable || attempt >= maxAttempts) {
+          throw lastError;
+        }
+      } catch (error) {
+        lastError = error;
+
+        const statusMatch = String(error?.message || '').match(/HTTP\s+(\d+)/);
+        const status = statusMatch ? Number(statusMatch[1]) : null;
+        const retryable = status == null || (status >= 500 && status <= 599);
+
+        if (!retryable || attempt >= maxAttempts) {
+          throw error;
+        }
+      }
+
+      const delayMs = Math.min(1800, 300 * (2 ** (attempt - 1)));
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+
+    throw lastError || new Error(`${label}: erreur inconnue`);
+  }
+
+  function extractRarityCounts(json) {
+    if (!json || typeof json !== 'object') return null;
+
+    const candidates = [
+      json.rarityCounts,
+      json.rarity_counts,
+      json.rarities,
+      json.counts,
+      json.stats?.rarityCounts,
+      json.stats?.rarity_counts,
+      json.stats?.rarities,
+      json.stats?.counts
+    ];
+
+    for (const candidate of candidates) {
+      if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) continue;
+
+      const counts = {};
+      let found = false;
+
+      for (const rarity of RARITY_ORDER) {
+        const value = Number(candidate[rarity]);
+        if (Number.isFinite(value) && value >= 0) {
+          counts[rarity] = value;
+          found = true;
+        }
+      }
+
+      if (found) return counts;
+    }
+
+    if (Array.isArray(json.rarities)) {
+      const counts = {};
+      for (const row of json.rarities) {
+        const rarity = row?.rarity || row?.name || row?.key;
+        const count = Number(row?.count ?? row?.total ?? row?.value);
+        if (RARITY_ORDER.includes(rarity) && Number.isFinite(count) && count >= 0) {
+          counts[rarity] = count;
+        }
+      }
+      if (Object.keys(counts).length) return counts;
+    }
+
+    return null;
+  }
+
+  async function fetchCollectionRarityCounts() {
+    try {
+      const json = await fetchJsonRetry(
+        '/api/my-collection/stats?sort=rarity',
+        {
+          method: 'GET',
+          credentials: 'include',
+          headers: { accept: '*/*' }
+        },
+        { label: 'Stats collection', maxAttempts: 3 }
+      );
+      return extractRarityCounts(json);
+    } catch (error) {
+      console.debug('[WM Average] stats de rareté indisponibles, fallback pages', error);
+      return null;
+    }
+  }
+
   async function fetchCollectionPage(page, stats = false) {
     let attempt = 0;
 
@@ -274,12 +384,11 @@
         .map((rarity) => RARITY_ORDER.indexOf(rarity))
         .filter((index) => index >= 0);
 
-      // Lowest rarity requested = furthest to the right in the descending rarity order.
-      // If nothing was provided, keep the old behaviour and fetch the whole collection.
       const lowestRequestedIndex = selectedIndexes.length
         ? Math.max(...selectedIndexes)
         : RARITY_ORDER.length - 1;
 
+      const rarityCounts = await fetchCollectionRarityCounts();
       const first = await fetchCollectionPage(0, true);
       const firstCards = extractCards(first);
       const total = typeof first?.total === 'number' ? first.total : Number.NaN;
@@ -291,58 +400,70 @@
         totalPages = Math.max(1, Math.ceil(total / pageSize));
       }
 
+      let targetPages = totalPages;
+      let exactTargetFromStats = false;
+
+      if (rarityCounts && pageSize > 0 && selectedIndexes.length) {
+        let cardsThroughLowestRarity = 0;
+
+        for (let index = 0; index <= lowestRequestedIndex; index += 1) {
+          cardsThroughLowestRarity += Number(rarityCounts[RARITY_ORDER[index]]) || 0;
+        }
+
+        if (cardsThroughLowestRarity > 0) {
+          targetPages = Math.max(1, Math.ceil(cardsThroughLowestRarity / pageSize));
+          if (Number.isFinite(totalPages) && totalPages > 0) {
+            targetPages = Math.min(targetPages, totalPages);
+          }
+          exactTargetFromStats = true;
+        }
+      }
+
       let loadedPages = 1;
-      let stoppedEarly = false;
+      let stoppedEarly = exactTargetFromStats && targetPages < totalPages;
 
       const pageHasPassedRequestedRarity = (cards) => {
         if (!Array.isArray(cards) || !cards.length) return false;
-
         const lastRarity = cards[cards.length - 1]?.rarity;
         const lastIndex = RARITY_ORDER.indexOf(lastRarity);
-
-        // We only stop once the LAST card of the page is strictly lower
-        // than the lowest rarity requested. If it is equal, there may still
-        // be more cards of that rarity on the next page.
         return lastIndex >= 0 && lastIndex > lowestRequestedIndex;
       };
 
       window.dispatchEvent(new CustomEvent('wm-average-all-collection-progress', {
-        detail: { requestId, loadedPages, totalPages }
+        detail: {
+          requestId,
+          loadedPages,
+          totalPages: exactTargetFromStats ? targetPages : totalPages,
+          serverTotalPages: totalPages
+        }
       }));
 
-      if (pageHasPassedRequestedRarity(firstCards)) {
+      if (!exactTargetFromStats && pageHasPassedRequestedRarity(firstCards)) {
         stoppedEarly = true;
-      } else if (Number.isFinite(total) && totalPages > 1) {
-        for (let page = 1; page < totalPages && page < MAX_COLLECTION_PAGES; page += 1) {
+      } else if (pageSize > 0) {
+        const maxPageExclusive = exactTargetFromStats
+          ? Math.min(targetPages, MAX_COLLECTION_PAGES)
+          : (Number.isFinite(total) && totalPages > 0
+              ? Math.min(totalPages, MAX_COLLECTION_PAGES)
+              : MAX_COLLECTION_PAGES);
+
+        for (let page = 1; page < maxPageExclusive; page += 1) {
           const json = await fetchCollectionPage(page, false);
           const cards = extractCards(json);
           pages[page] = cards;
           loadedPages += 1;
 
           window.dispatchEvent(new CustomEvent('wm-average-all-collection-progress', {
-            detail: { requestId, loadedPages, totalPages }
+            detail: {
+              requestId,
+              loadedPages,
+              totalPages: exactTargetFromStats ? targetPages : (Number.isFinite(total) ? totalPages : 0),
+              serverTotalPages: totalPages
+            }
           }));
 
-          if (pageHasPassedRequestedRarity(cards)) {
-            stoppedEarly = page + 1 < totalPages;
-            break;
-          }
-
-          if (cards.length < pageSize) break;
-        }
-      } else if (!Number.isFinite(total) && pageSize > 0) {
-        for (let page = 1; page < MAX_COLLECTION_PAGES; page += 1) {
-          const json = await fetchCollectionPage(page, false);
-          const cards = extractCards(json);
-          pages[page] = cards;
-          loadedPages += 1;
-
-          window.dispatchEvent(new CustomEvent('wm-average-all-collection-progress', {
-            detail: { requestId, loadedPages, totalPages: 0 }
-          }));
-
-          if (pageHasPassedRequestedRarity(cards)) {
-            stoppedEarly = true;
+          if (!exactTargetFromStats && pageHasPassedRequestedRarity(cards)) {
+            stoppedEarly = Number.isFinite(total) ? page + 1 < totalPages : true;
             break;
           }
 
@@ -353,8 +474,10 @@
       const deduped = new Map();
       for (const pageCards of pages) {
         if (!Array.isArray(pageCards)) continue;
+
         for (const card of pageCards) {
           const existing = deduped.get(card.id);
+
           if (existing) {
             existing.count = Math.max(existing.count || 1, card.count || 1);
             const ownershipIds = new Set([
@@ -362,6 +485,7 @@
               ...(Array.isArray(card.ownedCardIds) ? card.ownedCardIds : []),
               card.ownedCardId
             ].filter(Boolean));
+
             existing.ownedCardIds = [...ownershipIds];
             if (!existing.ownedCardId && existing.ownedCardIds.length) {
               existing.ownedCardId = existing.ownedCardIds[0];
@@ -372,15 +496,24 @@
         }
       }
 
+      const complete =
+        lowestRequestedIndex >= RARITY_ORDER.length - 1 &&
+        !stoppedEarly &&
+        (
+          !Number.isFinite(total) ||
+          loadedPages >= totalPages
+        );
+
       window.dispatchEvent(new CustomEvent('wm-average-all-collection', {
         detail: {
           requestId,
           ok: true,
           cards: [...deduped.values()],
           total: Number.isFinite(total) ? total : deduped.size,
-          complete: !stoppedEarly,
+          complete,
           loadedPages,
-          totalPages
+          totalPages: exactTargetFromStats ? targetPages : totalPages,
+          usedRarityStats: exactTargetFromStats
         }
       }));
     } catch (error) {
@@ -592,12 +725,55 @@
     fetchTrades();
   });
 
-  async function fetchOwnedCardId(catalogueCardId, title, excludeOwnedCardId = null) {
+  function createSaleError(message, code) {
+    const error = new Error(message);
+    error.code = code;
+    return error;
+  }
+
+  async function fetchMarketplaceMine(force = false) {
+    const now = Date.now();
+
+    if (
+      !force &&
+      marketplaceMineCache.json &&
+      now - marketplaceMineCache.fetchedAt < MARKETPLACE_MINE_CACHE_TTL
+    ) {
+      return marketplaceMineCache;
+    }
+
+    const json = await fetchJsonRetry(
+      '/api/marketplace/mine',
+      {
+        method: 'GET',
+        credentials: 'include',
+        headers: { accept: '*/*' }
+      },
+      { label: 'Mes ventes', maxAttempts: 3 }
+    );
+
+    marketplaceMineCache = {
+      fetchedAt: now,
+      json,
+      text: JSON.stringify(json || {})
+    };
+
+    return marketplaceMineCache;
+  }
+
+  function markOwnedCardListedInMineCache(ownedCardId) {
+    if (!ownedCardId) return;
+    marketplaceMineCache.fetchedAt = Date.now();
+    marketplaceMineCache.text = `${marketplaceMineCache.text || ''} ${ownedCardId}`;
+  }
+
+  async function fetchOwnedCardCandidates(catalogueCardId, title, excludedIds = new Set()) {
     if (!catalogueCardId || !title) {
-      throw new Error('Carte invalide.');
+      throw createSaleError('Carte invalide.', 'INVALID_CARD');
     }
 
     const query = String(title).trim();
+    const candidates = [];
     let page = 0;
     let totalPages = 1;
 
@@ -624,9 +800,14 @@
           }
 
           if (response.status < 500 || response.status > 599) {
-            throw new Error(`Recherche copie: HTTP ${response.status}`);
+            throw createSaleError(
+              `Recherche copie: HTTP ${response.status}`,
+              'OWNERSHIP_LOOKUP_FAILED'
+            );
           }
         } catch (error) {
+          if (error?.code) throw error;
+
           const statusMatch = String(error?.message || '').match(/HTTP\s+(\d+)/);
           const status = statusMatch ? Number(statusMatch[1]) : null;
           const retryable = status == null || (status >= 500 && status <= 599);
@@ -638,14 +819,14 @@
       }
 
       const cards = extractCards(json);
-      const exact = cards.find(
-        (card) =>
+      for (const card of cards) {
+        if (
           card.id === catalogueCardId &&
           card.ownedCardId &&
-          card.ownedCardId !== excludeOwnedCardId
-      );
-      if (exact?.ownedCardId) {
-        return exact.ownedCardId;
+          !excludedIds.has(card.ownedCardId)
+        ) {
+          candidates.push(card);
+        }
       }
 
       if (page === 0) {
@@ -660,7 +841,48 @@
       page += 1;
     }
 
-    throw new Error('Impossible de trouver ta copie de cette carte.');
+    if (!candidates.length) {
+      throw createSaleError('Tu ne possèdes plus cette carte.', 'NOT_OWNED');
+    }
+
+    return candidates;
+  }
+
+  async function resolveAvailableOwnedCardId(
+    catalogueCardId,
+    title,
+    excludedIds = new Set(),
+    forceMine = false
+  ) {
+    const candidates = await fetchOwnedCardCandidates(
+      catalogueCardId,
+      title,
+      excludedIds
+    );
+
+    let mine = null;
+    try {
+      mine = await fetchMarketplaceMine(forceMine);
+    } catch (error) {
+      console.debug('[WM Average] /marketplace/mine indisponible, fallback copie collection', error);
+    }
+
+    if (!mine) {
+      return candidates[0].ownedCardId;
+    }
+
+    const available = candidates.find(
+      (candidate) => !mine.text.includes(candidate.ownedCardId)
+    );
+
+    if (available?.ownedCardId) {
+      return available.ownedCardId;
+    }
+
+    throw createSaleError(
+      'Toutes tes copies de cette carte sont déjà en vente.',
+      'ALREADY_LISTED'
+    );
   }
 
   async function submitMarketplaceListing(cardId, amount, duration) {
@@ -723,11 +945,26 @@
     let staleOwnedCardId = null;
 
     try {
+      const mine = await fetchMarketplaceMine(false).catch(() => null);
+
+      if (
+        resolvedOwnedCardId &&
+        mine?.text?.includes(resolvedOwnedCardId)
+      ) {
+        staleOwnedCardId = resolvedOwnedCardId;
+        resolvedOwnedCardId = null;
+      }
+
       if (!resolvedOwnedCardId) {
         window.dispatchEvent(new CustomEvent('wm-average-create-listing-progress', {
           detail: { requestId, state: 'resolving-id' }
         }));
-        resolvedOwnedCardId = await fetchOwnedCardId(catalogueCardId, title);
+
+        resolvedOwnedCardId = await resolveAvailableOwnedCardId(
+          catalogueCardId,
+          title,
+          new Set(staleOwnedCardId ? [staleOwnedCardId] : [])
+        );
       }
 
       let { response, json } = await submitMarketplaceListing(
@@ -747,10 +984,11 @@
           }
         }));
 
-        resolvedOwnedCardId = await fetchOwnedCardId(
+        resolvedOwnedCardId = await resolveAvailableOwnedCardId(
           catalogueCardId,
           title,
-          staleOwnedCardId
+          new Set([staleOwnedCardId]),
+          true
         );
 
         ({ response, json } = await submitMarketplaceListing(
@@ -777,6 +1015,8 @@
         return;
       }
 
+      markOwnedCardListedInMineCache(resolvedOwnedCardId);
+
       window.dispatchEvent(new CustomEvent('wm-average-create-listing-result', {
         detail: {
           requestId,
@@ -794,9 +1034,13 @@
           catalogueCardId,
           ownedCardId: resolvedOwnedCardId,
           staleOwnedCardId,
-          ownershipError: String(error?.message || '')
-            .toLocaleLowerCase('fr')
-            .includes('vous ne possédez pas cette carte'),
+          notOwned: error?.code === 'NOT_OWNED',
+          alreadyListed: error?.code === 'ALREADY_LISTED',
+          ownershipError:
+            error?.code === 'NOT_OWNED' ||
+            String(error?.message || '')
+              .toLocaleLowerCase('fr')
+              .includes('vous ne possédez pas cette carte'),
           ok: false,
           error: String(error?.message || error)
         }
@@ -808,49 +1052,73 @@
     const { id, requestId } = event.detail || {};
     if (!id || !requestId) return;
 
-    try {
-      const response = await originalFetch(
-        `/api/marketplace/cards/${encodeURIComponent(id)}/sales?scope=summary`,
-        {
-          method: 'GET',
-          credentials: 'include',
-          headers: { accept: '*/*' }
-        }
-      );
+    let lastError = null;
 
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
-
-      const json = await response.json();
-      const averages = {};
-      if (json?.summary && typeof json.summary === 'object') {
-        for (const [rarity, value] of Object.entries(json.summary)) {
-          if (value && Number.isFinite(Number(value.average))) {
-            averages[rarity] = Number(value.average);
+    for (let attempt = 1; attempt <= 3; attempt += 1) {
+      try {
+        const response = await originalFetch(
+          `/api/marketplace/cards/${encodeURIComponent(id)}/sales?scope=summary`,
+          {
+            method: 'GET',
+            credentials: 'include',
+            headers: { accept: '*/*' }
           }
+        );
+
+        if (!response.ok) {
+          const retryable = response.status >= 500 && response.status <= 599;
+          lastError = new Error(`HTTP ${response.status}`);
+
+          if (!retryable || attempt >= 3) {
+            throw lastError;
+          }
+        } else {
+          const json = await response.json();
+          const averages = {};
+
+          if (json?.summary && typeof json.summary === 'object') {
+            for (const [rarity, value] of Object.entries(json.summary)) {
+              if (value && Number.isFinite(Number(value.average))) {
+                averages[rarity] = Number(value.average);
+              }
+            }
+          }
+
+          window.dispatchEvent(new CustomEvent('wm-average-response', {
+            detail: {
+              requestId,
+              id,
+              ok: true,
+              title: json?.wikipedia_title || null,
+              averages
+            }
+          }));
+          return;
+        }
+      } catch (error) {
+        lastError = error;
+
+        const statusMatch = String(error?.message || '').match(/HTTP\s+(\d+)/);
+        const status = statusMatch ? Number(statusMatch[1]) : null;
+        const retryable = status == null || (status >= 500 && status <= 599);
+
+        if (!retryable || attempt >= 3) {
+          break;
         }
       }
 
-      window.dispatchEvent(new CustomEvent('wm-average-response', {
-        detail: {
-          requestId,
-          id,
-          ok: true,
-          title: json?.wikipedia_title || null,
-          averages
-        }
-      }));
-    } catch (error) {
-      window.dispatchEvent(new CustomEvent('wm-average-response', {
-        detail: {
-          requestId,
-          id,
-          ok: false,
-          error: String(error?.message || error)
-        }
-      }));
+      await new Promise((resolve) => setTimeout(resolve, 300 * attempt));
     }
+
+    window.dispatchEvent(new CustomEvent('wm-average-response', {
+      detail: {
+        requestId,
+        id,
+        ok: false,
+        retryAfterMs: 60 * 1000,
+        error: String(lastError?.message || lastError || 'Erreur réseau')
+      }
+    }));
   });
 
   console.debug('[WM Average] bridge installé');
