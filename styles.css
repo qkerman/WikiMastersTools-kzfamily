@@ -1079,3 +1079,13 @@
 }
 
 
+
+
+.wm-ranking-row-unowned {
+  opacity: 0.56;
+}
+
+.wm-ranking-row-unowned .wm-ranking-title {
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
+}
