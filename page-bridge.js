@@ -6,6 +6,7 @@
   const COLLECTION_FETCH_CONCURRENCY = 1;
   const MAX_COLLECTION_PAGES = 200;
   const MAX_BULK_PACKS = 100;
+  const RARITY_ORDER = ['L', 'UR', 'SR', 'R', 'PC', 'C'];
 
   function mapEntry(entry) {
     const card = entry && entry.card;
@@ -267,8 +268,18 @@
     }
   }
 
-  async function fetchAllCollection(requestId) {
+  async function fetchAllCollection(requestId, selectedRarities = []) {
     try {
+      const selectedIndexes = (Array.isArray(selectedRarities) ? selectedRarities : [])
+        .map((rarity) => RARITY_ORDER.indexOf(rarity))
+        .filter((index) => index >= 0);
+
+      // Lowest rarity requested = furthest to the right in the descending rarity order.
+      // If nothing was provided, keep the old behaviour and fetch the whole collection.
+      const lowestRequestedIndex = selectedIndexes.length
+        ? Math.max(...selectedIndexes)
+        : RARITY_ORDER.length - 1;
+
       const first = await fetchCollectionPage(0, true);
       const firstCards = extractCards(first);
       const total = typeof first?.total === 'number' ? first.total : Number.NaN;
@@ -280,38 +291,61 @@
         totalPages = Math.max(1, Math.ceil(total / pageSize));
       }
 
+      let loadedPages = 1;
+      let stoppedEarly = false;
+
+      const pageHasPassedRequestedRarity = (cards) => {
+        if (!Array.isArray(cards) || !cards.length) return false;
+
+        const lastRarity = cards[cards.length - 1]?.rarity;
+        const lastIndex = RARITY_ORDER.indexOf(lastRarity);
+
+        // We only stop once the LAST card of the page is strictly lower
+        // than the lowest rarity requested. If it is equal, there may still
+        // be more cards of that rarity on the next page.
+        return lastIndex >= 0 && lastIndex > lowestRequestedIndex;
+      };
+
       window.dispatchEvent(new CustomEvent('wm-average-all-collection-progress', {
-        detail: { requestId, loadedPages: 1, totalPages }
+        detail: { requestId, loadedPages, totalPages }
       }));
 
-      if (totalPages > 1) {
-        let nextPage = 1;
-        let loadedPages = 1;
+      if (pageHasPassedRequestedRarity(firstCards)) {
+        stoppedEarly = true;
+      } else if (Number.isFinite(total) && totalPages > 1) {
+        for (let page = 1; page < totalPages && page < MAX_COLLECTION_PAGES; page += 1) {
+          const json = await fetchCollectionPage(page, false);
+          const cards = extractCards(json);
+          pages[page] = cards;
+          loadedPages += 1;
 
-        const worker = async () => {
-          while (true) {
-            const page = nextPage++;
-            if (page >= totalPages || page >= MAX_COLLECTION_PAGES) return;
-            const json = await fetchCollectionPage(page, false);
-            pages[page] = extractCards(json);
-            loadedPages += 1;
-            window.dispatchEvent(new CustomEvent('wm-average-all-collection-progress', {
-              detail: { requestId, loadedPages, totalPages }
-            }));
+          window.dispatchEvent(new CustomEvent('wm-average-all-collection-progress', {
+            detail: { requestId, loadedPages, totalPages }
+          }));
+
+          if (pageHasPassedRequestedRarity(cards)) {
+            stoppedEarly = page + 1 < totalPages;
+            break;
           }
-        };
 
-        await Promise.all(
-          Array.from({ length: Math.min(COLLECTION_FETCH_CONCURRENCY, totalPages - 1) }, () => worker())
-        );
+          if (cards.length < pageSize) break;
+        }
       } else if (!Number.isFinite(total) && pageSize > 0) {
         for (let page = 1; page < MAX_COLLECTION_PAGES; page += 1) {
           const json = await fetchCollectionPage(page, false);
           const cards = extractCards(json);
           pages[page] = cards;
+          loadedPages += 1;
+
           window.dispatchEvent(new CustomEvent('wm-average-all-collection-progress', {
-            detail: { requestId, loadedPages: page + 1, totalPages: 0 }
+            detail: { requestId, loadedPages, totalPages: 0 }
           }));
+
+          if (pageHasPassedRequestedRarity(cards)) {
+            stoppedEarly = true;
+            break;
+          }
+
           if (cards.length < pageSize) break;
         }
       }
@@ -343,7 +377,10 @@
           requestId,
           ok: true,
           cards: [...deduped.values()],
-          total: Number.isFinite(total) ? total : deduped.size
+          total: Number.isFinite(total) ? total : deduped.size,
+          complete: !stoppedEarly,
+          loadedPages,
+          totalPages
         }
       }));
     } catch (error) {
@@ -537,7 +574,12 @@
   window.addEventListener('wm-average-load-all-collection', (event) => {
     const requestId = event.detail?.requestId;
     if (!requestId) return;
-    fetchAllCollection(requestId);
+
+    const selectedRarities = Array.isArray(event.detail?.selectedRarities)
+      ? event.detail.selectedRarities
+      : [];
+
+    fetchAllCollection(requestId, selectedRarities);
   });
 
   window.addEventListener('wm-average-open-all-packs', (event) => {
