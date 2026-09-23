@@ -1514,7 +1514,10 @@
     setBulkButtonState('Collection…', true);
 
     window.dispatchEvent(new CustomEvent('wm-average-load-all-collection', {
-      detail: { requestId: bulkRequestId }
+      detail: {
+        requestId: bulkRequestId,
+        selectedRarities: [...bulkSelectedRarities]
+      }
     }));
   }
 
@@ -2355,9 +2358,33 @@
     const cards = Array.isArray(detail.cards) ? detail.cards : [];
     const fetchedAt = Date.now();
 
-    storageSet({
-      [ALL_COLLECTION_KEY]: { fetchedAt, cards }
-    });
+    if (detail.complete) {
+      storageSet({
+        [ALL_COLLECTION_KEY]: { fetchedAt, cards, complete: true }
+      });
+    } else {
+      // This bulk load intentionally stopped once it passed the lowest selected
+      // rarity. Keep an existing complete collection cache intact so
+      // « Plus chères » does not suddenly lose the lower rarities.
+      const existingEntry = storageGet(ALL_COLLECTION_KEY)[ALL_COLLECTION_KEY];
+
+      if (Array.isArray(existingEntry?.cards) && existingEntry.complete !== false) {
+        const merged = new Map(existingEntry.cards.map((card) => [card.id, { ...card }]));
+
+        for (const card of cards) {
+          const previous = merged.get(card.id);
+          merged.set(card.id, previous ? { ...previous, ...card } : { ...card });
+        }
+
+        storageSet({
+          [ALL_COLLECTION_KEY]: {
+            ...existingEntry,
+            cards: [...merged.values()],
+            complete: true
+          }
+        });
+      }
+    }
 
     if (!cards.length) {
       finishBulkLoad();
@@ -2446,5 +2473,5 @@
     }
   });
 
-  console.debug('[WM Average] page runtime v3.14.1 chargé');
+  console.debug('[WM Average] page runtime v3.14.2 chargé');
 })();
