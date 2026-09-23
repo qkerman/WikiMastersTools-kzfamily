@@ -26,6 +26,11 @@
   border-color: rgba(209, 213, 219, 0.35);
 }
 
+.wm-average-badge.wm-average-substituted {
+  color: #ffd79a;
+  border-color: rgba(255, 183, 77, 0.5);
+}
+
 .wm-average-badge.wm-average-loading {
   display: inline-flex;
   align-items: center;
