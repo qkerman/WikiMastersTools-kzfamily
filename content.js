@@ -299,17 +299,54 @@
     badge.append(spinner, label);
   }
 
-  function chooseAverage(cacheEntry, cardEl, explicitRarity = null) {
-    const rarity = explicitRarity || getRarityFromCard(cardEl);
-    const averages = cacheEntry?.averages || {};
-    if (rarity && Number.isFinite(Number(averages[rarity]))) {
-      return Number(averages[rarity]);
+  // Une cellule de prix a trois états distincts, longtemps affichés tous les
+  // trois comme « — » : erreur de chargement (retentée), aucune vente connue,
+  // ou prix disponible.
+  function applyPriceCellFailure(cell, cacheEntry) {
+    if (cacheEntry?.ok === false) {
+      cell.classList.add('is-error');
+      cell.title = 'Erreur temporaire lors du chargement du prix';
+      cell.textContent = 'Indispo.';
+      return true;
     }
 
-    const values = Object.values(averages)
-      .map(Number)
-      .filter(Number.isFinite);
-    return values.length === 1 ? values[0] : null;
+    cell.classList.add('is-empty');
+    cell.title = 'Aucune vente enregistrée pour cette carte';
+    cell.textContent = '—';
+    return false;
+  }
+
+  function resolveAverage(cacheEntry, cardEl, explicitRarity = null) {
+    const rarity = explicitRarity || getRarityFromCard(cardEl);
+    const averages = cacheEntry?.averages || {};
+
+    if (rarity && Number.isFinite(Number(averages[rarity]))) {
+      return { value: Number(averages[rarity]), rarity, substituted: false };
+    }
+
+    // Aucune vente dans cette rareté : on retombe sur la seule autre rareté
+    // cotée, quand il n'y en a qu'une. Le prix varie fortement d'une rareté à
+    // l'autre, donc l'appelant doit signaler la substitution à l'utilisateur.
+    const priced = Object.entries(averages)
+      .map(([key, value]) => [key, Number(value)])
+      .filter(([, value]) => Number.isFinite(value));
+
+    if (priced.length === 1) {
+      return { value: priced[0][1], rarity: priced[0][0], substituted: true };
+    }
+
+    return { value: null, rarity: null, substituted: false };
+  }
+
+  function formatResolvedAverage(resolved) {
+    const text = `${formatAverage(resolved.value)} W`;
+    return resolved.substituted ? `${text} (${resolved.rarity})` : text;
+  }
+
+  function resolvedAverageTitle(resolved) {
+    return resolved.substituted
+      ? `Aucune vente dans cette rareté. Prix moyen de la rareté ${resolved.rarity} (cache 24 h)`
+      : 'Prix moyen des ventes (cache 24 h)';
   }
 
   function renderCollectionCard(id, card) {
@@ -330,19 +367,20 @@
       return;
     }
 
-    badge.title = 'Prix moyen des ventes (cache 24 h)';
-    const average = chooseAverage(cacheEntry, card, cardMetaById.get(id)?.rarity || null);
+    const resolved = resolveAverage(cacheEntry, card, cardMetaById.get(id)?.rarity || null);
+    badge.title = resolvedAverageTitle(resolved);
 
-    if (average == null) {
+    if (resolved.value == null) {
       if (badge.className !== 'wm-average-badge wm-average-empty') {
         badge.className = 'wm-average-badge wm-average-empty';
       }
       if (badge.textContent !== 'Moy. —') badge.textContent = 'Moy. —';
     } else {
-      if (badge.className !== 'wm-average-badge') {
-        badge.className = 'wm-average-badge';
-      }
-      const text = `Moy. ${formatAverage(average)} W`;
+      const className = resolved.substituted
+        ? 'wm-average-badge wm-average-substituted'
+        : 'wm-average-badge';
+      if (badge.className !== className) badge.className = className;
+      const text = `Moy. ${formatResolvedAverage(resolved)}`;
       if (badge.textContent !== text) badge.textContent = text;
     }
   }
@@ -524,9 +562,10 @@
       return;
     }
 
-    const average = chooseAverage(cacheEntry, null, meta.rarity || null);
+    const resolved = resolveAverage(cacheEntry, null, meta.rarity || null);
     valueEl.className = 'wm-marketplace-average-value';
-    valueEl.textContent = average == null ? '—' : `${formatAverage(average)} W`;
+    valueEl.title = resolvedAverageTitle(resolved);
+    valueEl.textContent = resolved.value == null ? '—' : formatResolvedAverage(resolved);
   }
 
   function renderKnownCard(id) {
@@ -881,11 +920,13 @@
         spinner.className = 'wm-average-spinner';
         value.append(spinner, document.createTextNode('…'));
       } else {
-        const average = chooseAverage(entry, null, card.rarity || null);
+        const resolved = resolveAverage(entry, null, card.rarity || null);
+        const average = resolved.value;
         if (Number.isFinite(average)) {
           pricedCards += 1;
           total += average;
-          value.textContent = `${formatAverage(average)} W`;
+          value.title = resolvedAverageTitle(resolved);
+          value.textContent = formatResolvedAverage(resolved);
         } else {
           missing += 1;
           value.textContent = '—';
@@ -1169,8 +1210,9 @@
     const rows = openAllSummaryCards.map((card, index) => {
       const entry = cacheMemory.get(card.id);
       const loaded = Boolean(entry);
-      const average = entry ? chooseAverage(entry, null, card.rarity || null) : null;
-      return { ...card, _originalIndex: index, loaded, average };
+      const resolved = entry ? resolveAverage(entry, null, card.rarity || null) : null;
+      const average = resolved ? resolved.value : null;
+      return { ...card, _originalIndex: index, loaded, average, resolved };
     });
 
     rows.sort((a, b) => {
@@ -1230,10 +1272,10 @@
         spinner.className = 'wm-average-spinner';
         value.append(spinner, document.createTextNode('…'));
       } else if (Number.isFinite(row.average)) {
-        value.textContent = `${formatAverage(row.average)} W`;
+        value.title = resolvedAverageTitle(row.resolved);
+        value.textContent = formatResolvedAverage(row.resolved);
       } else {
-        value.textContent = '—';
-        value.classList.add('is-empty');
+        applyPriceCellFailure(value, cacheMemory.get(row.id));
       }
 
       item.append(rank, thumb, info, value);
@@ -1395,6 +1437,7 @@
 
     let total = 0;
     let priced = 0;
+    let failed = 0;
 
     for (const card of activePackRecap.cards) {
       const row = document.createElement('div');
@@ -1418,14 +1461,15 @@
         spinner.className = 'wm-average-spinner';
         value.append(spinner, document.createTextNode('…'));
       } else {
-        const average = chooseAverage(cacheEntry, null, card.rarity || null);
+        const resolved = resolveAverage(cacheEntry, null, card.rarity || null);
+        const average = resolved.value;
         if (Number.isFinite(average)) {
           total += average;
           priced += 1;
-          value.textContent = `${formatAverage(average)} W`;
-        } else {
-          value.textContent = '—';
-          value.classList.add('is-empty');
+          value.title = resolvedAverageTitle(resolved);
+          value.textContent = formatResolvedAverage(resolved);
+        } else if (applyPriceCellFailure(value, cacheEntry)) {
+          failed += 1;
         }
       }
 
@@ -1439,9 +1483,13 @@
     if (loaded < activePackRecap.cards.length) {
       footer.textContent = 'Chargement des prix moyens…';
     } else if (priced === 0) {
-      footer.textContent = 'Aucune carte n’a de prix moyen';
+      footer.textContent = failed > 0
+        ? `Aucun prix moyen • ${failed} échec(s) de chargement`
+        : 'Aucune carte n’a de prix moyen';
     } else {
-      footer.textContent = `Total des prix moyens connus : ${formatAverage(total)} W`;
+      const suffix = failed > 0 ? ` • ${failed} échec(s)` : '';
+      footer.textContent =
+        `Total des prix moyens connus : ${formatAverage(total)} W${suffix}`;
     }
 
     panel.append(header, list, footer);
@@ -2020,10 +2068,12 @@
 
     const rows = cards.map((card) => {
       const entry = prices[cacheKey(card.id)];
-      const average = entry ? chooseAverage(entry, null, card.rarity || null) : null;
+      const resolved = entry ? resolveAverage(entry, null, card.rarity || null) : null;
+      const average = resolved ? resolved.value : null;
       return {
         ...card,
         average,
+        resolved,
         fetchedAt: Number(entry?.fetchedAt) || 0
       };
     }).sort((a, b) => {
@@ -2173,7 +2223,8 @@
       const price = document.createElement('div');
       price.className = 'wm-ranking-price';
       if (Number.isFinite(row.average)) {
-        price.textContent = `${formatAverage(row.average)} W`;
+        price.title = resolvedAverageTitle(row.resolved);
+        price.textContent = formatResolvedAverage(row.resolved);
       } else {
         price.textContent = '—';
         price.classList.add('wm-ranking-price-empty');
