@@ -1110,6 +1110,12 @@
     let lastError = null;
     let retryAfterMs = null;
 
+    // Sous charge, ce endpoint renvoie parfois 404 pour une carte qui existe :
+    // la même URL a répondu 200 et 404 dans la même rafale. Un seul nouvel essai
+    // lève l'ambiguïté sans insister si la carte est réellement absente.
+    const isRetryableHere = (status, attempt) =>
+      isRetryableStatus(status) || (status === 404 && attempt === 1);
+
     for (let attempt = 1; attempt <= 3; attempt += 1) {
       try {
         const response = await originalFetch(
@@ -1122,7 +1128,7 @@
         );
 
         if (!response.ok) {
-          const retryable = isRetryableStatus(response.status);
+          const retryable = isRetryableHere(response.status, attempt);
           retryAfterMs = retryable ? retryAfterMsFromResponse(response) : null;
           lastError = new Error(`HTTP ${response.status}`);
 
@@ -1157,7 +1163,7 @@
 
         const statusMatch = String(error?.message || '').match(/HTTP\s+(\d+)/);
         const status = statusMatch ? Number(statusMatch[1]) : null;
-        const retryable = status == null || isRetryableStatus(status);
+        const retryable = status == null || isRetryableHere(status, attempt);
 
         if (!retryable || attempt >= 3) {
           break;
