@@ -3,6 +3,10 @@
   window.__wmAverageUiInstalled = true;
 
   const CACHE_TTL = 24 * 60 * 60 * 1000; // 24 h
+  const ERROR_CACHE_TTL = 60 * 1000;
+  const CACHE_CLEANUP_INTERVAL = 24 * 60 * 60 * 1000;
+  const CACHE_MAX_AGE = 30 * 24 * 60 * 60 * 1000;
+  const CACHE_CLEANUP_KEY = 'wm_avg_cache_cleanup_v1';
   const CACHE_PREFIX = 'wm_avg_v3_';
   const MAX_CONCURRENT = 3;
   const BULK_RARITY_LAST_LOAD_KEY = 'wm_bulk_rarity_last_load_v1';
@@ -42,6 +46,8 @@
   let openAllSummaryCards = [];
   let openAllOpenedPacks = 0;
   let openAllError = null;
+  let openAllRenderTimer = null;
+  let collectionPriceObserver = null;
   const tradesById = new Map();
   const activeTradeValueIds = new Set();
   let tradesRequested = false;
@@ -136,6 +142,46 @@
     }
   }
 
+  function isCacheEntryValid(entry, now = Date.now()) {
+    if (!entry || !Number.isFinite(Number(entry.fetchedAt))) return false;
+    const ttl = entry.ok === false ? ERROR_CACHE_TTL : CACHE_TTL;
+    return now - Number(entry.fetchedAt) < ttl;
+  }
+
+  function cleanupPriceCacheOnceDaily() {
+    const lastCleanup = Number(readLocalValue(CACHE_CLEANUP_KEY)) || 0;
+    const now = Date.now();
+    if (now - lastCleanup < CACHE_CLEANUP_INTERVAL) return;
+
+    try {
+      const keysToRemove = [];
+
+      for (let index = 0; index < localStorage.length; index += 1) {
+        const key = localStorage.key(index);
+        if (!key) continue;
+
+        if (/^wm_avg_v[12]_/.test(key)) {
+          keysToRemove.push(key);
+          continue;
+        }
+
+        if (!key.startsWith(CACHE_PREFIX)) continue;
+
+        const entry = readLocalValue(key);
+        const fetchedAt = Number(entry?.fetchedAt) || 0;
+
+        if (!fetchedAt || now - fetchedAt > CACHE_MAX_AGE) {
+          keysToRemove.push(key);
+        }
+      }
+
+      keysToRemove.forEach((key) => localStorage.removeItem(key));
+      writeLocalValue(CACHE_CLEANUP_KEY, now);
+    } catch (error) {
+      console.debug('[WM Average] nettoyage cache ignoré', error);
+    }
+  }
+
   function isContextInvalidatedError(error) {
     return String(error?.message || error).includes('Extension context invalidated');
   }
@@ -149,11 +195,16 @@
     for (const meta of cards) {
       if (!meta?.id || !meta?.title) continue;
       const normalized = {
+        ...cardMetaById.get(meta.id),
         id: meta.id,
         title: meta.title,
         rarity: meta.rarity || null,
         imageUrl: meta.imageUrl || null,
-        count: Number(meta.count) || 1
+        count: Number(meta.count) || 1,
+        ownedCardId: meta.ownedCardId || cardMetaById.get(meta.id)?.ownedCardId || null,
+        ownedCardIds: Array.isArray(meta.ownedCardIds)
+          ? [...meta.ownedCardIds]
+          : (cardMetaById.get(meta.id)?.ownedCardIds || [])
       };
       cardMetaById.set(normalized.id, normalized);
       idByTitle.set(normalizeTitle(normalized.title), normalized.id);
@@ -227,6 +278,13 @@
   }
 
   function renderLoadingBadge(badge) {
+    if (
+      badge.classList.contains('wm-average-loading') &&
+      normalizeTitle(badge.textContent) === 'Prix…'
+    ) {
+      return;
+    }
+
     badge.className = 'wm-average-badge wm-average-loading';
     badge.title = 'Chargement du prix moyen…';
     badge.replaceChildren();
@@ -263,6 +321,13 @@
       return;
     }
 
+    if (cacheEntry.ok === false) {
+      badge.className = 'wm-average-badge wm-average-empty';
+      badge.title = 'Erreur temporaire lors du chargement du prix';
+      badge.textContent = 'Prix indispo.';
+      return;
+    }
+
     badge.title = 'Prix moyen des ventes (cache 24 h)';
     const average = chooseAverage(cacheEntry, card, cardMetaById.get(id)?.rarity || null);
     if (average == null) {
@@ -274,24 +339,101 @@
     }
   }
 
+  function ensureCollectionPriceObserver() {
+    if (collectionPriceObserver) return collectionPriceObserver;
+
+    collectionPriceObserver = new IntersectionObserver((entries) => {
+      for (const entry of entries) {
+        if (!entry.isIntersecting) continue;
+
+        const cardEl = entry.target;
+        const id = cardEl.dataset.wmCardId;
+        if (!id) {
+          collectionPriceObserver.unobserve(cardEl);
+          continue;
+        }
+
+        const meta = cardMetaById.get(id);
+        if (meta) {
+          try {
+            loadCacheForCards([meta]);
+          } catch (error) {
+            reportError('prix visible', error);
+          }
+        }
+
+        collectionPriceObserver.unobserve(cardEl);
+      }
+    }, {
+      root: null,
+      rootMargin: '320px 0px',
+      threshold: 0
+    });
+
+    return collectionPriceObserver;
+  }
+
+  function hydrateCacheForCards(cards) {
+    const now = Date.now();
+    const stored = storageGet(cards.map((card) => cacheKey(card.id)));
+
+    for (const card of cards) {
+      const entry = stored[cacheKey(card.id)];
+
+      if (isCacheEntryValid(entry, now)) {
+        cacheMemory.set(card.id, entry);
+      } else {
+        cacheMemory.delete(card.id);
+      }
+    }
+  }
+
+  function bindCollectionCardElement(id, h3, card) {
+    if (!id || !card) return;
+
+    card.dataset.wmCardId = id;
+    if (h3) h3.dataset.wmCardBound = '1';
+
+    renderCollectionCard(id, card);
+
+    if (!isCacheEntryValid(cacheMemory.get(id))) {
+      ensureCollectionPriceObserver().observe(card);
+    }
+  }
+
   function renderOne(id) {
     if (!isCollectionPage()) return;
+
+    const direct = document.querySelector(`[data-wm-card-id="${CSS.escape(id)}"]`);
+    if (direct) {
+      renderCollectionCard(id, direct);
+      return;
+    }
+
     const meta = cardMetaById.get(id);
     if (!meta?.title) return;
 
     const card = findCardByTitle(meta.title);
-    if (card) renderCollectionCard(id, card);
+    if (card) {
+      const h3 = card.querySelector('h3');
+      bindCollectionCardElement(id, h3, card);
+    }
   }
 
   function renderVisibleCollectionCards() {
     if (!isCollectionPage()) return;
 
-    for (const h3 of document.querySelectorAll('h3')) {
+    for (const card of document.querySelectorAll('[data-wm-card-id]')) {
+      const id = card.dataset.wmCardId;
+      if (id) renderCollectionCard(id, card);
+    }
+
+    for (const h3 of document.querySelectorAll('h3:not([data-wm-card-bound])')) {
       const id = idByTitle.get(normalizeTitle(h3.textContent));
       if (!id) continue;
 
       const card = h3.closest('div[class*="rounded-2xl"][class*="overflow-hidden"][class*="cursor-pointer"]');
-      if (card) renderCollectionCard(id, card);
+      if (card) bindCollectionCardElement(id, h3, card);
     }
   }
 
@@ -378,7 +520,7 @@
     }
 
     if (openAllSummaryCards.some((card) => card.id === id)) {
-      renderOpenAllSummary();
+      scheduleOpenAllSummaryRender();
     }
 
     renderTradeDetailCard(id);
@@ -988,6 +1130,15 @@
     openAllButton.textContent = `Attente ${seconds}s…`;
   }
 
+  function scheduleOpenAllSummaryRender() {
+    if (openAllRenderTimer) return;
+
+    openAllRenderTimer = setTimeout(() => {
+      openAllRenderTimer = null;
+      renderOpenAllSummary();
+    }, 100);
+  }
+
   function renderOpenAllSummary() {
     const overlay = document.getElementById('wm-open-all-overlay');
     if (!overlay || !openAllSummaryCards.length) return;
@@ -1350,12 +1501,13 @@
       const { id } = card;
       const forceCard = Boolean(forceRarities?.has(card.rarity));
       const entry = stored[cacheKey(id)];
-      const valid = !forceCard && entry && Number.isFinite(entry.fetchedAt) && now - entry.fetchedAt < CACHE_TTL;
+      const valid = !forceCard && isCacheEntryValid(entry, now);
 
       if (valid) {
         cacheMemory.set(id, entry);
         renderKnownCard(id);
       } else {
+        cacheMemory.delete(id);
         if (markBulk) bulkPendingIds.add(id);
         enqueue(id);
       }
@@ -1370,7 +1522,12 @@
   }
 
   function enqueue(id) {
-    if (cacheMemory.has(id) || queuedIds.has(id) || inFlightIds.has(id)) return;
+    const memoryEntry = cacheMemory.get(id);
+
+    if (memoryEntry && isCacheEntryValid(memoryEntry)) return;
+    if (memoryEntry) cacheMemory.delete(id);
+
+    if (queuedIds.has(id) || inFlightIds.has(id)) return;
     queued.push(id);
     queuedIds.add(id);
   }
@@ -1379,7 +1536,12 @@
     while (activeRequests < MAX_CONCURRENT && queued.length > 0) {
       const id = queued.shift();
       queuedIds.delete(id);
-      if (cacheMemory.has(id) || inFlightIds.has(id)) continue;
+
+      const memoryEntry = cacheMemory.get(id);
+      if (memoryEntry && isCacheEntryValid(memoryEntry)) continue;
+      if (memoryEntry) cacheMemory.delete(id);
+
+      if (inFlightIds.has(id)) continue;
       requestAverage(id);
     }
   }
@@ -1407,7 +1569,8 @@
     const entry = {
       fetchedAt: Date.now(),
       averages: detail.ok ? (detail.averages || {}) : {},
-      ok: Boolean(detail.ok)
+      ok: Boolean(detail.ok),
+      retryAfterMs: detail.ok ? null : (Number(detail.retryAfterMs) || ERROR_CACHE_TTL)
     };
 
     if (detail.title) {
@@ -1429,7 +1592,7 @@
     }
 
     if (!detail.ok) {
-      console.debug('[WM Average] échec mis en cache 24 h', id, detail.error);
+      console.debug('[WM Average] échec temporaire mis en cache 60 s', id, detail.error);
     }
 
     pumpQueue();
@@ -2168,6 +2331,35 @@
       return;
     }
 
+    if (detail.notOwned) {
+      const stored = storageGet(ALL_COLLECTION_KEY)[ALL_COLLECTION_KEY];
+
+      if (Array.isArray(stored?.cards)) {
+        stored.cards = stored.cards.filter((card) => card?.id !== row.id);
+        storageSet({ [ALL_COLLECTION_KEY]: stored });
+      }
+
+      row.ownedCardId = null;
+      row.ownedCardIds = [];
+
+      const rankingRow = button.closest('.wm-ranking-row');
+      rankingRow?.classList.add('wm-ranking-row-unowned');
+
+      button.dataset.state = 'success';
+      button.disabled = true;
+      button.textContent = 'Plus possédée';
+      button.title = 'Cette carte n’est plus dans ta collection.';
+      return;
+    }
+
+    if (detail.alreadyListed) {
+      button.dataset.state = 'success';
+      button.disabled = true;
+      button.textContent = 'Déjà en vente';
+      button.title = detail.error || 'Toutes tes copies disponibles sont déjà en vente.';
+      return;
+    }
+
     const staleId = detail.staleOwnedCardId || (detail.ownershipError ? detail.ownedCardId : null);
 
     if (staleId) {
@@ -2321,9 +2513,13 @@
   window.addEventListener('wm-average-collection', (event) => {
     const cards = event.detail?.cards;
     if (!Array.isArray(cards) || !cards.length) return;
+
     console.debug(`[WM Average] ${cards.length} cartes détectées`, cards);
+
     try {
-      loadCacheForCards(cards);
+      registerCards(cards);
+      hydrateCacheForCards(cards);
+      renderVisibleCollectionCards();
     } catch (error) {
       reportError('cache', error);
     }
@@ -2424,29 +2620,75 @@
 
   let renderTimer = null;
   let previousPath = location.pathname;
+  let observedMain = null;
 
-  const observer = new MutationObserver(() => {
-    try {
-      const currentPath = location.pathname;
+  function routeIsSupported() {
+    return (
+      isCollectionPage() ||
+      isMarketplaceDetailPage() ||
+      isPullsPage() ||
+      isTradesPage() ||
+      isGlobalCollectionPage()
+    );
+  }
 
-      if (currentPath !== previousPath) {
-        previousPath = currentPath;
-        if (isTradesPage()) tradesRequested = false;
-        console.debug('[WM Average] navigation SPA détectée:', currentPath);
+  function handlePathChange() {
+    const currentPath = location.pathname;
+    if (currentPath === previousPath) return false;
+
+    previousPath = currentPath;
+    if (isTradesPage()) tradesRequested = false;
+
+    console.debug('[WM Average] navigation SPA détectée:', currentPath);
+    return true;
+  }
+
+  function scheduleRender(delay = 70) {
+    if (!routeIsSupported()) return;
+
+    clearTimeout(renderTimer);
+    renderTimer = setTimeout(() => {
+      try {
+        renderAll();
+      } catch (error) {
+        reportError('rendu', error);
       }
+    }, delay);
+  }
 
-      if (!isCollectionPage() && !isMarketplaceDetailPage() && !isPullsPage() && !isTradesPage() && !isGlobalCollectionPage()) return;
+  const mainObserver = new MutationObserver(() => {
+    handlePathChange();
+    scheduleRender();
+  });
 
-      clearTimeout(renderTimer);
-      renderTimer = setTimeout(() => {
-        try {
-          renderAll();
-        } catch (error) {
-          reportError('rendu', error);
-        }
-      }, 80);
-    } catch (error) {
-      reportError('observation', error);
+  function attachMainObserver() {
+    const currentMain = document.querySelector('main');
+    if (currentMain === observedMain) return;
+
+    mainObserver.disconnect();
+    observedMain = currentMain;
+
+    if (observedMain) {
+      mainObserver.observe(observedMain, {
+        childList: true,
+        subtree: true
+      });
+    }
+  }
+
+  const outsideObserver = new MutationObserver((mutations) => {
+    const pathChanged = handlePathChange();
+    const previousMain = observedMain;
+
+    attachMainObserver();
+
+    const hasOutsideChange = mutations.some((mutation) => {
+      if (!previousMain) return true;
+      return !previousMain.contains(mutation.target);
+    });
+
+    if (pathChanged || hasOutsideChange || previousMain !== observedMain) {
+      scheduleRender();
     }
   });
 
@@ -2455,23 +2697,25 @@
       requestAnimationFrame(startObserver);
       return;
     }
-    observer.observe(document.body, { childList: true, subtree: true });
+
+    cleanupPriceCacheOnceDaily();
+    attachMainObserver();
+
+    outsideObserver.observe(document.body, {
+      childList: true,
+      subtree: true
+    });
+
     renderAll();
   }
+
   startObserver();
 
   window.addEventListener('popstate', () => {
     previousPath = location.pathname;
-    if (isCollectionPage() || isMarketplaceDetailPage() || isPullsPage() || isTradesPage() || isGlobalCollectionPage()) {
-      setTimeout(() => {
-        try {
-          renderAll();
-        } catch (error) {
-          reportError('navigation', error);
-        }
-      }, 0);
-    }
+    attachMainObserver();
+    scheduleRender(0);
   });
 
-  console.debug('[WM Average] page runtime v3.14.2 chargé');
+  console.debug('[WM Average] page runtime v3.15 chargé');
 })();
