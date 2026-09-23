@@ -8,6 +8,28 @@
   const MAX_BULK_PACKS = 100;
   const RARITY_ORDER = ['L', 'UR', 'SR', 'R', 'PC', 'C'];
   const MARKETPLACE_MINE_CACHE_TTL = 15 * 1000;
+  const RETRY_AFTER_MAX_MS = 60 * 1000;
+
+  function isRetryableStatus(status) {
+    return status === 429 || (status >= 500 && status <= 599);
+  }
+
+  function retryAfterMsFromResponse(response) {
+    const header = response?.headers?.get?.('retry-after');
+    if (!header) return null;
+
+    const seconds = Number(header);
+    if (Number.isFinite(seconds)) {
+      return Math.min(RETRY_AFTER_MAX_MS, Math.max(0, seconds * 1000));
+    }
+
+    const retryAt = Date.parse(header);
+    if (Number.isFinite(retryAt)) {
+      return Math.min(RETRY_AFTER_MAX_MS, Math.max(0, retryAt - Date.now()));
+    }
+
+    return null;
+  }
 
   let marketplaceMineCache = {
     fetchedAt: 0,
@@ -231,6 +253,7 @@
     maxAttempts = 3
   } = {}) {
     let lastError = null;
+    let retryAfterMs = null;
 
     for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
       try {
@@ -240,7 +263,8 @@
           return await response.json();
         }
 
-        const retryable = response.status >= 500 && response.status <= 599;
+        const retryable = isRetryableStatus(response.status);
+        retryAfterMs = retryable ? retryAfterMsFromResponse(response) : null;
         lastError = new Error(`${label}: HTTP ${response.status}`);
 
         if (!retryable || attempt >= maxAttempts) {
@@ -251,7 +275,7 @@
 
         const statusMatch = String(error?.message || '').match(/HTTP\s+(\d+)/);
         const status = statusMatch ? Number(statusMatch[1]) : null;
-        const retryable = status == null || (status >= 500 && status <= 599);
+        const retryable = status == null || isRetryableStatus(status);
 
         if (!retryable || attempt >= maxAttempts) {
           throw error;
@@ -259,7 +283,8 @@
       }
 
       const delayMs = Math.min(1800, 300 * (2 ** (attempt - 1)));
-      await new Promise((resolve) => setTimeout(resolve, delayMs));
+      await new Promise((resolve) => setTimeout(resolve, Math.max(retryAfterMs ?? 0, delayMs)));
+      retryAfterMs = null;
     }
 
     throw lastError || new Error(`${label}: erreur inconnue`);
@@ -331,6 +356,7 @@
 
   async function fetchCollectionPage(page, stats = false) {
     let attempt = 0;
+    let retryAfterMs = null;
 
     while (true) {
       attempt += 1;
@@ -349,10 +375,12 @@
           return response.json();
         }
 
-        const retryable = response.status >= 500 && response.status <= 599;
+        const retryable = isRetryableStatus(response.status);
         if (!retryable) {
           throw new Error(`Collection page ${page}: HTTP ${response.status}`);
         }
+
+        retryAfterMs = retryAfterMsFromResponse(response);
 
         console.warn(
           `[WM Average] Collection page ${page}: HTTP ${response.status}, retry ${attempt}`
@@ -362,7 +390,7 @@
         const status = statusMatch ? Number(statusMatch[1]) : null;
         const retryable =
           status == null ||
-          (status >= 500 && status <= 599);
+          isRetryableStatus(status);
 
         if (!retryable) {
           throw error;
@@ -374,7 +402,8 @@
       }
 
       const delayMs = Math.min(5000, 500 * (2 ** Math.min(attempt - 1, 4)));
-      await new Promise((resolve) => setTimeout(resolve, delayMs));
+      await new Promise((resolve) => setTimeout(resolve, Math.max(retryAfterMs ?? 0, delayMs)));
+      retryAfterMs = null;
     }
   }
 
@@ -780,6 +809,7 @@
     while (page < Math.min(totalPages, MAX_COLLECTION_PAGES)) {
       let attempt = 0;
       let json = null;
+      let retryAfterMs = null;
 
       while (true) {
         attempt += 1;
@@ -799,23 +829,26 @@
             break;
           }
 
-          if (response.status < 500 || response.status > 599) {
+          if (!isRetryableStatus(response.status)) {
             throw createSaleError(
               `Recherche copie: HTTP ${response.status}`,
               'OWNERSHIP_LOOKUP_FAILED'
             );
           }
+
+          retryAfterMs = retryAfterMsFromResponse(response);
         } catch (error) {
           if (error?.code) throw error;
 
           const statusMatch = String(error?.message || '').match(/HTTP\s+(\d+)/);
           const status = statusMatch ? Number(statusMatch[1]) : null;
-          const retryable = status == null || (status >= 500 && status <= 599);
+          const retryable = status == null || isRetryableStatus(status);
           if (!retryable) throw error;
         }
 
         const delayMs = Math.min(5000, 500 * (2 ** Math.min(attempt - 1, 4)));
-        await new Promise((resolve) => setTimeout(resolve, delayMs));
+        await new Promise((resolve) => setTimeout(resolve, Math.max(retryAfterMs ?? 0, delayMs)));
+        retryAfterMs = null;
       }
 
       const cards = extractCards(json);
@@ -1075,6 +1108,7 @@
     if (!id || !requestId) return;
 
     let lastError = null;
+    let retryAfterMs = null;
 
     for (let attempt = 1; attempt <= 3; attempt += 1) {
       try {
@@ -1088,7 +1122,8 @@
         );
 
         if (!response.ok) {
-          const retryable = response.status >= 500 && response.status <= 599;
+          const retryable = isRetryableStatus(response.status);
+          retryAfterMs = retryable ? retryAfterMsFromResponse(response) : null;
           lastError = new Error(`HTTP ${response.status}`);
 
           if (!retryable || attempt >= 3) {
@@ -1122,14 +1157,15 @@
 
         const statusMatch = String(error?.message || '').match(/HTTP\s+(\d+)/);
         const status = statusMatch ? Number(statusMatch[1]) : null;
-        const retryable = status == null || (status >= 500 && status <= 599);
+        const retryable = status == null || isRetryableStatus(status);
 
         if (!retryable || attempt >= 3) {
           break;
         }
       }
 
-      await new Promise((resolve) => setTimeout(resolve, 300 * attempt));
+      await new Promise((resolve) => setTimeout(resolve, Math.max(retryAfterMs ?? 0, 300 * attempt)));
+      retryAfterMs = null;
     }
 
     window.dispatchEvent(new CustomEvent('wm-average-response', {
