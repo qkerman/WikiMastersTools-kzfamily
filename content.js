@@ -2928,35 +2928,82 @@
   async function openRankingModal() {
     const storedCollection = storageGet(ALL_COLLECTION_KEY);
     const collectionEntry = storedCollection[ALL_COLLECTION_KEY];
-    const cards = Array.isArray(collectionEntry?.cards) ? collectionEntry.cards : [];
+    const storedCards = Array.isArray(collectionEntry?.cards) ? collectionEntry.cards : [];
 
-    if (!cards.length) {
-      showInfoModal('Collection non chargée', 'Clique d’abord sur « Charger les prix » pour récupérer toute la collection et pouvoir la trier par prix moyen.');
+    // Merge persisted metadata with cards already discovered during this page session.
+    // This lets the ranking work even before a full bulk collection load.
+    const knownCards = new Map();
+
+    for (const card of storedCards) {
+      if (card?.id && card?.title) knownCards.set(card.id, { ...card });
+    }
+
+    for (const card of cardMetaById.values()) {
+      if (!card?.id || !card?.title) continue;
+      const previous = knownCards.get(card.id);
+      knownCards.set(card.id, previous ? { ...previous, ...card } : { ...card });
+    }
+
+    const candidates = [...knownCards.values()];
+
+    if (!candidates.length) {
+      showInfoModal(
+        'Aucun prix chargé',
+        'Aucune carte avec métadonnées n’est encore disponible. Parcourez votre collection ou utilisez « Charger les prix », puis réessayez.'
+      );
       return;
     }
 
-    const priceKeys = cards.map((card) => cacheKey(card.id));
+    const priceKeys = candidates.map((card) => cacheKey(card.id));
     const prices = storageGet(priceKeys);
 
-    const rows = cards.map((card) => {
-      const entry = prices[cacheKey(card.id)];
-      const average = entry ? chooseAverage(entry, null, card.rarity || null) : null;
-      return {
-        ...card,
-        average,
-        fetchedAt: Number(entry?.fetchedAt) || 0
-      };
-    }).sort((a, b) => {
-      const aPrice = Number.isFinite(a.average) ? a.average : -Infinity;
-      const bPrice = Number.isFinite(b.average) ? b.average : -Infinity;
-      if (bPrice !== aPrice) return bPrice - aPrice;
-      return a.title.localeCompare(b.title, 'fr');
-    });
+    const rows = candidates
+      .map((card) => {
+        const entry = prices[cacheKey(card.id)];
 
-    renderRankingModal(rows, collectionEntry?.fetchedAt || 0);
+        // Errors are not useful in a "most expensive" ranking.
+        if (!entry || entry.ok === false) return null;
+
+        const average = chooseAverage(entry, null, card.rarity || null);
+
+        return {
+          ...card,
+          average,
+          fetchedAt: Number(entry?.fetchedAt) || 0
+        };
+      })
+      .filter(Boolean)
+      .sort((a, b) => {
+        const aPrice = Number.isFinite(a.average) ? a.average : -Infinity;
+        const bPrice = Number.isFinite(b.average) ? b.average : -Infinity;
+        if (bPrice !== aPrice) return bPrice - aPrice;
+        return a.title.localeCompare(b.title, 'fr');
+      });
+
+    if (!rows.length) {
+      showInfoModal(
+        'Aucun prix chargé',
+        'Aucun prix n’est encore présent dans le cache. Parcourez votre collection ou utilisez « Charger les prix », puis réessayez.'
+      );
+      return;
+    }
+
+    const isComplete =
+      collectionEntry?.complete === true &&
+      rows.length >= candidates.length;
+
+    renderRankingModal(
+      rows,
+      collectionEntry?.fetchedAt || 0,
+      {
+        incomplete: !isComplete,
+        knownCards: candidates.length,
+        cachedCards: rows.length
+      }
+    );
   }
 
-  function renderRankingModal(rows, collectionFetchedAt) {
+  function renderRankingModal(rows, collectionFetchedAt, status = {}) {
     const overlay = document.createElement('div');
     overlay.className = 'wm-modal-overlay wm-ranking-overlay';
 
@@ -2972,7 +3019,7 @@
 
     const subtitle = document.createElement('p');
     const pricedCount = rows.filter((row) => Number.isFinite(row.average)).length;
-    subtitle.textContent = `${rows.length} cartes • ${pricedCount} avec un prix moyen${collectionFetchedAt ? ` • collection chargée il y a ${humanElapsed(collectionFetchedAt)}` : ''}`;
+    subtitle.textContent = `${rows.length} cartes du cache • ${pricedCount} avec un prix moyen${collectionFetchedAt ? ` • données collection il y a ${humanElapsed(collectionFetchedAt)}` : ''}`;
 
     headingWrap.append(title, subtitle);
 
@@ -2983,6 +3030,21 @@
     closeButton.textContent = '×';
 
     header.append(headingWrap, closeButton);
+
+    let cacheNotice = null;
+    if (status.incomplete) {
+      cacheNotice = document.createElement('div');
+      cacheNotice.className = 'wm-ranking-cache-notice';
+
+      const noticeTitle = document.createElement('strong');
+      noticeTitle.textContent = 'Classement partiel';
+
+      const noticeText = document.createElement('span');
+      noticeText.textContent =
+        'Vous n’avez pas chargé tous les prix : seules les cartes actuellement disponibles dans votre cache sont affichées ici.';
+
+      cacheNotice.append(noticeTitle, noticeText);
+    }
 
     const saleControls = document.createElement('div');
     saleControls.className = 'wm-ranking-sale-controls';
@@ -3205,7 +3267,9 @@
       if (event.target === overlay) close();
     });
 
-    modal.append(header, saleControls, list);
+    modal.append(header);
+    if (cacheNotice) modal.append(cacheNotice);
+    modal.append(saleControls, list);
     overlay.append(modal);
     document.body.append(overlay);
   }
@@ -3518,27 +3582,24 @@
         [ALL_COLLECTION_KEY]: { fetchedAt, cards, complete: true }
       });
     } else {
-      // This bulk load intentionally stopped once it passed the lowest selected
-      // rarity. Keep an existing complete collection cache intact so
-      // « Plus chères » does not suddenly lose the lower rarities.
+      // Keep every piece of collection metadata we have already seen.
+      // A partial load is enough for « Plus chères » to rank the cached prices.
       const existingEntry = storageGet(ALL_COLLECTION_KEY)[ALL_COLLECTION_KEY];
+      const existingCards = Array.isArray(existingEntry?.cards) ? existingEntry.cards : [];
+      const merged = new Map(existingCards.map((card) => [card.id, { ...card }]));
 
-      if (Array.isArray(existingEntry?.cards) && existingEntry.complete !== false) {
-        const merged = new Map(existingEntry.cards.map((card) => [card.id, { ...card }]));
-
-        for (const card of cards) {
-          const previous = merged.get(card.id);
-          merged.set(card.id, previous ? { ...previous, ...card } : { ...card });
-        }
-
-        storageSet({
-          [ALL_COLLECTION_KEY]: {
-            ...existingEntry,
-            cards: [...merged.values()],
-            complete: true
-          }
-        });
+      for (const card of cards) {
+        const previous = merged.get(card.id);
+        merged.set(card.id, previous ? { ...previous, ...card } : { ...card });
       }
+
+      storageSet({
+        [ALL_COLLECTION_KEY]: {
+          fetchedAt,
+          cards: [...merged.values()],
+          complete: existingEntry?.complete === true
+        }
+      });
     }
 
     if (!cards.length) {
@@ -3705,5 +3766,5 @@
     scheduleRender(0);
   });
 
-  console.debug('[WM Average] page runtime v4.1.1 chargé');
+  console.debug('[WM Average] page runtime v4.1.2 chargé');
 })();
