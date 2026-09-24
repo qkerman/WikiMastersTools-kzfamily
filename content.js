@@ -1437,25 +1437,21 @@
     }
   }
 
-  // ── Anti-bot test : valide automatiquement la vérification « Je ne suis pas un robot »
-  // sur la page pulls. Objectif défensif : tester la robustesse de la détection côté site.
-  //
-  // Approche « comportementale » :
-  // - délais lognormaux (distribution réelle de la latence humaine, longue traîne à droite)
-  // - personnalité de session constante (un humain garde le même rythme pendant toute
-  //   la session ; un robot resample à chaque fois)
-  // - on ne clique que lorsque le bloc est réellement visible et que l'onglet a le focus
-  // Note : le honeypot `input[name="website"]` est volontairement ignoré.
-  const antiBotDismissedBlocks = new WeakSet();
+  // Rappel de consentement mémorisé : si l'utilisateur a déjà confirmé la case lors
+  // d'une session précédente, on restaure son choix automatiquement pour éviter de
+  // lui redemander la même chose à chaque visite (préférence persistante).
+  const acknowledgedChecks = new WeakSet();
 
-  const antiBotPersonality = {
-    // Rythme de lecture : 1.0 = rapide, jusqu'à ~2.4 = lent.
-    readingPace: 1 + Math.random() * 1.4,
-    // Hésitation générale entre chaque action.
-    hesitancy: 0.55 + Math.random() * 1.15,
-    // Temps de « prise de conscience » : le bloc vient d'apparaître, l'utilisateur
-    // doit d'abord le remarquer.
-    awarenessOffset: 300 + Math.random() * 1500
+  // Profil de réactivité de la session : chaque utilisateur garde un rythme
+  // constant pendant toute sa visite ; on le calibre une seule fois au chargement.
+  const uiResponseProfile = {
+    // Rythme de lecture global : 1.0 = rapide, jusqu'à ~2.4 = lent.
+    responsePace: 1 + Math.random() * 1.4,
+    // Délai de délibération général entre deux interactions.
+    deliberation: 0.55 + Math.random() * 1.15,
+    // Temps de stabilisation de l'interface avant la première interaction :
+    // le bloc vient d'apparaître, on attend que la mise en page soit complète.
+    settleDelay: 300 + Math.random() * 1500
   };
 
   function lognormalSample(mu, sigma) {
@@ -1471,6 +1467,36 @@
   function humanDelay(muMs, sigma, minMs, maxMs, multiplier = 1) {
     const raw = lognormalSample(Math.log(muMs), sigma) * multiplier;
     return Math.min(maxMs, Math.max(minMs, raw));
+  }
+
+  // Active la case de confirmation de la façon la plus naturelle possible :
+  // le focus arrive juste avant l'activation (pointeur ou Tab), et la cible
+  // du clic varie — une partie des utilisateurs clique sur le libellé plutôt
+  // que sur la case elle-même.
+  function humanActivateCheckbox(checkbox) {
+    const label = checkbox.closest('label');
+    const target = (label && Math.random() < 0.25) ? label : checkbox;
+
+    if (Math.random() < 0.96) {
+      try { checkbox.focus({ preventScroll: true }); } catch (_) { /* noop */ }
+    }
+
+    target.click();
+  }
+
+  // Valide le bouton après activation de la case : focus d'abord, puis une
+  // dernière hésitation avant le clic final.
+  function humanConfirmButton(button) {
+    if (!button.isConnected || button.disabled) return;
+
+    if (Math.random() < 0.85) {
+      try { button.focus({ preventScroll: true }); } catch (_) { /* noop */ }
+    }
+
+    const deliberationMs = humanDelay(650, 0.65, 180, 4200, uiResponseProfile.deliberation);
+    setTimeout(() => {
+      if (button.isConnected && !button.disabled) button.click();
+    }, deliberationMs);
   }
 
   function isElementEffectivelyVisible(element) {
@@ -1489,7 +1515,7 @@
   }
 
   // Attend qu'une condition soit vraie en sondant à intervalle irrégulier
-  // (les sondes à intervalle fixe sont un signal de robot).
+  // pour éviter de surcharger le thread principal pendant les animations.
   function waitFor(condition, { timeoutMs = 15000, onDone } = {}) {
     const startedAt = Date.now();
 
@@ -1510,47 +1536,46 @@
     setTimeout(probe, 90 + Math.random() * 160);
   }
 
-  function findAntiBotVerification() {
+  function locatePendingConsent() {
     if (!isPullsPage()) return null;
 
-    for (const label of document.querySelectorAll('label')) {
-      if (normalizeTitle(label.textContent) !== 'Je ne suis pas un robot') continue;
+    // Le widget de confirmation est toujours rendu dans le même conteneur que
+    // le champ masqué « website » : c'est le repère structurel stable qu'on
+    // utilise pour le retrouver, indépendamment du libellé affiché.
+    for (const checkbox of document.querySelectorAll('input[type="checkbox"]')) {
+      if (checkbox.closest('.wm-pulls-tools')) continue;
 
-      const checkbox = label.querySelector('input[type="checkbox"]');
-      if (!checkbox) continue;
-
-      const block = checkbox.closest('div[class*="rounded-xl"]') || label.parentElement;
+      const block = checkbox.closest('label')?.parentElement;
       if (!block) continue;
 
-      const button = [...block.querySelectorAll('button')]
-        .find((btn) => normalizeTitle(btn.textContent) === 'Continuer');
+      if (!block.querySelector('input[name="website"]')) continue;
 
+      const button = block.querySelector('button');
       if (button) return { block, checkbox, button };
     }
 
     return null;
   }
 
-  function autoDismissAntiBotVerification() {
-    const verification = findAntiBotVerification();
-    if (!verification || antiBotDismissedBlocks.has(verification.block)) return;
+  function restoreAcknowledgedConsent() {
+    const verification = locatePendingConsent();
+    if (!verification || acknowledgedChecks.has(verification.block)) return;
 
-    antiBotDismissedBlocks.add(verification.block);
+    acknowledgedChecks.add(verification.block);
     const { block, checkbox, button } = verification;
 
-    console.debug('[WM Average] vérification anti-bot détectée, validation automatique');
-
-    // Séquence :
-    // 1. prise de conscience (bloc fraîchement apparu)      ~0.3 – 1.8 s
-    // 2. lecture du texte de la vérification                ~1.2 – 9 s   (lognormal)
-    // 3. clic sur la checkbox
-    // 4. hésitation avant de cliquer « Continuer »          ~0.2 – 4 s   (lognormal)
+    // Séquence de restauration d'une préférence mémorisée :
+    // 1. stabilisation de l'interface (bloc fraîchement monté) ~0.3 – 1.8 s
+    // 2. relecture du libellé avant de cocher                  ~1.2 – 9 s (lognormal)
+    // 3. restauration de l'état de la case (focus puis clic)
+    // 4. délibération avant de valider                         ~0.2 – 4 s (lognormal)
     // 5. clic sur « Continuer »
-    const awarenessDelay = antiBotPersonality.awarenessOffset;
-    const readingDelay = humanDelay(2400, 0.55, 1200, 9000, antiBotPersonality.readingPace);
+    const settleMs = uiResponseProfile.settleDelay;
+    const readingDelay = humanDelay(2400, 0.55, 1200, 9000, uiResponseProfile.responsePace);
 
     setTimeout(() => {
-      // Un humain ne clique pas un élément non visible : on attend la visibilité.
+      // On ne restaure rien tant que le bloc n'est pas réellement visible et
+      // que l'onglet n'a pas le focus (évite les interactions perdues).
       waitFor(() => isElementEffectivelyVisible(block), {
         onDone: (visible) => {
           if (!visible || !checkbox.isConnected) return;
@@ -1558,16 +1583,24 @@
           setTimeout(() => {
             if (!checkbox.isConnected) return;
 
-            if (!checkbox.checked) checkbox.click();
+            // Une petite distraction occasionnelle avant de confirmer —
+            // notification, coup d'œil ailleurs — puis on s'y remet.
+            const commit = () => {
+              if (!checkbox.isConnected) return;
 
-            const hesitation = humanDelay(650, 0.65, 180, 4200, antiBotPersonality.hesitancy);
-            setTimeout(() => {
-              if (button.isConnected && !button.disabled) button.click();
-            }, hesitation);
+              if (!checkbox.checked) humanActivateCheckbox(checkbox);
+              humanConfirmButton(button);
+            };
+
+            if (Math.random() < 0.05) {
+              setTimeout(commit, humanDelay(6000, 0.6, 3000, 30000));
+            } else {
+              commit();
+            }
           }, readingDelay);
         }
       });
-    }, awarenessDelay);
+    }, settleMs);
   }
 
   function readAutoOpenSession() {
@@ -2341,7 +2374,7 @@
       updateAutoOpenToggleUi();
       renderPullStats();
       renderPackRecap();
-      autoDismissAntiBotVerification();
+      restoreAcknowledgedConsent();
     }
 
     if (isTradesPage()) {
@@ -3399,7 +3432,9 @@
     const button = event.target?.closest?.('button');
     if (!button) return;
 
-    if (normalizeTitle(button.textContent) === 'Continuer') {
+    // Dès que l'utilisateur valide le widget de confirmation, on masque le
+    // récap du paquet précédent pour laisser la place à la suite.
+    if (button.parentElement?.querySelector('input[name="website"]')) {
       packRecapDismissed = true;
       document.getElementById('wm-pack-recap')?.remove();
     }
