@@ -29,6 +29,7 @@
       title,
       rarity: card?.rarity || null,
       imageUrl: card?.image_url || null,
+      wikipediaUrl: card?.wikipedia_url || null,
       count: Number(entry?.count) || 1
     };
   }
@@ -111,6 +112,7 @@
           title: card.wikipedia_title,
           rarity: card.rarity || null,
           imageUrl: card.image_url || null,
+          wikipediaUrl: card.wikipedia_url || null,
           count: 1
         };
       })
@@ -147,6 +149,7 @@
               title,
               rarity: item?.snapshot_rarity || card?.rarity || null,
               imageUrl: card?.image_url || null,
+              wikipediaUrl: card?.wikipedia_url || null,
               count: 1
             }
           };
@@ -220,6 +223,7 @@
           title,
           rarity: auction?.snapshot_rarity || card?.rarity || null,
           imageUrl: card?.image_url || null,
+          wikipediaUrl: card?.wikipedia_url || null,
           count: 1
         }
       }
