@@ -13,6 +13,11 @@
   const ALL_COLLECTION_KEY = 'wm_all_collection_v1';
   const PULL_RECAP_ENABLED_KEY = 'wm_pull_recap_enabled_v1';
   const PULL_STATS_KEY = 'wm_pull_stats_v1';
+  const AUTO_OPEN_ENABLED_KEY = 'wm_auto_open_enabled_v1';
+  const AUTO_OPEN_NEXT_AT_KEY = 'wm_auto_open_next_at_v1';
+  const AUTO_OPEN_SESSION_KEY = 'wm_auto_open_session_v1';
+  const AUTO_OPEN_MIN_DELAY = 20 * 60 * 1000;
+  const AUTO_OPEN_MAX_DELAY = 100 * 60 * 1000;
   const COMPACT_MODE_KEY = 'wm_compact_mode_v1';
   const MISSING_IMAGE_CACHE_PREFIX = 'wm_missing_img_v1_';
   const MISSING_IMAGE_FOUND_TTL = 30 * 24 * 60 * 60 * 1000;
@@ -52,6 +57,15 @@
   let openAllOpenedPacks = 0;
   let openAllError = null;
   let openAllRenderTimer = null;
+  let openAllSummaryTitle = 'Cartes obtenues';
+  let openAllSummaryOnClose = null;
+  let openAllSummaryReloadOnClose = true;
+  let autoOpenEnabled = readLocalValue(AUTO_OPEN_ENABLED_KEY) === true;
+  let autoOpenTimer = null;
+  let autoOpenRequestId = null;
+  let autoOpenShowSummaryAfterCurrent = false;
+  let autoOpenToggleInput = null;
+  let autoOpenToggleLabel = null;
   let collectionPriceObserver = null;
   let cardExtrasObserver = null;
   let compactModeEnabled = readLocalValue(COMPACT_MODE_KEY) === true;
@@ -1556,6 +1570,218 @@
     }, awarenessDelay);
   }
 
+  function readAutoOpenSession() {
+    const raw = readLocalValue(AUTO_OPEN_SESSION_KEY);
+
+    return {
+      startedAt: Number(raw?.startedAt) || Date.now(),
+      openedPacks: Math.max(0, Number(raw?.openedPacks) || 0),
+      runs: Math.max(0, Number(raw?.runs) || 0),
+      cards: Array.isArray(raw?.cards) ? raw.cards.filter((card) => card?.id && card?.title) : [],
+      errors: Array.isArray(raw?.errors) ? raw.errors.map(String).slice(-10) : []
+    };
+  }
+
+  function writeAutoOpenSession(session) {
+    writeLocalValue(AUTO_OPEN_SESSION_KEY, {
+      startedAt: Number(session?.startedAt) || Date.now(),
+      openedPacks: Math.max(0, Number(session?.openedPacks) || 0),
+      runs: Math.max(0, Number(session?.runs) || 0),
+      cards: Array.isArray(session?.cards) ? session.cards : [],
+      errors: Array.isArray(session?.errors) ? session.errors.slice(-10) : []
+    });
+  }
+
+  function resetAutoOpenSession() {
+    const session = {
+      startedAt: Date.now(),
+      openedPacks: 0,
+      runs: 0,
+      cards: [],
+      errors: []
+    };
+    writeAutoOpenSession(session);
+    return session;
+  }
+
+  function randomAutoOpenDelay() {
+    return Math.round(
+      AUTO_OPEN_MIN_DELAY +
+      Math.random() * (AUTO_OPEN_MAX_DELAY - AUTO_OPEN_MIN_DELAY)
+    );
+  }
+
+  function clearAutoOpenTimer() {
+    if (autoOpenTimer) {
+      clearTimeout(autoOpenTimer);
+      autoOpenTimer = null;
+    }
+  }
+
+  function updateAutoOpenToggleUi() {
+    if (autoOpenToggleInput) {
+      autoOpenToggleInput.checked = autoOpenEnabled;
+    }
+    if (autoOpenToggleLabel) {
+      autoOpenToggleLabel.classList.toggle('is-enabled', autoOpenEnabled);
+    }
+  }
+
+  function scheduleNextAutoOpen({ keepExisting = true } = {}) {
+    clearAutoOpenTimer();
+
+    if (!autoOpenEnabled) {
+      localStorage.removeItem(AUTO_OPEN_NEXT_AT_KEY);
+      return;
+    }
+
+    let nextAt = keepExisting ? Number(readLocalValue(AUTO_OPEN_NEXT_AT_KEY)) || 0 : 0;
+    const now = Date.now();
+
+    if (nextAt <= now) {
+      nextAt = now + randomAutoOpenDelay();
+      writeLocalValue(AUTO_OPEN_NEXT_AT_KEY, nextAt);
+    }
+
+    const delay = Math.max(1000, nextAt - now);
+
+    autoOpenTimer = setTimeout(() => {
+      autoOpenTimer = null;
+      runAutomaticOpen().catch((error) => {
+        reportError('ouverture automatique', error);
+        if (autoOpenEnabled) scheduleNextAutoOpen({ keepExisting: false });
+      });
+    }, delay);
+  }
+
+  function appendAutomaticOpenResult(detail) {
+    const session = readAutoOpenSession();
+    const cards = Array.isArray(detail?.cards) ? detail.cards : [];
+    const openedPacks = Math.max(0, Number(detail?.openedPacks) || 0);
+
+    if (cards.length || openedPacks > 0) {
+      session.cards.push(...cards);
+      session.openedPacks += openedPacks;
+      session.runs += 1;
+    }
+
+    if (!detail?.ok && detail?.error) {
+      session.errors.push(String(detail.error));
+    }
+
+    writeAutoOpenSession(session);
+    return session;
+  }
+
+  function showAutomaticOpenSummary() {
+    const session = readAutoOpenSession();
+
+    if (!session.cards.length) {
+      localStorage.removeItem(AUTO_OPEN_SESSION_KEY);
+      showInfoModal(
+        'Ouverture automatique',
+        'Aucune carte n’a été ouverte automatiquement pendant cette session.'
+      );
+      return;
+    }
+
+    const error =
+      session.errors.length > 0
+        ? `${session.errors.length} cycle${session.errors.length > 1 ? 's' : ''} interrompu${session.errors.length > 1 ? 's' : ''} pendant la session.`
+        : null;
+
+    openOpenAllSummary(
+      session.cards,
+      session.openedPacks,
+      error,
+      {
+        title: 'Récap ouverture automatique',
+        reloadOnClose: false,
+        onClose: () => {
+          localStorage.removeItem(AUTO_OPEN_SESSION_KEY);
+        }
+      }
+    );
+  }
+
+  function disableAutomaticOpening({ showSummary = true } = {}) {
+    autoOpenEnabled = false;
+    writeLocalValue(AUTO_OPEN_ENABLED_KEY, false);
+    localStorage.removeItem(AUTO_OPEN_NEXT_AT_KEY);
+    clearAutoOpenTimer();
+    updateAutoOpenToggleUi();
+
+    if (autoOpenRequestId && openAllActive && openAllRequestId === autoOpenRequestId) {
+      autoOpenShowSummaryAfterCurrent = showSummary;
+      return;
+    }
+
+    if (showSummary) {
+      showAutomaticOpenSummary();
+    }
+  }
+
+  function enableAutomaticOpening() {
+    autoOpenEnabled = true;
+    writeLocalValue(AUTO_OPEN_ENABLED_KEY, true);
+    resetAutoOpenSession();
+    localStorage.removeItem(AUTO_OPEN_NEXT_AT_KEY);
+    autoOpenShowSummaryAfterCurrent = false;
+    updateAutoOpenToggleUi();
+    scheduleNextAutoOpen({ keepExisting: false });
+  }
+
+  function startOpenAllPacks({ automatic = false } = {}) {
+    if (openAllActive) return false;
+
+    openAllActive = true;
+    openAllSummaryCards = [];
+    openAllOpenedPacks = 0;
+    openAllError = null;
+    openAllRequestId = `${automatic ? 'auto-packs' : 'packs'}:${Date.now()}:${Math.random().toString(36).slice(2)}`;
+
+    if (automatic) {
+      autoOpenRequestId = openAllRequestId;
+    }
+
+    if (openAllButton?.isConnected) {
+      openAllButton.disabled = true;
+      openAllButton.textContent = automatic ? 'Auto ouverture…' : 'Ouverture…';
+    }
+
+    document.getElementById('wm-pack-recap')?.remove();
+    document.getElementById('wm-open-all-overlay')?.remove();
+
+    window.dispatchEvent(new CustomEvent('wm-average-open-all-packs', {
+      detail: { requestId: openAllRequestId }
+    }));
+
+    return true;
+  }
+
+  async function runAutomaticOpen() {
+    if (!autoOpenEnabled) return;
+
+    localStorage.removeItem(AUTO_OPEN_NEXT_AT_KEY);
+
+    if (openAllActive) {
+      scheduleNextAutoOpen({ keepExisting: false });
+      return;
+    }
+
+    const started = startOpenAllPacks({ automatic: true });
+    if (!started && autoOpenEnabled) {
+      scheduleNextAutoOpen({ keepExisting: false });
+    }
+  }
+
+  function showAutoOpenHelp() {
+    showInfoModal(
+      'Ouverture automatique',
+      'Quand cette option est activée, l’extension attend aléatoirement entre 20 et 100 minutes puis utilise « Tout ouvrir » pour ouvrir tous les paquets disponibles. Les récaps intermédiaires restent masqués et le cycle recommence automatiquement. Quand vous désactivez l’option, un récapitulatif cumulé de toutes les cartes ouvertes automatiquement s’affiche. WikiMasters doit rester ouvert dans au moins un onglet pour que l’automatisation puisse s’exécuter.'
+    );
+  }
+
   function ensurePullsToolbar() {
     if (!isPullsPage() || document.getElementById('wm-pulls-tools')) return;
 
@@ -1608,7 +1834,54 @@
 
     label.classList.toggle('is-enabled', pullRecapEnabled);
     label.append(textWrap, input, track);
-    tools.append(label);
+
+    const autoControl = document.createElement('span');
+    autoControl.className = 'wm-auto-open-control';
+
+    autoOpenToggleLabel = document.createElement('label');
+    autoOpenToggleLabel.className = 'wm-pulls-toggle wm-auto-open-toggle';
+    autoOpenToggleLabel.title = 'Ouvrir automatiquement tous les paquets à intervalles aléatoires';
+
+    const autoTextWrap = document.createElement('span');
+    autoTextWrap.className = 'wm-pulls-toggle-text';
+
+    const autoTitle = document.createElement('strong');
+    autoTitle.textContent = 'Ouvrir automatiquement';
+    autoTextWrap.append(autoTitle);
+
+    autoOpenToggleInput = document.createElement('input');
+    autoOpenToggleInput.type = 'checkbox';
+    autoOpenToggleInput.checked = autoOpenEnabled;
+
+    const autoTrack = document.createElement('span');
+    autoTrack.className = 'wm-toggle-track';
+
+    const autoKnob = document.createElement('span');
+    autoKnob.className = 'wm-toggle-knob';
+    autoTrack.append(autoKnob);
+
+    autoOpenToggleInput.addEventListener('change', () => {
+      if (autoOpenToggleInput.checked) {
+        enableAutomaticOpening();
+      } else {
+        disableAutomaticOpening({ showSummary: true });
+      }
+    });
+
+    autoOpenToggleLabel.classList.toggle('is-enabled', autoOpenEnabled);
+    autoOpenToggleLabel.append(autoTextWrap, autoOpenToggleInput, autoTrack);
+
+    const helpButton = document.createElement('button');
+    helpButton.type = 'button';
+    helpButton.className = 'wm-auto-open-help';
+    helpButton.textContent = '?';
+    helpButton.title = 'Comment fonctionne l’ouverture automatique ?';
+    helpButton.setAttribute('aria-label', 'Aide ouverture automatique');
+    helpButton.addEventListener('click', showAutoOpenHelp);
+
+    autoControl.append(autoOpenToggleLabel, helpButton);
+
+    tools.append(label, autoControl);
     h1.insertAdjacentElement('afterend', tools);
 
     const info = document.createElement('div');
@@ -1691,22 +1964,7 @@
     const confirmed = await showOpenAllConfirmation();
     if (!confirmed) return;
 
-    openAllActive = true;
-    openAllSummaryCards = [];
-    openAllOpenedPacks = 0;
-    openAllError = null;
-    openAllRequestId = `packs:${Date.now()}:${Math.random().toString(36).slice(2)}`;
-
-    if (openAllButton) {
-      openAllButton.disabled = true;
-      openAllButton.textContent = 'Ouverture…';
-    }
-
-    document.getElementById('wm-pack-recap')?.remove();
-
-    window.dispatchEvent(new CustomEvent('wm-average-open-all-packs', {
-      detail: { requestId: openAllRequestId }
-    }));
+    startOpenAllPacks({ automatic: false });
   }
 
   function setOpenAllButtonProgress(openedPacks, packsRemaining = null) {
@@ -1835,12 +2093,15 @@
     }
   }
 
-  function openOpenAllSummary(cards, openedPacks, error = null) {
+  function openOpenAllSummary(cards, openedPacks, error = null, options = {}) {
     document.getElementById('wm-open-all-overlay')?.remove();
 
     openAllSummaryCards = cards;
     openAllOpenedPacks = openedPacks;
     openAllError = error;
+    openAllSummaryTitle = options.title || 'Cartes obtenues';
+    openAllSummaryOnClose = typeof options.onClose === 'function' ? options.onClose : null;
+    openAllSummaryReloadOnClose = options.reloadOnClose !== false;
 
     const overlay = document.createElement('div');
     overlay.id = 'wm-open-all-overlay';
@@ -1855,7 +2116,7 @@
     const headingWrap = document.createElement('div');
 
     const title = document.createElement('h2');
-    title.textContent = 'Cartes obtenues';
+    title.textContent = openAllSummaryTitle;
 
     const subtitle = document.createElement('p');
     subtitle.dataset.role = 'subtitle';
@@ -1870,9 +2131,24 @@
 
     const close = () => {
       overlay.remove();
+      const onClose = openAllSummaryOnClose;
+      const reloadOnClose = openAllSummaryReloadOnClose;
+
       openAllSummaryCards = [];
       openAllError = null;
-      location.reload();
+      openAllSummaryTitle = 'Cartes obtenues';
+      openAllSummaryOnClose = null;
+      openAllSummaryReloadOnClose = true;
+
+      try {
+        onClose?.();
+      } catch (error) {
+        reportError('fermeture récap', error);
+      }
+
+      if (reloadOnClose) {
+        location.reload();
+      }
     };
 
     closeButton.addEventListener('click', close);
@@ -2062,6 +2338,7 @@
 
     if (isPullsPage()) {
       ensurePullsToolbar();
+      updateAutoOpenToggleUi();
       renderPullStats();
       renderPackRecap();
       autoDismissAntiBotVerification();
@@ -3112,16 +3389,36 @@
     const detail = event.detail || {};
     if (!openAllActive || detail.requestId !== openAllRequestId) return;
 
+    const wasAutomatic = Boolean(autoOpenRequestId && detail.requestId === autoOpenRequestId);
+
     openAllActive = false;
     openAllRequestId = null;
 
-    if (openAllButton) {
+    if (openAllButton?.isConnected) {
       openAllButton.disabled = false;
       openAllButton.textContent = 'Tout ouvrir';
     }
 
     const cards = Array.isArray(detail.cards) ? detail.cards : [];
     const openedPacks = Number(detail.openedPacks) || 0;
+
+    if (wasAutomatic) {
+      autoOpenRequestId = null;
+
+      appendAutomaticOpenResult(detail);
+      document.getElementById('wm-open-all-overlay')?.remove();
+      document.getElementById('wm-pack-recap')?.remove();
+      openAllSummaryCards = [];
+      openAllError = null;
+
+      if (autoOpenShowSummaryAfterCurrent || !autoOpenEnabled) {
+        autoOpenShowSummaryAfterCurrent = false;
+        showAutomaticOpenSummary();
+      } else {
+        scheduleNextAutoOpen({ keepExisting: false });
+      }
+      return;
+    }
 
     if (!cards.length) {
       showInfoModal(
@@ -3331,7 +3628,8 @@
         '.wm-average-badge, .wm-tools-bar, .wm-modal-overlay, .wm-marketplace-average-wrap, ' +
         '.wm-pulls-tools, .wm-pulls-info, .wm-pack-recap, .wm-trade-values-panel, ' +
         '.wm-trade-values-controls, #wm-open-all-overlay, .wm-pull-stats, ' +
-        '.wm-wikipedia-card-button, .wm-missing-image-credit, .wm-compact-tools, .wm-price-legend'
+        '.wm-wikipedia-card-button, .wm-missing-image-credit, .wm-compact-tools, .wm-price-legend, ' +
+        '.wm-auto-open-control, .wm-auto-open-help'
       )
     );
   }
@@ -3387,6 +3685,10 @@
     cleanupPriceCacheOnceDaily();
     attachMainObserver();
 
+    if (autoOpenEnabled) {
+      scheduleNextAutoOpen({ keepExisting: true });
+    }
+
     outsideObserver.observe(document.body, {
       childList: true,
       subtree: true
@@ -3403,5 +3705,5 @@
     scheduleRender(0);
   });
 
-  console.debug('[WM Average] page runtime v4.0.1 chargé');
+  console.debug('[WM Average] page runtime v4.1 chargé');
 })();
