@@ -505,7 +505,12 @@
     const info = document.getElementById('wm-pulls-info');
     if (!info?.parentElement) return;
 
+    const stats = readPullStats();
+    const key = RARITIES.map((rarity) => stats.counts[rarity]).join(':');
+
     let panel = document.getElementById('wm-pull-stats');
+    if (panel?.dataset.wmStatsKey === key) return;
+
     if (!panel) {
       panel = document.createElement('section');
       panel.id = 'wm-pull-stats';
@@ -513,57 +518,82 @@
       info.insertAdjacentElement('afterend', panel);
     }
 
-    const stats = readPullStats();
+    panel.dataset.wmStatsKey = key;
 
-    const header = document.createElement('div');
-    header.className = 'wm-pull-stats-header';
+    const head = document.createElement('div');
+    head.className = 'wm-pull-stats-head';
 
-    const heading = document.createElement('div');
     const title = document.createElement('strong');
-    title.textContent = 'Stats de tirage';
+    title.className = 'wm-pull-stats-title';
+    title.textContent = 'Vos statistiques';
 
     const total = document.createElement('span');
-    total.textContent = `${stats.total} carte${stats.total > 1 ? 's' : ''} suivie${stats.total > 1 ? 's' : ''}`;
-    heading.append(title, total);
+    total.className = 'wm-pull-stats-total';
+    total.textContent = `${stats.total} carte${stats.total > 1 ? 's' : ''}`;
 
-    const reset = document.createElement('button');
-    reset.type = 'button';
-    reset.className = 'wm-pull-stats-reset';
-    reset.textContent = 'Réinitialiser';
-    reset.disabled = stats.total === 0;
-    reset.addEventListener('click', () => {
-      if (!confirm('Réinitialiser toutes les statistiques de tirage ?')) return;
-      localStorage.removeItem(PULL_STATS_KEY);
-      renderPullStats();
-    });
+    head.append(title, total);
 
-    header.append(heading, reset);
+    if (stats.total === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'wm-pull-stats-note';
+      empty.textContent = 'Aucune carte comptée pour le moment. Ouvrez un paquet pour commencer.';
 
-    const grid = document.createElement('div');
-    grid.className = 'wm-pull-stats-grid';
+      panel.replaceChildren(head, empty);
+      return;
+    }
+
+    const rows = document.createElement('div');
+    rows.className = 'wm-pull-stats-rows';
 
     for (const rarity of RARITIES) {
       const count = stats.counts[rarity];
       const percent = stats.total > 0 ? (count / stats.total) * 100 : 0;
 
-      const item = document.createElement('div');
-      item.className = 'wm-pull-stat';
-      item.dataset.rarity = rarity.toLowerCase();
+      const row = document.createElement('div');
+      row.className = 'wm-pull-stat-row';
+      row.dataset.rarity = rarity.toLowerCase();
 
-      const label = document.createElement('strong');
+      const label = document.createElement('span');
+      label.className = 'wm-pull-stat-label';
       label.textContent = rarity;
 
-      const value = document.createElement('span');
-      value.textContent = `${count} • ${percent.toLocaleString('fr-FR', {
+      const track = document.createElement('span');
+      track.className = 'wm-pull-stat-track';
+
+      if (count > 0) {
+        const bar = document.createElement('span');
+        bar.className = 'wm-pull-stat-bar';
+        bar.style.width = `${Math.max(0, Math.min(100, percent))}%`;
+        track.append(bar);
+      }
+
+      const share = document.createElement('span');
+      share.className = 'wm-pull-stat-percent';
+      share.textContent = `${percent.toLocaleString('fr-FR', {
         minimumFractionDigits: 0,
         maximumFractionDigits: 1
       })} %`;
 
-      item.append(label, value);
-      grid.append(item);
+      const amount = document.createElement('span');
+      amount.className = 'wm-pull-stat-count';
+      amount.textContent = String(count);
+
+      row.append(label, track, share, amount);
+      rows.append(row);
     }
 
-    panel.replaceChildren(header, grid);
+    const reset = document.createElement('button');
+    reset.type = 'button';
+    reset.className = 'wm-pull-stats-reset';
+    reset.textContent = 'Réinitialiser les statistiques';
+    reset.addEventListener('click', () => {
+      if (!confirm('Réinitialiser toutes les statistiques de tirage ?')) return;
+      localStorage.removeItem(PULL_STATS_KEY);
+      panel.dataset.wmStatsKey = '';
+      renderPullStats();
+    });
+
+    panel.replaceChildren(head, rows, reset);
   }
 
   function compactEligiblePage() {
@@ -1889,6 +1919,7 @@
   function renderAll() {
     if (isCollectionPage()) {
       ensureToolbar();
+      ensurePriceLegend();
       renderVisibleCollectionCards();
     }
 
@@ -2036,6 +2067,63 @@
     pumpQueue();
   }
 
+  function ensurePriceLegend(toolbar = document.getElementById('wm-tools-bar')) {
+    if (!isCollectionPage() || !toolbar || document.getElementById('wm-price-legend')) return;
+
+    const legend = document.createElement('div');
+    legend.id = 'wm-price-legend';
+    legend.className = 'wm-price-legend';
+
+    const heading = document.createElement('strong');
+    heading.className = 'wm-price-legend-title';
+    heading.textContent = 'Légende des prix';
+
+    const items = document.createElement('div');
+    items.className = 'wm-price-legend-items';
+
+    const definitions = [
+      {
+        badge: 'Moy. 12 W',
+        className: 'wm-price-legend-badge',
+        text: 'prix moyen des ventes'
+      },
+      {
+        badge: 'Moy. —',
+        className: 'wm-price-legend-badge is-empty',
+        text: 'aucune moyenne disponible'
+      },
+      {
+        badge: 'Prix indispo.',
+        className: 'wm-price-legend-badge is-error',
+        text: 'erreur temporaire, nouvel essai automatique'
+      },
+      {
+        badge: 'Prix…',
+        className: 'wm-price-legend-badge is-loading',
+        text: 'prix en cours de chargement'
+      }
+    ];
+
+    for (const definition of definitions) {
+      const item = document.createElement('span');
+      item.className = 'wm-price-legend-item';
+
+      const badge = document.createElement('span');
+      badge.className = definition.className;
+      badge.textContent = definition.badge;
+
+      const text = document.createElement('span');
+      text.className = 'wm-price-legend-text';
+      text.textContent = definition.text;
+
+      item.append(badge, text);
+      items.append(item);
+    }
+
+    legend.append(heading, items);
+    toolbar.insertAdjacentElement('afterend', legend);
+  }
+
   function ensureToolbar() {
     if (!isCollectionPage() || document.getElementById('wm-tools-bar')) return;
 
@@ -2075,6 +2163,7 @@
 
     bar.append(bulkButton, rankingButton, createSponsorNote());
     header.insertAdjacentElement('afterend', bar);
+    ensurePriceLegend(bar);
   }
 
   async function handleBulkClick() {
@@ -3108,7 +3197,7 @@
         '.wm-average-badge, .wm-tools-bar, .wm-modal-overlay, .wm-marketplace-average-wrap, ' +
         '.wm-pulls-tools, .wm-pulls-info, .wm-pack-recap, .wm-trade-values-panel, ' +
         '.wm-trade-values-controls, #wm-open-all-overlay, .wm-pull-stats, ' +
-        '.wm-wikipedia-card-button, .wm-missing-image-credit, .wm-compact-tools'
+        '.wm-wikipedia-card-button, .wm-missing-image-credit, .wm-compact-tools, .wm-price-legend'
       )
     );
   }
@@ -3180,5 +3269,5 @@
     scheduleRender(0);
   });
 
-  console.debug('[WM Average] page runtime v4.0 chargé');
+  console.debug('[WM Average] page runtime v4.0.1 chargé');
 })();
