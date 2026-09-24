@@ -12,6 +12,11 @@
   const BULK_RARITY_LAST_LOAD_KEY = 'wm_bulk_rarity_last_load_v1';
   const ALL_COLLECTION_KEY = 'wm_all_collection_v1';
   const PULL_RECAP_ENABLED_KEY = 'wm_pull_recap_enabled_v1';
+  const PULL_STATS_KEY = 'wm_pull_stats_v1';
+  const COMPACT_MODE_KEY = 'wm_compact_mode_v1';
+  const MISSING_IMAGE_CACHE_PREFIX = 'wm_missing_img_v1_';
+  const MISSING_IMAGE_FOUND_TTL = 30 * 24 * 60 * 60 * 1000;
+  const MISSING_IMAGE_MISS_TTL = 7 * 24 * 60 * 60 * 1000;
   const RARITIES = ['L', 'UR', 'SR', 'R', 'PC', 'C'];
   const DEFAULT_RARE_RARITIES = ['L', 'UR', 'SR', 'R'];
 
@@ -48,6 +53,9 @@
   let openAllError = null;
   let openAllRenderTimer = null;
   let collectionPriceObserver = null;
+  let cardExtrasObserver = null;
+  let compactModeEnabled = readLocalValue(COMPACT_MODE_KEY) === true;
+  const missingImagePending = new Map();
   const tradesById = new Map();
   const activeTradeValueIds = new Set();
   let tradesRequested = false;
@@ -59,6 +67,10 @@
 
   function isMarketplaceDetailPage() {
     return /^\/marketplace\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/?$/i.test(location.pathname);
+  }
+
+  function isMarketplacePage() {
+    return location.pathname === '/marketplace' || location.pathname.startsWith('/marketplace/');
   }
 
   function isPullsPage() {
@@ -200,6 +212,7 @@
         title: meta.title,
         rarity: meta.rarity || null,
         imageUrl: meta.imageUrl || null,
+        wikipediaUrl: meta.wikipediaUrl || cardMetaById.get(meta.id)?.wikipediaUrl || null,
         count: Number(meta.count) || 1,
         ownedCardId: meta.ownedCardId || cardMetaById.get(meta.id)?.ownedCardId || null,
         ownedCardIds: Array.isArray(meta.ownedCardIds)
@@ -209,6 +222,407 @@
       cardMetaById.set(normalized.id, normalized);
       idByTitle.set(normalizeTitle(normalized.title), normalized.id);
     }
+  }
+
+  function wikipediaUrlFor(title, meta = null) {
+    if (meta?.wikipediaUrl) return meta.wikipediaUrl;
+    const normalized = normalizeTitle(title);
+    if (!normalized) return null;
+    return `https://fr.wikipedia.org/wiki/${encodeURIComponent(normalized.replace(/ /g, '_'))}`;
+  }
+
+  function ensureWikipediaButton(card) {
+    if (!card || card.querySelector(':scope > .wm-wikipedia-card-button')) return;
+
+    const h3 = card.querySelector('h3');
+    const title = normalizeTitle(h3?.textContent);
+    if (!title) return;
+
+    const id = idByTitle.get(title);
+    const meta = id ? cardMetaById.get(id) : null;
+    const url = wikipediaUrlFor(title, meta);
+    if (!url) return;
+
+    const button = document.createElement('a');
+    button.className = 'wm-wikipedia-card-button';
+    button.href = url;
+    button.target = '_blank';
+    button.rel = 'noopener noreferrer';
+    button.referrerPolicy = 'no-referrer';
+    button.textContent = 'W';
+    button.title = 'Ouvrir l’article Wikipédia';
+    button.setAttribute('aria-label', `Ouvrir Wikipédia : ${title}`);
+
+    const stop = (event) => event.stopPropagation();
+    button.addEventListener('pointerdown', stop);
+    button.addEventListener('mousedown', stop);
+    button.addEventListener('click', stop);
+
+    card.append(button);
+  }
+
+  function findMissingImagePlaceholder(card) {
+    if (!card) return null;
+
+    for (const img of card.querySelectorAll('img')) {
+      if (img.classList.contains('wm-replaced-missing-image')) continue;
+
+      const alt = normalizeTitle(img.getAttribute('alt')).toLocaleLowerCase('fr');
+      const src = String(img.currentSrc || img.src || '');
+
+      if (
+        alt === 'wikimasters' ||
+        /(?:%2f|\/)logo\.png/i.test(src)
+      ) {
+        return img;
+      }
+    }
+
+    return null;
+  }
+
+  function missingImageCacheKey(title) {
+    return MISSING_IMAGE_CACHE_PREFIX + encodeURIComponent(normalizeTitle(title));
+  }
+
+  function readMissingImageCache(title) {
+    const entry = readLocalValue(missingImageCacheKey(title));
+    if (!entry || !Number.isFinite(Number(entry.fetchedAt))) return null;
+
+    const ttl = entry.found ? MISSING_IMAGE_FOUND_TTL : MISSING_IMAGE_MISS_TTL;
+    if (Date.now() - Number(entry.fetchedAt) >= ttl) return null;
+
+    return entry;
+  }
+
+  async function resolveMissingImage(title) {
+    const normalized = normalizeTitle(title);
+    if (!normalized) return null;
+
+    const cached = readMissingImageCache(normalized);
+    if (cached) return cached;
+
+    const pending = missingImagePending.get(normalized);
+    if (pending) return pending;
+
+    const task = (async () => {
+      const params = new URLSearchParams({
+        action: 'query',
+        format: 'json',
+        origin: '*',
+        redirects: '1',
+        prop: 'pageimages',
+        piprop: 'thumbnail|name',
+        pithumbsize: '720',
+        titles: normalized
+      });
+
+      const response = await fetch(`https://fr.wikipedia.org/w/api.php?${params}`, {
+        method: 'GET',
+        credentials: 'omit',
+        referrerPolicy: 'no-referrer',
+        headers: { accept: 'application/json' }
+      });
+
+      if (!response.ok) {
+        throw new Error(`Wikipedia HTTP ${response.status}`);
+      }
+
+      const json = await response.json();
+      const page = Object.values(json?.query?.pages || {})[0] || null;
+      const imageUrl = page?.thumbnail?.source || null;
+      const fileName = page?.pageimage || null;
+
+      // We intentionally keep only Wikimedia Commons images.
+      const found = Boolean(
+        imageUrl &&
+        /\/wikipedia\/commons\//i.test(String(imageUrl))
+      );
+
+      const entry = {
+        fetchedAt: Date.now(),
+        found,
+        url: found ? imageUrl : null,
+        fileName: found ? fileName : null
+      };
+
+      writeLocalValue(missingImageCacheKey(normalized), entry);
+      return entry;
+    })();
+
+    missingImagePending.set(normalized, task);
+
+    try {
+      return await task;
+    } finally {
+      missingImagePending.delete(normalized);
+    }
+  }
+
+  function applyResolvedMissingImage(card, placeholder, title, entry) {
+    if (!card?.isConnected || !placeholder?.isConnected || !entry?.found || !entry.url) return;
+
+    placeholder.classList.add('wm-replaced-missing-image');
+    placeholder.dataset.wmOriginalSrc = placeholder.getAttribute('src') || '';
+    placeholder.dataset.wmOriginalSrcset = placeholder.getAttribute('srcset') || '';
+    placeholder.src = entry.url;
+    placeholder.removeAttribute('srcset');
+    placeholder.alt = title;
+    placeholder.referrerPolicy = 'no-referrer';
+
+    if (!card.querySelector(':scope > .wm-missing-image-credit')) {
+      const credit = document.createElement('a');
+      credit.className = 'wm-missing-image-credit';
+      credit.target = '_blank';
+      credit.rel = 'noopener noreferrer';
+      credit.referrerPolicy = 'no-referrer';
+      credit.textContent = 'Wikimedia';
+      credit.title = 'Image ajoutée depuis Wikimedia Commons';
+
+      if (entry.fileName) {
+        credit.href = `https://commons.wikimedia.org/wiki/File:${encodeURIComponent(entry.fileName.replace(/ /g, '_'))}`;
+      } else {
+        credit.href = wikipediaUrlFor(title);
+      }
+
+      const stop = (event) => event.stopPropagation();
+      credit.addEventListener('pointerdown', stop);
+      credit.addEventListener('click', stop);
+      card.append(credit);
+    }
+  }
+
+  async function ensureMissingImageForCard(card) {
+    if (!card?.isConnected) return;
+    if (card.dataset.wmMissingImageLoading === '1') return;
+
+    const placeholder = findMissingImagePlaceholder(card);
+    if (!placeholder) return;
+
+    const retryAt = Number(card.dataset.wmMissingImageRetryAt) || 0;
+    if (retryAt > Date.now()) return;
+
+    const title = normalizeTitle(card.querySelector('h3')?.textContent);
+    if (!title) return;
+
+    card.dataset.wmMissingImageLoading = '1';
+
+    try {
+      const entry = await resolveMissingImage(title);
+
+      if (entry?.found) {
+        applyResolvedMissingImage(card, placeholder, title, entry);
+      } else {
+        card.dataset.wmMissingImageDone = '1';
+      }
+    } catch (error) {
+      card.dataset.wmMissingImageRetryAt = String(Date.now() + 60 * 1000);
+      console.debug('[WM Average] image Wikimedia indisponible', title, error);
+    } finally {
+      delete card.dataset.wmMissingImageLoading;
+    }
+  }
+
+  function ensureCardExtrasObserver() {
+    if (cardExtrasObserver) return cardExtrasObserver;
+
+    cardExtrasObserver = new IntersectionObserver((entries) => {
+      for (const entry of entries) {
+        if (!entry.isIntersecting) continue;
+
+        const card = entry.target;
+        cardExtrasObserver.unobserve(card);
+
+        ensureMissingImageForCard(card).catch((error) => {
+          console.debug('[WM Average] image manquante', error);
+        });
+      }
+    }, {
+      root: null,
+      rootMargin: '280px 0px',
+      threshold: 0
+    });
+
+    return cardExtrasObserver;
+  }
+
+  function renderCardExtras() {
+    const observer = ensureCardExtrasObserver();
+
+    for (const card of document.querySelectorAll('div[class*="glow-"]')) {
+      if (!card.querySelector('h3')) continue;
+
+      ensureWikipediaButton(card);
+
+      if (
+        card.dataset.wmMissingImageDone !== '1' &&
+        findMissingImagePlaceholder(card)
+      ) {
+        observer.observe(card);
+      }
+    }
+  }
+
+  function readPullStats() {
+    const raw = readLocalValue(PULL_STATS_KEY) || {};
+    const counts = {};
+
+    for (const rarity of RARITIES) {
+      counts[rarity] = Math.max(0, Number(raw?.counts?.[rarity]) || 0);
+    }
+
+    return {
+      counts,
+      total: RARITIES.reduce((sum, rarity) => sum + counts[rarity], 0)
+    };
+  }
+
+  function writePullStats(stats) {
+    writeLocalValue(PULL_STATS_KEY, {
+      counts: stats.counts,
+      updatedAt: Date.now()
+    });
+  }
+
+  function recordPullStats(cards) {
+    if (!Array.isArray(cards) || !cards.length) return;
+
+    const stats = readPullStats();
+
+    for (const card of cards) {
+      if (!RARITIES.includes(card?.rarity)) continue;
+      stats.counts[card.rarity] += 1;
+      stats.total += 1;
+    }
+
+    writePullStats(stats);
+    renderPullStats();
+  }
+
+  function renderPullStats() {
+    if (!isPullsPage()) return;
+
+    const info = document.getElementById('wm-pulls-info');
+    if (!info?.parentElement) return;
+
+    let panel = document.getElementById('wm-pull-stats');
+    if (!panel) {
+      panel = document.createElement('section');
+      panel.id = 'wm-pull-stats';
+      panel.className = 'wm-pull-stats';
+      info.insertAdjacentElement('afterend', panel);
+    }
+
+    const stats = readPullStats();
+
+    const header = document.createElement('div');
+    header.className = 'wm-pull-stats-header';
+
+    const heading = document.createElement('div');
+    const title = document.createElement('strong');
+    title.textContent = 'Stats de tirage';
+
+    const total = document.createElement('span');
+    total.textContent = `${stats.total} carte${stats.total > 1 ? 's' : ''} suivie${stats.total > 1 ? 's' : ''}`;
+    heading.append(title, total);
+
+    const reset = document.createElement('button');
+    reset.type = 'button';
+    reset.className = 'wm-pull-stats-reset';
+    reset.textContent = 'Réinitialiser';
+    reset.disabled = stats.total === 0;
+    reset.addEventListener('click', () => {
+      if (!confirm('Réinitialiser toutes les statistiques de tirage ?')) return;
+      localStorage.removeItem(PULL_STATS_KEY);
+      renderPullStats();
+    });
+
+    header.append(heading, reset);
+
+    const grid = document.createElement('div');
+    grid.className = 'wm-pull-stats-grid';
+
+    for (const rarity of RARITIES) {
+      const count = stats.counts[rarity];
+      const percent = stats.total > 0 ? (count / stats.total) * 100 : 0;
+
+      const item = document.createElement('div');
+      item.className = 'wm-pull-stat';
+      item.dataset.rarity = rarity.toLowerCase();
+
+      const label = document.createElement('strong');
+      label.textContent = rarity;
+
+      const value = document.createElement('span');
+      value.textContent = `${count} • ${percent.toLocaleString('fr-FR', {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 1
+      })} %`;
+
+      item.append(label, value);
+      grid.append(item);
+    }
+
+    panel.replaceChildren(header, grid);
+  }
+
+  function compactEligiblePage() {
+    return isCollectionPage() || isGlobalCollectionPage();
+  }
+
+  function applyCompactMode() {
+    document.body?.classList.toggle(
+      'wm-compact-mode',
+      compactModeEnabled && compactEligiblePage()
+    );
+
+    for (const button of document.querySelectorAll('[data-wm-compact-button]')) {
+      button.classList.toggle('is-enabled', compactModeEnabled);
+      button.textContent = compactModeEnabled ? 'Compact ✓' : 'Compact';
+      button.setAttribute('aria-pressed', compactModeEnabled ? 'true' : 'false');
+    }
+  }
+
+  function makeCompactButton() {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'wm-tool-button wm-compact-button';
+    button.dataset.wmCompactButton = '1';
+    button.title = 'Réduire la taille des cartes pour en afficher davantage';
+    button.addEventListener('click', () => {
+      compactModeEnabled = !compactModeEnabled;
+      writeLocalValue(COMPACT_MODE_KEY, compactModeEnabled);
+      applyCompactMode();
+    });
+    return button;
+  }
+
+  function ensureCompactControl() {
+    if (!compactEligiblePage()) {
+      applyCompactMode();
+      return;
+    }
+
+    if (isCollectionPage()) {
+      const bar = document.getElementById('wm-tools-bar');
+      if (bar && !bar.querySelector('[data-wm-compact-button]')) {
+        const sponsor = bar.querySelector('.wm-sponsor-note');
+        const button = makeCompactButton();
+        if (sponsor) bar.insertBefore(button, sponsor);
+        else bar.append(button);
+      }
+    } else if (isGlobalCollectionPage() && !document.getElementById('wm-global-compact-tools')) {
+      const h1 = document.querySelector('main h1');
+      if (h1) {
+        const tools = document.createElement('div');
+        tools.id = 'wm-global-compact-tools';
+        tools.className = 'wm-compact-tools';
+        tools.append(makeCompactButton());
+        h1.parentElement?.insertAdjacentElement('afterend', tools);
+      }
+    }
+
+    applyCompactMode();
   }
 
   function createSponsorNote() {
@@ -1454,6 +1868,8 @@
   function handlePackOpened(cards) {
     if (!Array.isArray(cards) || !cards.length) return;
 
+    recordPullStats(cards);
+
     activePackRecap = {
       openedAt: Date.now(),
       cards
@@ -1482,6 +1898,7 @@
 
     if (isPullsPage()) {
       ensurePullsToolbar();
+      renderPullStats();
       renderPackRecap();
     }
 
@@ -1495,6 +1912,9 @@
       ensureGlobalCollectionInspectedCard();
       renderGlobalCollectionInspectedCard();
     }
+
+    ensureCompactControl();
+    renderCardExtras();
   }
 
   function loadCacheForCards(cards, { forceRarities = null, markBulk = false } = {}) {
@@ -2453,6 +2873,7 @@
     const packCards = Array.isArray(detail.cards) ? detail.cards : [];
     if (!packCards.length) return;
 
+    recordPullStats(packCards);
     openAllSummaryCards.push(...packCards);
     mergePulledCardsIntoCollectionCache(packCards);
 
@@ -2643,7 +3064,7 @@
   function routeIsSupported() {
     return (
       isCollectionPage() ||
-      isMarketplaceDetailPage() ||
+      isMarketplacePage() ||
       isPullsPage() ||
       isTradesPage() ||
       isGlobalCollectionPage()
@@ -2656,6 +3077,9 @@
 
     previousPath = currentPath;
     if (isTradesPage()) tradesRequested = false;
+    if (!compactEligiblePage()) {
+      document.body?.classList.remove('wm-compact-mode');
+    }
 
     console.debug('[WM Average] navigation SPA détectée:', currentPath);
     return true;
@@ -2683,7 +3107,8 @@
       target?.closest?.(
         '.wm-average-badge, .wm-tools-bar, .wm-modal-overlay, .wm-marketplace-average-wrap, ' +
         '.wm-pulls-tools, .wm-pulls-info, .wm-pack-recap, .wm-trade-values-panel, ' +
-        '.wm-trade-values-controls, #wm-open-all-overlay'
+        '.wm-trade-values-controls, #wm-open-all-overlay, .wm-pull-stats, ' +
+        '.wm-wikipedia-card-button, .wm-missing-image-credit, .wm-compact-tools'
       )
     );
   }
@@ -2755,5 +3180,5 @@
     scheduleRender(0);
   });
 
-  console.debug('[WM Average] page runtime v3.15.1 chargé');
+  console.debug('[WM Average] page runtime v4.0 chargé');
 })();
