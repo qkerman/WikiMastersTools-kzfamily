@@ -1152,99 +1152,215 @@
 
 /* v4 — statistiques de tirage */
 .wm-pull-stats {
-  width: min(620px, calc(100% - 24px));
+  --wm-pull-color: #cbd5e1;
+  --wm-pull-ink: var(--color-foreground, #e6edf3);
+
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  width: 17rem;
+  max-width: calc(100% - 24px);
+  box-sizing: border-box;
   margin: 10px auto 0;
   padding: 10px 12px;
-  border: 1px solid rgba(191, 148, 255, 0.18);
+  border: 1px solid color-mix(in srgb, var(--wm-pull-ink) 14%, transparent);
   border-radius: 12px;
-  background: rgba(191, 148, 255, 0.045);
+  background: color-mix(in srgb, var(--wm-pull-ink) 6%, transparent);
+  color: var(--wm-pull-ink);
+  font-size: 11px;
+  line-height: 1.3;
 }
 
-.wm-pull-stats-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  margin-bottom: 8px;
-}
-
-.wm-pull-stats-header > div {
+.wm-pull-stats-head {
   display: flex;
   align-items: baseline;
-  gap: 7px;
-  min-width: 0;
+  justify-content: space-between;
+  gap: 8px;
 }
 
-.wm-pull-stats-header strong {
-  color: #f8fafc;
-  font-size: 11px;
+.wm-pull-stats-title {
+  font-family: var(--font-heading, inherit);
+  font-size: 12px;
+  font-weight: 700;
 }
 
-.wm-pull-stats-header span {
-  color: #94a3b8;
-  font-size: 9px;
+.wm-pull-stats-total {
+  color: color-mix(in srgb, var(--wm-pull-ink) 55%, transparent);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
 }
+
+.wm-pull-stats-note {
+  color: color-mix(in srgb, var(--wm-pull-ink) 55%, transparent);
+  font-size: 10px;
+  text-align: left;
+}
+
+.wm-pull-stats-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.wm-pull-stat-row {
+  --wm-pull-color: #cbd5e1;
+
+  display: grid;
+  grid-template-columns: 1.6rem 1fr 3.2rem 2rem;
+  align-items: center;
+  gap: 6px;
+}
+
+.wm-pull-stat-label {
+  color: var(--wm-pull-color);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.wm-pull-stat-track {
+  display: block;
+  height: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--wm-pull-ink) 10%, transparent);
+}
+
+.wm-pull-stat-bar {
+  display: block;
+  min-width: 3px;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--wm-pull-color);
+  box-shadow: 0 0 6px color-mix(in srgb, var(--wm-pull-color) 45%, transparent);
+}
+
+.wm-pull-stat-percent {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
+.wm-pull-stat-count {
+  color: color-mix(in srgb, var(--wm-pull-ink) 55%, transparent);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.wm-pull-stat-row[data-rarity="l"] { --wm-pull-color: var(--color-rarity-l, #f6c85f); }
+.wm-pull-stat-row[data-rarity="ur"] { --wm-pull-color: var(--color-rarity-ur, #f87171); }
+.wm-pull-stat-row[data-rarity="sr"] { --wm-pull-color: var(--color-rarity-sr, #c084fc); }
+.wm-pull-stat-row[data-rarity="r"] { --wm-pull-color: var(--color-rarity-r, #60a5fa); }
+.wm-pull-stat-row[data-rarity="pc"] { --wm-pull-color: var(--color-rarity-pc, #34d399); }
+.wm-pull-stat-row[data-rarity="c"] { --wm-pull-color: var(--color-rarity-c, #d1d5db); }
 
 .wm-pull-stats-reset {
-  flex: 0 0 auto;
-  padding: 4px 7px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 7px;
-  background: rgba(255, 255, 255, 0.035);
-  color: #94a3b8;
-  font-size: 8px;
+  align-self: flex-start;
+  margin-top: 1px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: color-mix(in srgb, var(--wm-pull-ink) 48%, transparent);
+  font: inherit;
+  font-size: 9px;
   cursor: pointer;
+  text-decoration: underline;
+  text-decoration-color: transparent;
+  text-underline-offset: 2px;
 }
 
-.wm-pull-stats-reset:hover:not(:disabled) {
-  border-color: rgba(191, 148, 255, 0.45);
-  color: #c4b5fd;
+.wm-pull-stats-reset:hover {
+  color: color-mix(in srgb, var(--wm-pull-ink) 76%, transparent);
+  text-decoration-color: currentColor;
 }
 
-.wm-pull-stats-reset:disabled {
-  opacity: 0.4;
-  cursor: default;
-}
-
-.wm-pull-stats-grid {
-  display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
-  gap: 5px;
-}
-
-.wm-pull-stat {
-  min-width: 0;
-  padding: 6px 5px;
+/* v4.0.1 — légende des prix */
+.wm-price-legend {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  width: fit-content;
+  max-width: 100%;
+  margin-top: 6px;
+  padding: 6px 8px;
   border: 1px solid rgba(255, 255, 255, 0.07);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.022);
-  text-align: center;
-}
-
-.wm-pull-stat strong,
-.wm-pull-stat span {
-  display: block;
-}
-
-.wm-pull-stat strong {
-  margin-bottom: 2px;
-  font-size: 10px;
-}
-
-.wm-pull-stat span {
-  overflow: hidden;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.025);
   color: #94a3b8;
-  font-size: 8px;
-  text-overflow: ellipsis;
+  font-size: 9px;
+  line-height: 1.25;
+}
+
+.wm-price-legend-title {
+  flex: 0 0 auto;
+  padding-top: 2px;
+  color: #cbd5e1;
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.wm-price-legend-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px 10px;
+}
+
+.wm-price-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   white-space: nowrap;
 }
 
-.wm-pull-stat[data-rarity="l"] strong { color: var(--color-rarity-l, #f6c85f); }
-.wm-pull-stat[data-rarity="ur"] strong { color: var(--color-rarity-ur, #f87171); }
-.wm-pull-stat[data-rarity="sr"] strong { color: var(--color-rarity-sr, #c084fc); }
-.wm-pull-stat[data-rarity="r"] strong { color: var(--color-rarity-r, #60a5fa); }
-.wm-pull-stat[data-rarity="pc"] strong { color: var(--color-rarity-pc, #34d399); }
-.wm-pull-stat[data-rarity="c"] strong { color: var(--color-rarity-c, #d1d5db); }
+.wm-price-legend-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 17px;
+  padding: 1px 5px;
+  border: 1px solid rgba(191, 148, 255, 0.3);
+  border-radius: 5px;
+  background: rgba(191, 148, 255, 0.1);
+  color: #d8c4ff;
+  font-size: 8px;
+  font-weight: 700;
+}
+
+.wm-price-legend-badge.is-empty,
+.wm-price-legend-badge.is-error {
+  border-color: rgba(148, 163, 184, 0.22);
+  background: rgba(148, 163, 184, 0.07);
+  color: #a8b3c4;
+}
+
+.wm-price-legend-badge.is-loading {
+  opacity: 0.72;
+}
+
+.wm-price-legend-text {
+  color: #7f8da3;
+}
+
+@media (max-width: 720px) {
+  .wm-price-legend {
+    display: block;
+    width: 100%;
+  }
+
+  .wm-price-legend-title {
+    display: block;
+    margin-bottom: 5px;
+  }
+
+  .wm-price-legend-items {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .wm-price-legend-item {
+    white-space: normal;
+  }
+}
 
 /* v4 — vue compacte */
 .wm-compact-tools {
@@ -1265,10 +1381,6 @@ body.wm-compact-mode main div[class*="glow-"]:has(h3) {
 }
 
 @media (max-width: 640px) {
-  .wm-pull-stats-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-
   .wm-wikipedia-card-button {
     width: 23px;
     height: 23px;
