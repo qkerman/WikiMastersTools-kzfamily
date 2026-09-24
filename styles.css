@@ -1435,3 +1435,36 @@ body.wm-compact-mode main div[class*="glow-"]:has(h3) {
     row-gap: 5px;
   }
 }
+
+
+/* v4.1.2 — classement partiel depuis le cache */
+.wm-ranking-cache-notice {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin: 0 14px 8px;
+  padding: 7px 9px;
+  border: 1px solid rgba(191, 148, 255, 0.22);
+  border-radius: 8px;
+  background: rgba(191, 148, 255, 0.055);
+  color: #94a3b8;
+  font-size: 9px;
+  line-height: 1.35;
+}
+
+.wm-ranking-cache-notice strong {
+  flex: 0 0 auto;
+  color: #c4b5fd;
+  font-size: 9px;
+}
+
+@media (max-width: 560px) {
+  .wm-ranking-cache-notice {
+    display: block;
+  }
+
+  .wm-ranking-cache-notice strong {
+    display: block;
+    margin-bottom: 2px;
+  }
+}
