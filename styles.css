@@ -1387,3 +1387,51 @@ body.wm-compact-mode main div[class*="glow-"]:has(h3) {
     font-size: 13px;
   }
 }
+
+
+/* v4.1 — ouverture automatique */
+.wm-pulls-tools {
+  gap: 5px;
+  flex-wrap: wrap;
+}
+
+.wm-auto-open-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.wm-auto-open-toggle {
+  padding-left: 7px;
+}
+
+.wm-auto-open-help {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 19px;
+  height: 19px;
+  flex: 0 0 19px;
+  padding: 0;
+  border: 1px solid rgba(191, 148, 255, 0.3);
+  border-radius: 50%;
+  background: rgba(191, 148, 255, 0.055);
+  color: rgba(226, 232, 240, 0.7);
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.wm-auto-open-help:hover {
+  border-color: rgba(191, 148, 255, 0.7);
+  background: rgba(191, 148, 255, 0.12);
+  color: #e9ddff;
+}
+
+@media (max-width: 760px) {
+  .wm-pulls-tools {
+    justify-content: center;
+    row-gap: 5px;
+  }
+}
