@@ -1089,3 +1089,189 @@
   text-decoration: line-through;
   text-decoration-thickness: 1px;
 }
+
+
+/* v4 — Wikipédia */
+.wm-wikipedia-card-button {
+  position: absolute;
+  top: 34px;
+  right: 6px;
+  z-index: 36;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 25px;
+  height: 25px;
+  border: 1px solid rgba(255, 255, 255, 0.26);
+  border-radius: 7px;
+  background: rgba(8, 10, 14, 0.82);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.28);
+  font-family: Georgia, serif;
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1;
+  text-decoration: none;
+  backdrop-filter: blur(4px);
+}
+
+.wm-wikipedia-card-button:hover {
+  border-color: #bf94ff;
+  background: rgba(191, 148, 255, 0.18);
+  color: #fff;
+}
+
+/* v4 — images Wikimedia Commons */
+.wm-replaced-missing-image {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+  opacity: 1 !important;
+}
+
+.wm-missing-image-credit {
+  position: absolute;
+  top: calc(45% - 19px);
+  right: 5px;
+  z-index: 35;
+  padding: 2px 5px;
+  border-radius: 5px;
+  background: rgba(7, 10, 14, 0.76);
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 7px;
+  font-weight: 700;
+  line-height: 1.1;
+  text-decoration: none;
+  backdrop-filter: blur(3px);
+}
+
+.wm-missing-image-credit:hover {
+  color: #fff;
+  background: rgba(7, 10, 14, 0.92);
+}
+
+/* v4 — statistiques de tirage */
+.wm-pull-stats {
+  width: min(620px, calc(100% - 24px));
+  margin: 10px auto 0;
+  padding: 10px 12px;
+  border: 1px solid rgba(191, 148, 255, 0.18);
+  border-radius: 12px;
+  background: rgba(191, 148, 255, 0.045);
+}
+
+.wm-pull-stats-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.wm-pull-stats-header > div {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  min-width: 0;
+}
+
+.wm-pull-stats-header strong {
+  color: #f8fafc;
+  font-size: 11px;
+}
+
+.wm-pull-stats-header span {
+  color: #94a3b8;
+  font-size: 9px;
+}
+
+.wm-pull-stats-reset {
+  flex: 0 0 auto;
+  padding: 4px 7px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.035);
+  color: #94a3b8;
+  font-size: 8px;
+  cursor: pointer;
+}
+
+.wm-pull-stats-reset:hover:not(:disabled) {
+  border-color: rgba(191, 148, 255, 0.45);
+  color: #c4b5fd;
+}
+
+.wm-pull-stats-reset:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.wm-pull-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 5px;
+}
+
+.wm-pull-stat {
+  min-width: 0;
+  padding: 6px 5px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.022);
+  text-align: center;
+}
+
+.wm-pull-stat strong,
+.wm-pull-stat span {
+  display: block;
+}
+
+.wm-pull-stat strong {
+  margin-bottom: 2px;
+  font-size: 10px;
+}
+
+.wm-pull-stat span {
+  overflow: hidden;
+  color: #94a3b8;
+  font-size: 8px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wm-pull-stat[data-rarity="l"] strong { color: var(--color-rarity-l, #f6c85f); }
+.wm-pull-stat[data-rarity="ur"] strong { color: var(--color-rarity-ur, #f87171); }
+.wm-pull-stat[data-rarity="sr"] strong { color: var(--color-rarity-sr, #c084fc); }
+.wm-pull-stat[data-rarity="r"] strong { color: var(--color-rarity-r, #60a5fa); }
+.wm-pull-stat[data-rarity="pc"] strong { color: var(--color-rarity-pc, #34d399); }
+.wm-pull-stat[data-rarity="c"] strong { color: var(--color-rarity-c, #d1d5db); }
+
+/* v4 — vue compacte */
+.wm-compact-tools {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.wm-compact-button.is-enabled {
+  border-color: rgba(191, 148, 255, 0.72);
+  box-shadow: 0 0 0 1px rgba(191, 148, 255, 0.12);
+}
+
+body.wm-compact-mode main div[class*="glow-"]:has(> h3),
+body.wm-compact-mode main div[class*="glow-"]:has(h3) {
+  zoom: 0.76;
+}
+
+@media (max-width: 640px) {
+  .wm-pull-stats-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .wm-wikipedia-card-button {
+    width: 23px;
+    height: 23px;
+    font-size: 13px;
+  }
+}
