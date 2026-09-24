@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "WikiMasters - Prix moyen collection",
-  "version": "3.15.1",
-  "description": "Affiche les prix moyens WikiMasters dans la collection et sur les pages marketplace, avec cache individuel de 24 h.",
+  "version": "4.0.0",
+  "description": "Outils WikiMasters : prix moyens, collection, échanges, paquets, images manquantes, Wikipédia et vue compacte.",
   "host_permissions": ["https://www.wiki-masters.com/*"],
   "browser_specific_settings": {
     "gecko": {
