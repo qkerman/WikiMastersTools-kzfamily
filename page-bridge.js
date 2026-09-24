@@ -615,6 +615,24 @@
         if (Number.isFinite(packsRemaining) && packsRemaining <= 0) {
           break;
         }
+
+        // Small extra jitter on top of WikiMasters' own pacing/rate-limit delay.
+        // This applies to both manual « Tout ouvrir » and automatic opening.
+        const extraDelayMs = Math.round(500 + Math.random() * 1500);
+
+        window.dispatchEvent(new CustomEvent('wm-average-open-all-packs-progress', {
+          detail: {
+            requestId,
+            openedPacks,
+            cardsCount: allCards.length,
+            packsRemaining: Number.isFinite(packsRemaining) ? packsRemaining : null,
+            waiting: true,
+            extraDelay: true,
+            waitMs: extraDelayMs
+          }
+        }));
+
+        await new Promise((resolve) => setTimeout(resolve, extraDelayMs));
       }
 
       window.dispatchEvent(new CustomEvent('wm-average-open-all-packs-result', {
