@@ -1423,6 +1423,139 @@
     }
   }
 
+  // ── Anti-bot test : valide automatiquement la vérification « Je ne suis pas un robot »
+  // sur la page pulls. Objectif défensif : tester la robustesse de la détection côté site.
+  //
+  // Approche « comportementale » :
+  // - délais lognormaux (distribution réelle de la latence humaine, longue traîne à droite)
+  // - personnalité de session constante (un humain garde le même rythme pendant toute
+  //   la session ; un robot resample à chaque fois)
+  // - on ne clique que lorsque le bloc est réellement visible et que l'onglet a le focus
+  // Note : le honeypot `input[name="website"]` est volontairement ignoré.
+  const antiBotDismissedBlocks = new WeakSet();
+
+  const antiBotPersonality = {
+    // Rythme de lecture : 1.0 = rapide, jusqu'à ~2.4 = lent.
+    readingPace: 1 + Math.random() * 1.4,
+    // Hésitation générale entre chaque action.
+    hesitancy: 0.55 + Math.random() * 1.15,
+    // Temps de « prise de conscience » : le bloc vient d'apparaître, l'utilisateur
+    // doit d'abord le remarquer.
+    awarenessOffset: 300 + Math.random() * 1500
+  };
+
+  function lognormalSample(mu, sigma) {
+    // Box-Muller sur loi normale, puis exponentielle => lognormale.
+    let u = 0;
+    let v = 0;
+    while (u === 0) u = Math.random();
+    while (v === 0) v = Math.random();
+    const z = Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+    return Math.exp(mu + sigma * z);
+  }
+
+  function humanDelay(muMs, sigma, minMs, maxMs, multiplier = 1) {
+    const raw = lognormalSample(Math.log(muMs), sigma) * multiplier;
+    return Math.min(maxMs, Math.max(minMs, raw));
+  }
+
+  function isElementEffectivelyVisible(element) {
+    if (!element?.isConnected) return false;
+    if (document.visibilityState !== 'visible') return false;
+
+    const rect = element.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return false;
+
+    const style = window.getComputedStyle(element);
+    if (style.visibility === 'hidden' || style.display === 'none') return false;
+
+    // Au moins partiellement dans le viewport.
+    return rect.bottom > 0 && rect.right > 0 &&
+      rect.top < window.innerHeight && rect.left < window.innerWidth;
+  }
+
+  // Attend qu'une condition soit vraie en sondant à intervalle irrégulier
+  // (les sondes à intervalle fixe sont un signal de robot).
+  function waitFor(condition, { timeoutMs = 15000, onDone } = {}) {
+    const startedAt = Date.now();
+
+    const probe = () => {
+      if (condition()) {
+        onDone(true);
+        return;
+      }
+
+      if (Date.now() - startedAt > timeoutMs) {
+        onDone(false);
+        return;
+      }
+
+      setTimeout(probe, 90 + Math.random() * 160);
+    };
+
+    setTimeout(probe, 90 + Math.random() * 160);
+  }
+
+  function findAntiBotVerification() {
+    if (!isPullsPage()) return null;
+
+    for (const label of document.querySelectorAll('label')) {
+      if (normalizeTitle(label.textContent) !== 'Je ne suis pas un robot') continue;
+
+      const checkbox = label.querySelector('input[type="checkbox"]');
+      if (!checkbox) continue;
+
+      const block = checkbox.closest('div[class*="rounded-xl"]') || label.parentElement;
+      if (!block) continue;
+
+      const button = [...block.querySelectorAll('button')]
+        .find((btn) => normalizeTitle(btn.textContent) === 'Continuer');
+
+      if (button) return { block, checkbox, button };
+    }
+
+    return null;
+  }
+
+  function autoDismissAntiBotVerification() {
+    const verification = findAntiBotVerification();
+    if (!verification || antiBotDismissedBlocks.has(verification.block)) return;
+
+    antiBotDismissedBlocks.add(verification.block);
+    const { block, checkbox, button } = verification;
+
+    console.debug('[WM Average] vérification anti-bot détectée, validation automatique');
+
+    // Séquence :
+    // 1. prise de conscience (bloc fraîchement apparu)      ~0.3 – 1.8 s
+    // 2. lecture du texte de la vérification                ~1.2 – 9 s   (lognormal)
+    // 3. clic sur la checkbox
+    // 4. hésitation avant de cliquer « Continuer »          ~0.2 – 4 s   (lognormal)
+    // 5. clic sur « Continuer »
+    const awarenessDelay = antiBotPersonality.awarenessOffset;
+    const readingDelay = humanDelay(2400, 0.55, 1200, 9000, antiBotPersonality.readingPace);
+
+    setTimeout(() => {
+      // Un humain ne clique pas un élément non visible : on attend la visibilité.
+      waitFor(() => isElementEffectivelyVisible(block), {
+        onDone: (visible) => {
+          if (!visible || !checkbox.isConnected) return;
+
+          setTimeout(() => {
+            if (!checkbox.isConnected) return;
+
+            if (!checkbox.checked) checkbox.click();
+
+            const hesitation = humanDelay(650, 0.65, 180, 4200, antiBotPersonality.hesitancy);
+            setTimeout(() => {
+              if (button.isConnected && !button.disabled) button.click();
+            }, hesitation);
+          }, readingDelay);
+        }
+      });
+    }, awarenessDelay);
+  }
+
   function ensurePullsToolbar() {
     if (!isPullsPage() || document.getElementById('wm-pulls-tools')) return;
 
@@ -1931,6 +2064,7 @@
       ensurePullsToolbar();
       renderPullStats();
       renderPackRecap();
+      autoDismissAntiBotVerification();
     }
 
     if (isTradesPage()) {
