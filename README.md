@@ -52,6 +52,7 @@ Puis cliquer sur **Recharger** dans `chrome://extensions/` et faire un F5 sur Wi
 
 *Heure de Paris*
 
+- **24/09/2026 — 22:32** — V4 : images manquantes via Wikimedia, statistiques de tirage, bouton Wikipédia sur les cartes et mode compact.
 - **23/09/2026 — 13:25** — Compatibilité multi-navigateurs : support officiel de Firefox (Manifest V3 / gecko ID), Brave et Opera, avec runtime universel.
 - **22/09/2026 — 17:37** — Ajout du prix moyen lors de l’inspection d’une carte dans la collection globale.
 - **21/09/2026 — 08:35** — Ajout de la mise en vente directe depuis le classement des cartes les plus chères.
