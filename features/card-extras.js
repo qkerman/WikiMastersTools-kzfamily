@@ -3,9 +3,8 @@
 
   registry.cardExtras = {
     create(deps) {
-      const { normalizeTitle, idByTitle, cardMetaById, readLocalValue, writeLocalValue, MISSING_IMAGE_CACHE_PREFIX, MISSING_IMAGE_FOUND_TTL, MISSING_IMAGE_MISS_TTL, isFeatureEnabled } = deps;
+      const { normalizeTitle, idByTitle, cardMetaById, imageResolver, isFeatureEnabled } = deps;
       let cardExtrasObserver = null;
-      const missingImagePending = new Map();
       function wikipediaUrlFor(title, meta = null) {
         if (meta?.wikipediaUrl) return meta.wikipediaUrl;
         const normalized = normalizeTitle(title);
@@ -63,84 +62,6 @@
         return null;
       }
     
-      function missingImageCacheKey(title) {
-        return MISSING_IMAGE_CACHE_PREFIX + encodeURIComponent(normalizeTitle(title));
-      }
-    
-      function readMissingImageCache(title) {
-        const entry = readLocalValue(missingImageCacheKey(title));
-        if (!entry || !Number.isFinite(Number(entry.fetchedAt))) return null;
-    
-        const ttl = entry.found ? MISSING_IMAGE_FOUND_TTL : MISSING_IMAGE_MISS_TTL;
-        if (Date.now() - Number(entry.fetchedAt) >= ttl) return null;
-    
-        return entry;
-      }
-    
-      async function resolveMissingImage(title) {
-        const normalized = normalizeTitle(title);
-        if (!normalized) return null;
-    
-        const cached = readMissingImageCache(normalized);
-        if (cached) return cached;
-    
-        const pending = missingImagePending.get(normalized);
-        if (pending) return pending;
-    
-        const task = (async () => {
-          const params = new URLSearchParams({
-            action: 'query',
-            format: 'json',
-            origin: '*',
-            redirects: '1',
-            prop: 'pageimages',
-            piprop: 'thumbnail|name',
-            pithumbsize: '720',
-            titles: normalized
-          });
-    
-          const response = await fetch(`https://fr.wikipedia.org/w/api.php?${params}`, {
-            method: 'GET',
-            credentials: 'omit',
-            referrerPolicy: 'no-referrer',
-            headers: { accept: 'application/json' }
-          });
-    
-          if (!response.ok) {
-            throw new Error(`Wikipedia HTTP ${response.status}`);
-          }
-    
-          const json = await response.json();
-          const page = Object.values(json?.query?.pages || {})[0] || null;
-          const imageUrl = page?.thumbnail?.source || null;
-          const fileName = page?.pageimage || null;
-    
-          // We intentionally keep only Wikimedia Commons images.
-          const found = Boolean(
-            imageUrl &&
-            /\/wikipedia\/commons\//i.test(String(imageUrl))
-          );
-    
-          const entry = {
-            fetchedAt: Date.now(),
-            found,
-            url: found ? imageUrl : null,
-            fileName: found ? fileName : null
-          };
-    
-          writeLocalValue(missingImageCacheKey(normalized), entry);
-          return entry;
-        })();
-    
-        missingImagePending.set(normalized, task);
-    
-        try {
-          return await task;
-        } finally {
-          missingImagePending.delete(normalized);
-        }
-      }
-    
       function applyResolvedMissingImage(card, placeholder, title, entry) {
         if (!card?.isConnected || !placeholder?.isConnected || !entry?.found || !entry.url) return;
     
@@ -158,14 +79,13 @@
           credit.target = '_blank';
           credit.rel = 'noopener noreferrer';
           credit.referrerPolicy = 'no-referrer';
-          credit.textContent = 'Wikimedia';
-          credit.title = 'Image ajoutée depuis Wikimedia Commons';
-    
-          if (entry.fileName) {
-            credit.href = `https://commons.wikimedia.org/wiki/File:${encodeURIComponent(entry.fileName.replace(/ /g, '_'))}`;
-          } else {
-            credit.href = wikipediaUrlFor(title);
-          }
+          credit.textContent = entry.creditLabel || 'Image';
+          credit.title = `Image ajoutée via ${entry.creditLabel || entry.source || 'fallback'}`;
+          credit.href =
+            entry.sourceUrl ||
+            (entry.fileName
+              ? `https://commons.wikimedia.org/wiki/File:${encodeURIComponent(entry.fileName.replace(/ /g, '_'))}`
+              : wikipediaUrlFor(title));
     
           const stop = (event) => event.stopPropagation();
           credit.addEventListener('pointerdown', stop);
@@ -190,7 +110,7 @@
         card.dataset.wmMissingImageLoading = '1';
     
         try {
-          const entry = await resolveMissingImage(title);
+          const entry = await imageResolver.resolveMissingImage(title);
     
           if (entry?.found) {
             applyResolvedMissingImage(card, placeholder, title, entry);
@@ -199,7 +119,7 @@
           }
         } catch (error) {
           card.dataset.wmMissingImageRetryAt = String(Date.now() + 60 * 1000);
-          console.debug('[WM Average] image Wikimedia indisponible', title, error);
+          console.debug('[WM Average] résolution image indisponible', title, error);
         } finally {
           delete card.dataset.wmMissingImageLoading;
         }
