@@ -6,7 +6,7 @@
       const {
         MAX_CONCURRENT, ERROR_CACHE_TTL, cardMetaById, idByTitle, cacheMemory,
         normalizeTitle, cacheKey, storageGet, storageSet, isCacheEntryValid,
-        registerCards
+        registerCards, reportError
       } = runtime.core;
 
       const queued = [];
@@ -61,6 +61,7 @@
         pumpQueue();
 
         if (markBulk && bulkPendingIds.size === 0) {
+          bulkBatchActive = false;
           runtime.collectionBulk.finishBulkLoad();
         }
       }
@@ -131,6 +132,7 @@
         if (bulkPendingIds.delete(id)) {
           notifyBulkProgress();
           if (bulkBatchActive && bulkPendingIds.size === 0) {
+            bulkBatchActive = false;
             runtime.collectionBulk.finishBulkLoad();
           }
         }
