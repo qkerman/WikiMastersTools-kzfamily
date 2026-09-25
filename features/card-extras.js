@@ -238,7 +238,22 @@
         if (!artLayer || !artImage) return;
     
         card.dataset.wmPremiumFx = '1';
-        card.classList.add('wm-premium-card');
+
+        let premiumRevealed = false;
+        let revealFallbackTimer = null;
+
+        function revealPremiumCard() {
+          if (premiumRevealed || !card.isConnected) return;
+          premiumRevealed = true;
+
+          if (revealFallbackTimer) {
+            clearTimeout(revealFallbackTimer);
+            revealFallbackTimer = null;
+          }
+
+          card.classList.add('wm-premium-card');
+          card.dataset.wmPremiumReady = '1';
+        }
     
         const clamp255 = (value) => Math.max(0, Math.min(255, Math.round(value)));
         const mixColors = (a, b, weight = 0.5) => a.map((value, index) => (
@@ -406,12 +421,21 @@
     
           applyImageFormat();
           applyImagePalette();
+          revealPremiumCard();
         }
     
         if (artImage.complete && artImage.naturalWidth) {
           syncArtwork();
         }
+
         artImage.addEventListener('load', syncArtwork);
+        artImage.addEventListener('error', revealPremiumCard, { once: true });
+
+        // Ne jamais laisser une carte bloquée sur le skeleton si l'image tarde
+        // ou si le navigateur ne fournit pas ses dimensions immédiatement.
+        if (!premiumRevealed) {
+          revealFallbackTimer = setTimeout(revealPremiumCard, 2000);
+        }
     
         const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)');
         if (reduceMotion?.matches) return;
