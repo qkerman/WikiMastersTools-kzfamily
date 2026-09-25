@@ -7,6 +7,7 @@
   window.__wmAverageRuntime = runtime;
 
   runtime.core = featureRegistry.core.create();
+  runtime.settings = featureRegistry.settings.create(runtime.core);
   runtime.priceUi = featureRegistry.priceUi.create(runtime);
   runtime.priceLoader = featureRegistry.priceLoader.create(runtime);
 
@@ -18,7 +19,8 @@
     writeLocalValue: runtime.core.writeLocalValue,
     MISSING_IMAGE_CACHE_PREFIX: runtime.core.MISSING_IMAGE_CACHE_PREFIX,
     MISSING_IMAGE_FOUND_TTL: runtime.core.MISSING_IMAGE_FOUND_TTL,
-    MISSING_IMAGE_MISS_TTL: runtime.core.MISSING_IMAGE_MISS_TTL
+    MISSING_IMAGE_MISS_TTL: runtime.core.MISSING_IMAGE_MISS_TTL,
+    isFeatureEnabled: runtime.settings.isEnabled
   });
 
   runtime.pullStats = featureRegistry.pullStats.create({
@@ -26,7 +28,8 @@
     PULL_STATS_KEY: runtime.core.PULL_STATS_KEY,
     readLocalValue: runtime.core.readLocalValue,
     writeLocalValue: runtime.core.writeLocalValue,
-    isPullsPage: runtime.core.isPullsPage
+    isPullsPage: runtime.core.isPullsPage,
+    isFeatureEnabled: runtime.settings.isEnabled
   });
 
   runtime.compactMode = featureRegistry.compactMode.create({
@@ -34,7 +37,8 @@
     readLocalValue: runtime.core.readLocalValue,
     writeLocalValue: runtime.core.writeLocalValue,
     isCollectionPage: runtime.core.isCollectionPage,
-    isGlobalCollectionPage: runtime.core.isGlobalCollectionPage
+    isGlobalCollectionPage: runtime.core.isGlobalCollectionPage,
+    isFeatureEnabled: runtime.settings.isEnabled
   });
 
   runtime.trades = featureRegistry.trades.create({
@@ -49,7 +53,8 @@
     createSponsorNote: runtime.core.createSponsorNote,
     formatAverage: runtime.priceUi.formatAverage,
     chooseAverage: runtime.priceUi.chooseAverage,
-    registerCards: runtime.core.registerCards
+    registerCards: runtime.core.registerCards,
+    isFeatureEnabled: runtime.settings.isEnabled
   });
 
   runtime.modalUi = featureRegistry.modalUi.create();
@@ -59,5 +64,5 @@
   runtime.app = featureRegistry.app.create(runtime);
 
   runtime.app.startObserver();
-  console.debug('[WM Average] runtime modulaire v4.2.0 chargé');
+  console.debug('[WM Average] runtime modulaire v4.3.0 chargé');
 })();
