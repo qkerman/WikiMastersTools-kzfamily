@@ -2009,3 +2009,95 @@ body.wm-compact-mode main div[class*="glow-"]:has(h3) {
     transform: none !important;
   }
 }
+
+
+/* v4.2.1 — anti-flash : skeleton avant initialisation des cartes full-art */
+html.wm-premium-cards-enabled
+div[class*="glow-"]:has(> div[class*="top-0"][class*="h-[45%]"] img):has(h3):not(.wm-premium-card) {
+  position: relative !important;
+  isolation: isolate !important;
+  overflow: hidden !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  border-radius: 18px !important;
+  background:
+    linear-gradient(145deg, rgba(38, 43, 51, 0.98), rgba(17, 20, 26, 0.99)) !important;
+  box-shadow:
+    0 12px 28px rgba(0, 0, 0, 0.42),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.04) !important;
+}
+
+/* visibility garde exactement la taille de la carte et évite tout layout shift. */
+html.wm-premium-cards-enabled
+div[class*="glow-"]:has(> div[class*="top-0"][class*="h-[45%]"] img):has(h3):not(.wm-premium-card) > * {
+  visibility: hidden !important;
+}
+
+html.wm-premium-cards-enabled
+div[class*="glow-"]:has(> div[class*="top-0"][class*="h-[45%]"] img):has(h3):not(.wm-premium-card)::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  background:
+    linear-gradient(
+      105deg,
+      transparent 18%,
+      rgba(255, 255, 255, 0.055) 38%,
+      rgba(255, 255, 255, 0.12) 50%,
+      rgba(255, 255, 255, 0.055) 62%,
+      transparent 82%
+    ),
+    linear-gradient(
+      to bottom,
+      rgba(255, 255, 255, 0.055) 0 43%,
+      rgba(255, 255, 255, 0.018) 43% 100%
+    );
+  background-size: 220% 100%, 100% 100%;
+  animation: wm-premium-card-shimmer 1.05s linear infinite;
+}
+
+html.wm-premium-cards-enabled
+div[class*="glow-"]:has(> div[class*="top-0"][class*="h-[45%]"] img):has(h3):not(.wm-premium-card)::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 3;
+  width: 20px;
+  height: 20px;
+  margin: -10px 0 0 -10px;
+  pointer-events: none;
+  border: 2px solid rgba(255, 255, 255, 0.28);
+  border-top-color: rgba(255, 255, 255, 0.92);
+  border-radius: 50%;
+  animation: wm-premium-card-spin 0.7s linear infinite;
+}
+
+.wm-premium-card {
+  animation: wm-premium-card-reveal 160ms ease-out both;
+}
+
+@keyframes wm-premium-card-shimmer {
+  from { background-position: 120% 0, 0 0; }
+  to { background-position: -120% 0, 0 0; }
+}
+
+@keyframes wm-premium-card-spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes wm-premium-card-reveal {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html.wm-premium-cards-enabled
+  div[class*="glow-"]:has(> div[class*="top-0"][class*="h-[45%]"] img):has(h3):not(.wm-premium-card)::before,
+  html.wm-premium-cards-enabled
+  div[class*="glow-"]:has(> div[class*="top-0"][class*="h-[45%]"] img):has(h3):not(.wm-premium-card)::after,
+  .wm-premium-card {
+    animation: none !important;
+  }
+}
