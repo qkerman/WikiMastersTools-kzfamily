@@ -52,6 +52,7 @@ Puis cliquer sur **Recharger** dans `chrome://extensions/` et faire un F5 sur Wi
 
 *Heure de Paris*
 
+- **25/09/2026 — 20:14** — V4.4 : amélioration des images manquantes avec des fallbacks 100 % ouverts et sans clé API : PokéAPI pour les Pokémon, Wikidata (image P18 / logo P154), puis Wikipedia/Wikimedia FR et EN. Les anciens échecs d’image sont invalidés pour être retestés.
 - **25/09/2026 — 19:24** — V4.3.1 : correction du chargement des modules de l’extension. Les scripts sont désormais injectés strictement dans l’ordre, ce qui corrige l’erreur `settings.create` au démarrage.
 - **25/09/2026 — 19:13** — V4.3 : ajout d’un menu Paramètres sur `/pulls`, organisé par catégories, pour activer ou désactiver individuellement le design des cartes, Wikipédia/Wikimedia, les outils de prix et collection, les fonctions de paquets et l’estimation des échanges.
 - **25/09/2026 — 18:48** — V4.2.2 : correction du suivi des statistiques de tirage après la modularisation (`recordPullStats`).
