@@ -100,7 +100,11 @@
         return values.length === 1 ? values[0] : null;
       }
 
-      function renderCollectionCard(id, card) {
+      function renderCollectionCard(id, card, { force = false } = {}) {
+        if (!force && !runtime.settings.isEnabled('collectionPrices')) {
+          card?.querySelector('.wm-average-badge')?.remove();
+          return;
+        }
         const badge = getOrCreateBadge(card);
         const cacheEntry = cacheMemory.get(id);
 
@@ -217,6 +221,10 @@
       }
 
       function renderVisibleCollectionCards() {
+        if (!runtime.settings.isEnabled('collectionPrices')) {
+          document.querySelectorAll('.wm-average-badge').forEach((badge) => badge.remove());
+          return;
+        }
         if (!isCollectionPage()) return;
 
         for (const card of document.querySelectorAll('[data-wm-card-id]')) {
@@ -243,6 +251,10 @@
       }
 
       function renderMarketplaceAverage(id) {
+        if (!runtime.settings.isEnabled('marketplacePrice')) {
+          document.getElementById('wm-marketplace-average')?.remove();
+          return;
+        }
         if (!isMarketplaceDetailPage() || marketplaceCardId !== id) return;
 
         const meta = cardMetaById.get(id);
@@ -350,6 +362,7 @@
       }
 
       function renderGlobalCollectionInspectedCard() {
+        if (!runtime.settings.isEnabled('globalCollectionPrice')) return;
         if (!isGlobalCollectionPage() || !globalCollectionCardId) return;
 
         const inspection = getGlobalCollectionInspection();
@@ -362,10 +375,11 @@
           return;
         }
 
-        renderCollectionCard(meta.id, inspection.card);
+        renderCollectionCard(meta.id, inspection.card, { force: true });
       }
 
       function ensureGlobalCollectionInspectedCard() {
+        if (!runtime.settings.isEnabled('globalCollectionPrice')) return;
         if (!isGlobalCollectionPage() || !globalCollectionCardId) return;
 
         const inspection = getGlobalCollectionInspection();
@@ -409,6 +423,7 @@
 
 
       window.addEventListener('wm-average-global-card-inspected', (event) => {
+        if (!runtime.settings.isEnabled('globalCollectionPrice')) return;
         const id = event.detail?.id;
         if (!isGlobalCollectionPage() || !id) return;
 
@@ -422,6 +437,7 @@
       });
 
       window.addEventListener('wm-average-marketplace-detail', (event) => {
+        if (!runtime.settings.isEnabled('marketplacePrice')) return;
         const card = event.detail?.card;
         if (!card?.id || !card?.title) return;
 
