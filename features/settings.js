@@ -252,13 +252,9 @@
         }
 
         const currencyButtons = [
-          ...document.querySelectorAll(
-            'button[aria-label="Ouvrir la boutique WikiBidous"], button[title*="wikibidous" i]'
-          )
+          ...document.querySelectorAll('button[aria-label="Ouvrir la boutique WikiBidous"]')
         ];
 
-        // Sur desktop, le compteur WikiBidous vit dans le bloc fixe en haut à droite.
-        // On privilégie explicitement ce bloc pour placer les paramètres juste dessous.
         const desktopCurrencyButton = currencyButtons.find((button) => {
           const parent = button.parentElement;
           return parent?.classList?.contains('fixed') &&
@@ -266,10 +262,9 @@
             parent.classList.contains('md:block');
         });
 
-        // Fallback si WikiMasters change légèrement son markup.
-        const currencyButton = desktopCurrencyButton || currencyButtons.find((button) => (
-          button.getClientRects().length > 0
-        ));
+        const currencyButton = desktopCurrencyButton || currencyButtons.find(
+          (button) => button.getClientRects().length > 0
+        );
 
         if (!currencyButton?.parentElement) return;
 
