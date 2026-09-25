@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "WikiMasters - Prix moyen collection",
-  "version": "4.3.2",
+  "version": "4.4.0",
   "description": "Outils WikiMasters configurables : prix moyens, collection, échanges, paquets, cartes full-art, Wikipédia et vue compacte.",
   "host_permissions": [
     "https://www.wiki-masters.com/*"
@@ -42,6 +42,7 @@
         "page-bridge.js",
         "features/core.js",
         "features/settings.js",
+        "features/image-resolver.js",
         "features/price-ui.js",
         "features/price-loader.js",
         "features/card-extras.js",
