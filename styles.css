@@ -2104,10 +2104,15 @@ div[class*="glow-"]:has(> div[class*="top-0"][class*="h-[45%]"] img):has(h3):not
 
 
 /* v4.3 — paramètres de l'extension */
+.wm-settings-currency-slot {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 6px;
+  pointer-events: auto;
+}
+
 .wm-settings-launch {
-  position: absolute;
-  top: 2px;
-  right: 0;
+  position: static;
   z-index: 20;
   display: inline-flex;
   align-items: center;
@@ -2357,10 +2362,12 @@ div[class*="glow-"]:has(> div[class*="top-0"][class*="h-[45%]"] img):has(h3):not
 }
 
 @media (max-width: 640px) {
+  .wm-settings-currency-slot {
+    margin-top: 4px;
+  }
+
   .wm-settings-launch {
-    position: static;
     width: max-content;
-    margin: 6px auto 0;
   }
 
   .wm-settings-footer {
