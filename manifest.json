@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "WikiMasters - Prix moyen collection",
-  "version": "4.1.5",
-  "description": "Outils WikiMasters : prix moyens, collection, échanges, paquets, images manquantes, Wikipédia et vue compacte.",
+  "version": "4.2.0",
+  "description": "Outils WikiMasters : prix moyens, collection, échanges, paquets, cartes full-art, Wikipédia et vue compacte.",
   "host_permissions": [
     "https://www.wiki-masters.com/*"
   ],
@@ -33,11 +33,25 @@
   "web_accessible_resources": [
     {
       "resources": [
+        "bridge/core.js",
+        "bridge/collection.js",
+        "bridge/packs.js",
+        "bridge/intercept.js",
+        "bridge/marketplace.js",
+        "bridge/prices.js",
         "page-bridge.js",
+        "features/core.js",
+        "features/price-ui.js",
+        "features/price-loader.js",
         "features/card-extras.js",
         "features/pull-stats.js",
         "features/compact-mode.js",
         "features/trades.js",
+        "features/modal-ui.js",
+        "features/packs.js",
+        "features/ranking.js",
+        "features/collection-bulk.js",
+        "features/app.js",
         "content.js"
       ],
       "matches": [
