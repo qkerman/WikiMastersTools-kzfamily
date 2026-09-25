@@ -40,7 +40,7 @@
     
           const card = h3.closest('div[class*="rounded-2xl"][class*="overflow-hidden"][class*="cursor-pointer"]');
           if (card) {
-            renderCollectionCard(id, card);
+            renderCollectionCard(id, card, { force: true });
           }
         }
       }
@@ -59,7 +59,7 @@
           const card = h3.closest('div[class*="rounded-2xl"][class*="overflow-hidden"][class*="cursor-pointer"]');
           if (!card) continue;
     
-          renderCollectionCard(id, card);
+          renderCollectionCard(id, card, { force: true });
     
           const meta = cardMetaById.get(id);
           if (meta?.id && meta?.title) {
