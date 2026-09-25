@@ -32,6 +32,11 @@
       let autoOpenToggleInput = null;
       let autoOpenToggleLabel = null;
 
+      if (!runtime.settings.isEnabled('autoOpen')) {
+        writeLocalValue(AUTO_OPEN_ENABLED_KEY, false);
+        localStorage.removeItem(AUTO_OPEN_NEXT_AT_KEY);
+      }
+
       function lognormalSample(mu, sigma) {
         // Box-Muller sur loi normale, puis exponentielle => lognormale.
         let u = 0;
