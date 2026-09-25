@@ -1,29 +1,48 @@
 {
   "manifest_version": 3,
   "name": "WikiMasters - Prix moyen collection",
-  "version": "4.1.4",
+  "version": "4.1.5",
   "description": "Outils WikiMasters : prix moyens, collection, échanges, paquets, images manquantes, Wikipédia et vue compacte.",
-  "host_permissions": ["https://www.wiki-masters.com/*"],
+  "host_permissions": [
+    "https://www.wiki-masters.com/*"
+  ],
   "browser_specific_settings": {
     "gecko": {
       "id": "wikimasters-tools@kzfamily",
       "data_collection_permissions": {
-        "required": ["none"]
+        "required": [
+          "none"
+        ]
       }
     }
   },
   "content_scripts": [
     {
-      "matches": ["https://www.wiki-masters.com/*"],
-      "js": ["bootstrap.js"],
-      "css": ["styles.css"],
+      "matches": [
+        "https://www.wiki-masters.com/*"
+      ],
+      "js": [
+        "bootstrap.js"
+      ],
+      "css": [
+        "styles.css"
+      ],
       "run_at": "document_start"
     }
   ],
   "web_accessible_resources": [
     {
-      "resources": ["page-bridge.js", "content.js"],
-      "matches": ["https://www.wiki-masters.com/*"]
+      "resources": [
+        "page-bridge.js",
+        "features/card-extras.js",
+        "features/pull-stats.js",
+        "features/compact-mode.js",
+        "features/trades.js",
+        "content.js"
+      ],
+      "matches": [
+        "https://www.wiki-masters.com/*"
+      ]
     }
   ]
 }
