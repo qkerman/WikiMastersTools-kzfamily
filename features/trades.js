@@ -3,11 +3,12 @@
 
   registry.trades = {
     create(deps) {
-      const { isTradesPage, normalizeTitle, cardMetaById, idByTitle, cacheMemory, renderCollectionCard, reportError, loadCacheForCards, createSponsorNote, formatAverage, chooseAverage, registerCards } = deps;
+      const { isTradesPage, normalizeTitle, cardMetaById, idByTitle, cacheMemory, renderCollectionCard, reportError, loadCacheForCards, createSponsorNote, formatAverage, chooseAverage, registerCards, isFeatureEnabled } = deps;
       const tradesById = new Map();
       const activeTradeValueIds = new Set();
       let tradesRequested = false;
       function ensureTradesLoaded() {
+        if (!isFeatureEnabled('tradeValues')) return;
         if (!isTradesPage() || tradesRequested) return;
         tradesRequested = true;
         window.dispatchEvent(new CustomEvent('wm-average-load-trades'));
@@ -25,6 +26,7 @@
       }
     
       function renderTradeDetailCard(id) {
+        if (!isFeatureEnabled('tradeValues')) return;
         if (!isTradesPage()) return;
     
         const meta = cardMetaById.get(id);
@@ -44,6 +46,7 @@
       }
     
       function renderTradeDetailCards() {
+        if (!isFeatureEnabled('tradeValues')) return;
         const modal = getTradeDetailModal();
         if (!modal) return;
     
@@ -342,6 +345,7 @@
       }
     
       function renderTradeButtons() {
+        if (!isFeatureEnabled('tradeValues')) return;
         if (!isTradesPage() || !tradesById.size) return;
     
         const usedIds = new Set();
@@ -373,6 +377,7 @@
     
     
       function renderTradeValuesForCard(id) {
+        if (!isFeatureEnabled('tradeValues')) return;
         for (const tradeId of activeTradeValueIds) {
           const trade = tradesById.get(tradeId);
           if (trade?.items?.some((item) => item.card?.id === id)) {
@@ -386,6 +391,7 @@
       }
       
       window.addEventListener('wm-average-trades', (event) => {
+          if (!isFeatureEnabled('tradeValues')) return;
           const detail = event.detail || {};
           const trades = Array.isArray(detail.trades) ? detail.trades : [];
       
