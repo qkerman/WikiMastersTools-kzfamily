@@ -3,7 +3,7 @@
 
   registry.pullStats = {
     create(deps) {
-      const { RARITIES, PULL_STATS_KEY, readLocalValue, writeLocalValue, isPullsPage } = deps;
+      const { RARITIES, PULL_STATS_KEY, readLocalValue, writeLocalValue, isPullsPage, isFeatureEnabled } = deps;
       function readPullStats() {
         const raw = readLocalValue(PULL_STATS_KEY) || {};
         const counts = {};
@@ -26,6 +26,7 @@
       }
     
       function recordPullStats(cards) {
+        if (!isFeatureEnabled('pullStats')) return;
         if (!Array.isArray(cards) || !cards.length) return;
     
         const stats = readPullStats();
@@ -41,6 +42,10 @@
       }
     
       function renderPullStats() {
+        if (!isFeatureEnabled('pullStats')) {
+          document.getElementById('wm-pull-stats')?.remove();
+          return;
+        }
         if (!isPullsPage()) return;
     
         const info = document.getElementById('wm-pulls-info');
