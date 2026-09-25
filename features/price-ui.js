@@ -405,7 +405,7 @@
         };
 
         registerCards([meta]);
-        renderCollectionCard(meta.id, inspection.card);
+        renderCollectionCard(meta.id, inspection.card, { force: true });
 
         if (globalCollectionInitializedId === meta.id) return;
 
