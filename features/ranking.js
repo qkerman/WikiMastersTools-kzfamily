@@ -10,6 +10,14 @@
       const { formatAverage, chooseAverage } = runtime.priceUi;
       const pendingMarketplaceListings = new Map();
 
+      function humanElapsed(timestamp) {
+        const minutes = Math.max(1, Math.round((Date.now() - timestamp) / 60000));
+        if (minutes < 60) return `${minutes} min`;
+        const hours = Math.floor(minutes / 60);
+        const remaining = minutes % 60;
+        return remaining ? `${hours} h ${remaining} min` : `${hours} h`;
+      }
+
       async function openRankingModal() {
         const storedCollection = storageGet(ALL_COLLECTION_KEY);
         const collectionEntry = storedCollection[ALL_COLLECTION_KEY];
@@ -32,7 +40,7 @@
         const candidates = [...knownCards.values()];
 
         if (!candidates.length) {
-          showInfoModal(
+          runtime.modalUi.showInfoModal(
             'Aucun prix chargé',
             'Aucune carte avec métadonnées n’est encore disponible. Parcourez votre collection ou utilisez « Charger les prix », puis réessayez.'
           );
@@ -66,7 +74,7 @@
           });
 
         if (!rows.length) {
-          showInfoModal(
+          runtime.modalUi.showInfoModal(
             'Aucun prix chargé',
             'Aucun prix n’est encore présent dans le cache. Parcourez votre collection ou utilisez « Charger les prix », puis réessayez.'
           );
