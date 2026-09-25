@@ -15,11 +15,25 @@ if (typeof window !== 'undefined' && typeof document !== 'undefined') {
     if (!extensionRuntime?.getURL) return;
 
     const urls = [
+      'bridge/core.js',
+      'bridge/collection.js',
+      'bridge/packs.js',
+      'bridge/intercept.js',
+      'bridge/marketplace.js',
+      'bridge/prices.js',
       'page-bridge.js',
+      'features/core.js',
+      'features/price-ui.js',
+      'features/price-loader.js',
       'features/card-extras.js',
       'features/pull-stats.js',
       'features/compact-mode.js',
       'features/trades.js',
+      'features/modal-ui.js',
+      'features/packs.js',
+      'features/ranking.js',
+      'features/collection-bulk.js',
+      'features/app.js',
       'content.js'
     ].map((path) => extensionRuntime.getURL(path));
 
