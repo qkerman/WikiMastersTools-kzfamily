@@ -11,6 +11,10 @@ if (typeof window !== 'undefined' && typeof document !== 'undefined') {
     if (window.__wmAverageBootstrapInjected) return;
     window.__wmAverageBootstrapInjected = true;
 
+    // Posé dès document_start : le CSS peut masquer le design WikiMasters
+    // avant le premier paint, jusqu'à ce que le rendu full-art soit prêt.
+    document.documentElement?.classList.add('wm-premium-cards-enabled');
+
     const extensionRuntime = getExtensionRuntime();
     if (!extensionRuntime?.getURL) return;
 
