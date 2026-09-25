@@ -164,15 +164,13 @@
         renderAll();
       }
 
-      startObserver();
-
       window.addEventListener('popstate', () => {
         previousPath = location.pathname;
         attachMainObserver();
         scheduleRender(0);
       });
 
-      console.debug('[WM Average] page runtime v4.1.5 chargé');
+      console.debug('[WM Average] app module v4.2.0 prêt');
 
       return { startObserver };
     }
