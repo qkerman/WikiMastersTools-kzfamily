@@ -18,6 +18,10 @@
       let rankingButton = null;
 
       function ensurePriceLegend(toolbar = document.getElementById('wm-tools-bar')) {
+        if (!runtime.settings.isEnabled('collectionPrices')) {
+          document.getElementById('wm-price-legend')?.remove();
+          return;
+        }
         if (!isCollectionPage() || !toolbar || document.getElementById('wm-price-legend')) return;
 
         const legend = document.createElement('div');
@@ -77,6 +81,12 @@
       function ensureToolbar() {
         if (!isCollectionPage() || document.getElementById('wm-tools-bar')) return;
 
+        const bulkEnabled = runtime.settings.isEnabled('bulkPriceLoader');
+        const rankingEnabled = runtime.settings.isEnabled('ranking');
+        const compactEnabled = runtime.settings.isEnabled('compactMode');
+
+        if (!bulkEnabled && !rankingEnabled && !compactEnabled) return;
+
         const h1 = [...document.querySelectorAll('h1')].find((el) => normalizeTitle(el.textContent) === 'Collection');
         if (!h1) return;
 
@@ -87,31 +97,37 @@
         bar.id = 'wm-tools-bar';
         bar.className = 'wm-tools-bar';
 
-        bulkButton = document.createElement('button');
-        bulkButton.type = 'button';
-        bulkButton.className = 'wm-tool-button';
-        bulkButton.textContent = 'Charger les prix';
-        bulkButton.title = 'Choisir les raretés dont tu veux charger ou actualiser les prix';
-        bulkButton.addEventListener('click', () => {
-          handleBulkClick().catch((error) => reportError('chargement', error));
-        });
-
-        rankingButton = document.createElement('button');
-        rankingButton.type = 'button';
-        rankingButton.className = 'wm-tool-button';
-        rankingButton.textContent = 'Plus chères';
-        rankingButton.title = 'Affiche toute la collection triée par prix moyen décroissant';
-        rankingButton.addEventListener('click', () => {
-          runtime.ranking.openRankingModal().catch((error) => {
-            reportError('classement', error);
-            runtime.modalUi.showInfoModal(
-              'Classement impossible',
-              String(error?.message || error || 'Impossible de charger la collection.')
-            );
+        if (bulkEnabled) {
+          bulkButton = document.createElement('button');
+          bulkButton.type = 'button';
+          bulkButton.className = 'wm-tool-button';
+          bulkButton.textContent = 'Charger les prix';
+          bulkButton.title = 'Choisir les raretés dont tu veux charger ou actualiser les prix';
+          bulkButton.addEventListener('click', () => {
+            handleBulkClick().catch((error) => reportError('chargement', error));
           });
-        });
+          bar.append(bulkButton);
+        }
 
-        bar.append(bulkButton, rankingButton, createSponsorNote());
+        if (rankingEnabled) {
+          rankingButton = document.createElement('button');
+          rankingButton.type = 'button';
+          rankingButton.className = 'wm-tool-button';
+          rankingButton.textContent = 'Plus chères';
+          rankingButton.title = 'Affiche toute la collection triée par prix moyen décroissant';
+          rankingButton.addEventListener('click', () => {
+            runtime.ranking.openRankingModal().catch((error) => {
+              reportError('classement', error);
+              runtime.modalUi.showInfoModal(
+                'Classement impossible',
+                String(error?.message || error || 'Impossible de charger la collection.')
+              );
+            });
+          });
+          bar.append(rankingButton);
+        }
+
+        bar.append(createSponsorNote());
         header.insertAdjacentElement('afterend', bar);
         ensurePriceLegend(bar);
       }
