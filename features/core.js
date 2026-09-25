@@ -20,7 +20,7 @@
       const AUTO_OPEN_MIN_DELAY = 20 * 60 * 1000;
       const AUTO_OPEN_MAX_DELAY = 100 * 60 * 1000;
       const COMPACT_MODE_KEY = 'wm_compact_mode_v1';
-      const MISSING_IMAGE_CACHE_PREFIX = 'wm_missing_img_v1_';
+      const MISSING_IMAGE_CACHE_PREFIX = 'wm_missing_img_v2_';
       const MISSING_IMAGE_FOUND_TTL = 30 * 24 * 60 * 60 * 1000;
       const MISSING_IMAGE_MISS_TTL = 7 * 24 * 60 * 60 * 1000;
       const RARITIES = ['L', 'UR', 'SR', 'R', 'PC', 'C'];
