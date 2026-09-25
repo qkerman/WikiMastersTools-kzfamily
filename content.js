@@ -460,12 +460,227 @@
     return cardExtrasObserver;
   }
 
+  function ensurePremiumCardFx(card) {
+    if (!card || card.dataset.wmPremiumFx === '1') return;
+
+    const artLayer = card.querySelector(
+      ':scope > div[class*="top-0"][class*="h-[45%]"]'
+    );
+    const artImage = artLayer?.querySelector('img');
+    if (!artLayer || !artImage) return;
+
+    card.dataset.wmPremiumFx = '1';
+    card.classList.add('wm-premium-card');
+
+    const clamp255 = (value) => Math.max(0, Math.min(255, Math.round(value)));
+    const mixColors = (a, b, weight = 0.5) => a.map((value, index) => (
+      clamp255(value * (1 - weight) + b[index] * weight)
+    ));
+    const mixWithBlack = (rgb, amount) => rgb.map((value) => (
+      clamp255(value * (1 - amount))
+    ));
+    const colorDistance = (a, b) => Math.hypot(
+      a[0] - b[0],
+      a[1] - b[1],
+      a[2] - b[2]
+    );
+
+    function averagePixels(data, width, height, testPixel) {
+      let r = 0;
+      let g = 0;
+      let b = 0;
+      let count = 0;
+
+      for (let y = 0; y < height; y += 1) {
+        for (let x = 0; x < width; x += 1) {
+          if (!testPixel(x, y, width, height)) continue;
+          const i = (y * width + x) * 4;
+          if (data[i + 3] < 180) continue;
+          r += data[i];
+          g += data[i + 1];
+          b += data[i + 2];
+          count += 1;
+        }
+      }
+
+      if (!count) return [24, 28, 32];
+      const mean = [r / count, g / count, b / count];
+
+      r = 0;
+      g = 0;
+      b = 0;
+      count = 0;
+
+      for (let y = 0; y < height; y += 1) {
+        for (let x = 0; x < width; x += 1) {
+          if (!testPixel(x, y, width, height)) continue;
+          const i = (y * width + x) * 4;
+          if (data[i + 3] < 180) continue;
+          const pixel = [data[i], data[i + 1], data[i + 2]];
+          if (colorDistance(pixel, mean) > 95) continue;
+          r += pixel[0];
+          g += pixel[1];
+          b += pixel[2];
+          count += 1;
+        }
+      }
+
+      if (!count) return mean.map(clamp255);
+      return [r / count, g / count, b / count].map(clamp255);
+    }
+
+    function applyImageFormat() {
+      if (!artImage.naturalWidth || !artImage.naturalHeight) return;
+
+      const ratio = artImage.naturalWidth / artImage.naturalHeight;
+      card.classList.remove('wm-art-portrait', 'wm-art-square', 'wm-art-landscape');
+
+      if (ratio < 0.82) {
+        card.classList.add('wm-art-portrait');
+        card.dataset.wmArtFormat = 'portrait';
+        card.style.setProperty('--wm-art-top', '8px');
+        card.style.setProperty('--wm-art-scale', '1');
+        card.style.setProperty('--wm-art-hover-scale', '1.02');
+        card.style.setProperty('--wm-blur-y', '38%');
+      } else if (ratio < 1.12) {
+        card.classList.add('wm-art-square');
+        card.dataset.wmArtFormat = 'square';
+        card.style.setProperty('--wm-art-top', '26px');
+        card.style.setProperty('--wm-art-scale', '1');
+        card.style.setProperty('--wm-art-hover-scale', '1.018');
+        card.style.setProperty('--wm-blur-y', '35%');
+      } else {
+        card.classList.add('wm-art-landscape');
+        card.dataset.wmArtFormat = 'landscape';
+        card.style.setProperty('--wm-art-top', '52px');
+        card.style.setProperty('--wm-art-scale', '1');
+        card.style.setProperty('--wm-art-hover-scale', '1.015');
+        card.style.setProperty('--wm-blur-y', '32%');
+      }
+    }
+
+    function applyImagePalette() {
+      if (!artImage.naturalWidth || !artImage.naturalHeight) return;
+
+      try {
+        const canvas = document.createElement('canvas');
+        const width = 96;
+        const height = 72;
+        canvas.width = width;
+        canvas.height = height;
+
+        const context = canvas.getContext('2d', { willReadFrequently: true });
+        if (!context) return;
+        context.drawImage(artImage, 0, 0, width, height);
+        const pixels = context.getImageData(0, 0, width, height).data;
+
+        const top = averagePixels(
+          pixels,
+          width,
+          height,
+          (x, y, w, h) => y < h * 0.30 && (x < w * 0.34 || x > w * 0.66)
+        );
+        const bottom = averagePixels(
+          pixels,
+          width,
+          height,
+          (x, y, w, h) => y > h * 0.68 && (x < w * 0.32 || x > w * 0.68)
+        );
+        const sides = averagePixels(
+          pixels,
+          width,
+          height,
+          (x, _y, w) => x < w * 0.16 || x > w * 0.84
+        );
+
+        const mid = mixColors(mixColors(top, bottom, 0.50), sides, 0.38);
+        const luminance = ([r, g, b]) => 0.2126 * r + 0.7152 * g + 0.0722 * b;
+        const topLuminance = luminance(top);
+
+        let topBase;
+        let topSoft;
+
+        if (topLuminance >= 205) {
+          topBase = mixColors(top, [255, 255, 255], 0.08);
+          topSoft = mixColors(top, [255, 255, 255], 0.18);
+        } else if (topLuminance >= 155) {
+          topBase = mixWithBlack(top, 0.06);
+          topSoft = mixColors(top, [255, 255, 255], 0.08);
+        } else if (topLuminance >= 100) {
+          topBase = mixWithBlack(top, 0.14);
+          topSoft = mixWithBlack(top, 0.04);
+        } else {
+          topBase = mixWithBlack(top, 0.20);
+          topSoft = mixWithBlack(top, 0.10);
+        }
+
+        const midDark = mixWithBlack(mid, 0.46);
+        const bottomDark = mixWithBlack(bottom, 0.68);
+        const bottomSoft = mixWithBlack(bottom, 0.50);
+        const setRgb = (name, rgb) => card.style.setProperty(name, rgb.join(', '));
+
+        setRgb('--wm-image-top-rgb', topBase);
+        setRgb('--wm-image-top-soft-rgb', topSoft);
+        setRgb('--wm-image-mid-rgb', midDark);
+        setRgb('--wm-image-bottom-rgb', bottomDark);
+        setRgb('--wm-image-bottom-soft-rgb', bottomSoft);
+      } catch (error) {
+        console.debug('[WM Average] palette image indisponible', error);
+      }
+    }
+
+    function syncArtwork() {
+      const src = String(artImage.currentSrc || artImage.src || '');
+      if (src) {
+        const escaped = src.replace(/["\\]/g, '\\$&');
+        card.style.setProperty('--wm-art-url', `url("${escaped}")`);
+      }
+
+      applyImageFormat();
+      applyImagePalette();
+    }
+
+    if (artImage.complete && artImage.naturalWidth) {
+      syncArtwork();
+    }
+    artImage.addEventListener('load', syncArtwork);
+
+    const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)');
+    if (reduceMotion?.matches) return;
+
+    const resetPointer = () => {
+      card.style.setProperty('--wm-pointer-x', '50%');
+      card.style.setProperty('--wm-pointer-y', '35%');
+      card.style.setProperty('--wm-tilt-x', '0deg');
+      card.style.setProperty('--wm-tilt-y', '0deg');
+    };
+
+    const updatePointer = (event) => {
+      const rect = card.getBoundingClientRect();
+      if (!rect.width || !rect.height) return;
+
+      const x = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
+      const y = Math.max(0, Math.min(1, (event.clientY - rect.top) / rect.height));
+
+      card.style.setProperty('--wm-pointer-x', `${(x * 100).toFixed(1)}%`);
+      card.style.setProperty('--wm-pointer-y', `${(y * 100).toFixed(1)}%`);
+      card.style.setProperty('--wm-tilt-x', `${((x - 0.5) * 10).toFixed(2)}deg`);
+      card.style.setProperty('--wm-tilt-y', `${((0.5 - y) * 10).toFixed(2)}deg`);
+    };
+
+    resetPointer();
+    card.addEventListener('pointermove', updatePointer, { passive: true });
+    card.addEventListener('pointerleave', resetPointer, { passive: true });
+    card.addEventListener('pointercancel', resetPointer, { passive: true });
+  }
+
   function renderCardExtras() {
     const observer = ensureCardExtrasObserver();
 
     for (const card of document.querySelectorAll('div[class*="glow-"]')) {
       if (!card.querySelector('h3')) continue;
 
+      ensurePremiumCardFx(card);
       ensureWikipediaButton(card);
 
       if (
