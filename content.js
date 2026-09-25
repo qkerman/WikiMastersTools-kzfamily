@@ -7,6 +7,7 @@
   const requiredFeatures = [
     'core',
     'settings',
+    'imageResolver',
     'priceUi',
     'priceLoader',
     'cardExtras',
@@ -38,6 +39,14 @@
 
   runtime.core = featureRegistry.core.create();
   runtime.settings = featureRegistry.settings.create(runtime.core);
+  runtime.imageResolver = featureRegistry.imageResolver.create({
+    normalizeTitle: runtime.core.normalizeTitle,
+    readLocalValue: runtime.core.readLocalValue,
+    writeLocalValue: runtime.core.writeLocalValue,
+    MISSING_IMAGE_CACHE_PREFIX: runtime.core.MISSING_IMAGE_CACHE_PREFIX,
+    MISSING_IMAGE_FOUND_TTL: runtime.core.MISSING_IMAGE_FOUND_TTL,
+    MISSING_IMAGE_MISS_TTL: runtime.core.MISSING_IMAGE_MISS_TTL
+  });
   runtime.priceUi = featureRegistry.priceUi.create(runtime);
   runtime.priceLoader = featureRegistry.priceLoader.create(runtime);
 
@@ -45,11 +54,7 @@
     normalizeTitle: runtime.core.normalizeTitle,
     idByTitle: runtime.core.idByTitle,
     cardMetaById: runtime.core.cardMetaById,
-    readLocalValue: runtime.core.readLocalValue,
-    writeLocalValue: runtime.core.writeLocalValue,
-    MISSING_IMAGE_CACHE_PREFIX: runtime.core.MISSING_IMAGE_CACHE_PREFIX,
-    MISSING_IMAGE_FOUND_TTL: runtime.core.MISSING_IMAGE_FOUND_TTL,
-    MISSING_IMAGE_MISS_TTL: runtime.core.MISSING_IMAGE_MISS_TTL,
+    imageResolver: runtime.imageResolver,
     isFeatureEnabled: runtime.settings.isEnabled
   });
 
@@ -94,5 +99,5 @@
   runtime.app = featureRegistry.app.create(runtime);
 
   runtime.app.startObserver();
-  console.debug('[WM Average] runtime modulaire v4.3.1 chargé');
+  console.debug('[WM Average] runtime modulaire v4.4.0 chargé');
 })();
