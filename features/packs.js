@@ -12,7 +12,7 @@
       } = runtime.core;
       const { formatAverage, chooseAverage } = runtime.priceUi;
 
-      let pullRecapEnabled = readLocalValue(PULL_RECAP_ENABLED_KEY) !== false;
+      let pullRecapEnabled = runtime.settings.isEnabled('packRecap') && readLocalValue(PULL_RECAP_ENABLED_KEY) !== false;
       let activePackRecap = null;
       let packRecapDismissed = false;
       let openAllActive = false;
@@ -25,7 +25,7 @@
       let openAllSummaryTitle = 'Cartes obtenues';
       let openAllSummaryOnClose = null;
       let openAllSummaryReloadOnClose = true;
-      let autoOpenEnabled = readLocalValue(AUTO_OPEN_ENABLED_KEY) === true;
+      let autoOpenEnabled = runtime.settings.isEnabled('autoOpen') && readLocalValue(AUTO_OPEN_ENABLED_KEY) === true;
       let autoOpenTimer = null;
       let autoOpenRequestId = null;
       let autoOpenShowSummaryAfterCurrent = false;
@@ -241,6 +241,13 @@
       function scheduleNextAutoOpen({ keepExisting = true } = {}) {
         clearAutoOpenTimer();
 
+        if (!runtime.settings.isEnabled('autoOpen')) {
+          autoOpenEnabled = false;
+          writeLocalValue(AUTO_OPEN_ENABLED_KEY, false);
+          localStorage.removeItem(AUTO_OPEN_NEXT_AT_KEY);
+          return;
+        }
+
         if (!autoOpenEnabled) {
           localStorage.removeItem(AUTO_OPEN_NEXT_AT_KEY);
           return;
@@ -333,6 +340,7 @@
       }
 
       function enableAutomaticOpening() {
+        if (!runtime.settings.isEnabled('autoOpen')) return;
         autoOpenEnabled = true;
         writeLocalValue(AUTO_OPEN_ENABLED_KEY, true);
         resetAutoOpenSession();
@@ -394,7 +402,7 @@
       }
 
       function ensurePullsToolbar() {
-        if (!isPullsPage() || document.getElementById('wm-pulls-tools')) return;
+        if (!isPullsPage() || document.getElementById('wm-pulls-info')) return;
 
         const h1 = [...document.querySelectorAll('h1')]
           .find((el) => normalizeTitle(el.textContent) === 'Ouvrir un paquet');
@@ -402,126 +410,130 @@
 
         const header = h1.parentElement;
         if (!header) return;
-
         header.classList.add('wm-pulls-header');
 
         const tools = document.createElement('div');
         tools.id = 'wm-pulls-tools';
         tools.className = 'wm-pulls-tools';
 
-        const label = document.createElement('label');
-        label.className = 'wm-pulls-toggle';
-        label.title = 'Afficher le récapitulatif des prix après chaque paquet';
+        if (runtime.settings.isEnabled('packRecap')) {
+          const label = document.createElement('label');
+          label.className = 'wm-pulls-toggle';
+          label.title = 'Afficher le récapitulatif des prix après chaque paquet';
 
-        const textWrap = document.createElement('span');
-        textWrap.className = 'wm-pulls-toggle-text';
+          const textWrap = document.createElement('span');
+          textWrap.className = 'wm-pulls-toggle-text';
+          const title = document.createElement('strong');
+          title.textContent = 'Récap prix';
+          textWrap.append(title);
 
-        const title = document.createElement('strong');
-        title.textContent = 'Récap prix';
-        textWrap.append(title);
+          const input = document.createElement('input');
+          input.type = 'checkbox';
+          input.checked = pullRecapEnabled;
 
-        const input = document.createElement('input');
-        input.type = 'checkbox';
-        input.checked = pullRecapEnabled;
+          const track = document.createElement('span');
+          track.className = 'wm-toggle-track';
+          const knob = document.createElement('span');
+          knob.className = 'wm-toggle-knob';
+          track.append(knob);
 
-        const track = document.createElement('span');
-        track.className = 'wm-toggle-track';
-        const knob = document.createElement('span');
-        knob.className = 'wm-toggle-knob';
-        track.append(knob);
+          input.addEventListener('change', () => {
+            pullRecapEnabled = input.checked;
+            writeLocalValue(PULL_RECAP_ENABLED_KEY, pullRecapEnabled);
+            label.classList.toggle('is-enabled', pullRecapEnabled);
 
-        input.addEventListener('change', () => {
-          pullRecapEnabled = input.checked;
-          writeLocalValue(PULL_RECAP_ENABLED_KEY, pullRecapEnabled);
+            if (pullRecapEnabled) {
+              packRecapDismissed = false;
+              renderPackRecap();
+            } else {
+              document.getElementById('wm-pack-recap')?.remove();
+            }
+          });
+
           label.classList.toggle('is-enabled', pullRecapEnabled);
+          label.append(textWrap, input, track);
+          tools.append(label);
+        }
 
-          if (pullRecapEnabled) {
-            packRecapDismissed = false;
-            renderPackRecap();
-          } else {
-            document.getElementById('wm-pack-recap')?.remove();
-          }
-        });
+        if (runtime.settings.isEnabled('autoOpen')) {
+          const autoControl = document.createElement('span');
+          autoControl.className = 'wm-auto-open-control';
 
-        label.classList.toggle('is-enabled', pullRecapEnabled);
-        label.append(textWrap, input, track);
+          autoOpenToggleLabel = document.createElement('label');
+          autoOpenToggleLabel.className = 'wm-pulls-toggle wm-auto-open-toggle';
+          autoOpenToggleLabel.title = 'Ouvrir automatiquement tous les paquets à intervalles aléatoires';
 
-        const autoControl = document.createElement('span');
-        autoControl.className = 'wm-auto-open-control';
+          const autoTextWrap = document.createElement('span');
+          autoTextWrap.className = 'wm-pulls-toggle-text';
+          const autoTitle = document.createElement('strong');
+          autoTitle.textContent = 'Ouvrir automatiquement';
+          autoTextWrap.append(autoTitle);
 
-        autoOpenToggleLabel = document.createElement('label');
-        autoOpenToggleLabel.className = 'wm-pulls-toggle wm-auto-open-toggle';
-        autoOpenToggleLabel.title = 'Ouvrir automatiquement tous les paquets à intervalles aléatoires';
+          autoOpenToggleInput = document.createElement('input');
+          autoOpenToggleInput.type = 'checkbox';
+          autoOpenToggleInput.checked = autoOpenEnabled;
 
-        const autoTextWrap = document.createElement('span');
-        autoTextWrap.className = 'wm-pulls-toggle-text';
+          const autoTrack = document.createElement('span');
+          autoTrack.className = 'wm-toggle-track';
+          const autoKnob = document.createElement('span');
+          autoKnob.className = 'wm-toggle-knob';
+          autoTrack.append(autoKnob);
 
-        const autoTitle = document.createElement('strong');
-        autoTitle.textContent = 'Ouvrir automatiquement';
-        autoTextWrap.append(autoTitle);
+          autoOpenToggleInput.addEventListener('change', () => {
+            if (autoOpenToggleInput.checked) enableAutomaticOpening();
+            else disableAutomaticOpening({ showSummary: true });
+          });
 
-        autoOpenToggleInput = document.createElement('input');
-        autoOpenToggleInput.type = 'checkbox';
-        autoOpenToggleInput.checked = autoOpenEnabled;
+          autoOpenToggleLabel.classList.toggle('is-enabled', autoOpenEnabled);
+          autoOpenToggleLabel.append(autoTextWrap, autoOpenToggleInput, autoTrack);
 
-        const autoTrack = document.createElement('span');
-        autoTrack.className = 'wm-toggle-track';
+          const helpButton = document.createElement('button');
+          helpButton.type = 'button';
+          helpButton.className = 'wm-auto-open-help';
+          helpButton.textContent = '?';
+          helpButton.title = 'Comment fonctionne l’ouverture automatique ?';
+          helpButton.setAttribute('aria-label', 'Aide ouverture automatique');
+          helpButton.addEventListener('click', showAutoOpenHelp);
 
-        const autoKnob = document.createElement('span');
-        autoKnob.className = 'wm-toggle-knob';
-        autoTrack.append(autoKnob);
+          autoControl.append(autoOpenToggleLabel, helpButton);
+          tools.append(autoControl);
+        }
 
-        autoOpenToggleInput.addEventListener('change', () => {
-          if (autoOpenToggleInput.checked) {
-            enableAutomaticOpening();
-          } else {
-            disableAutomaticOpening({ showSummary: true });
-          }
-        });
-
-        autoOpenToggleLabel.classList.toggle('is-enabled', autoOpenEnabled);
-        autoOpenToggleLabel.append(autoTextWrap, autoOpenToggleInput, autoTrack);
-
-        const helpButton = document.createElement('button');
-        helpButton.type = 'button';
-        helpButton.className = 'wm-auto-open-help';
-        helpButton.textContent = '?';
-        helpButton.title = 'Comment fonctionne l’ouverture automatique ?';
-        helpButton.setAttribute('aria-label', 'Aide ouverture automatique');
-        helpButton.addEventListener('click', showAutoOpenHelp);
-
-        autoControl.append(autoOpenToggleLabel, helpButton);
-
-        tools.append(label, autoControl);
-        h1.insertAdjacentElement('afterend', tools);
+        if (tools.childElementCount > 0) {
+          h1.insertAdjacentElement('afterend', tools);
+        }
 
         const info = document.createElement('div');
         info.id = 'wm-pulls-info';
         info.className = 'wm-pulls-info';
 
-        const cacheNote = document.createElement('div');
-        cacheNote.className = 'wm-pulls-cache-note';
-        cacheNote.textContent = 'À chaque ouverture, le prix moyen des cartes obtenues est automatiquement ajouté au cache local.';
-
-        openAllButton = document.createElement('button');
-        openAllButton.type = 'button';
-        openAllButton.className = 'wm-tool-button wm-open-all-button';
-        openAllButton.textContent = openAllActive ? 'Ouverture…' : 'Tout ouvrir';
-        openAllButton.disabled = openAllActive;
-        openAllButton.title = 'Ouvrir tous les paquets disponibles sans afficher les animations';
-        openAllButton.addEventListener('click', () => {
-          handleOpenAllPacksClick().catch((error) => reportError('tout ouvrir', error));
-        });
-
-        info.append(openAllButton, cacheNote, createSponsorNote());
-
-        const pageSubtitle = [...header.children]
-          .find((el) => el.tagName === 'P');
-        if (pageSubtitle) {
-          pageSubtitle.insertAdjacentElement('afterend', info);
-        } else {
-          header.append(info);
+        if (runtime.settings.isEnabled('openAll')) {
+          openAllButton = document.createElement('button');
+          openAllButton.type = 'button';
+          openAllButton.className = 'wm-tool-button wm-open-all-button';
+          openAllButton.textContent = openAllActive ? 'Ouverture…' : 'Tout ouvrir';
+          openAllButton.disabled = openAllActive;
+          openAllButton.title = 'Ouvrir tous les paquets disponibles sans afficher les animations';
+          openAllButton.addEventListener('click', () => {
+            handleOpenAllPacksClick().catch((error) => reportError('tout ouvrir', error));
+          });
+          info.append(openAllButton);
         }
+
+        if (
+          runtime.settings.isEnabled('packRecap') ||
+          runtime.settings.isEnabled('openAll') ||
+          runtime.settings.isEnabled('autoOpen')
+        ) {
+          const cacheNote = document.createElement('div');
+          cacheNote.className = 'wm-pulls-cache-note';
+          cacheNote.textContent = 'Les prix moyens utilisés par les outils sont conservés dans le cache local.';
+          info.append(cacheNote, createSponsorNote());
+        }
+
+        const pageSubtitle = [...header.children].find((el) => el.tagName === 'P');
+        if (pageSubtitle) pageSubtitle.insertAdjacentElement('afterend', info);
+        else header.append(info);
       }
 
       function showOpenAllConfirmation() {
@@ -814,6 +826,7 @@
         const existing = document.getElementById('wm-pack-recap');
 
         if (
+          !runtime.settings.isEnabled('packRecap') ||
           !isPullsPage() ||
           !pullRecapEnabled ||
           packRecapDismissed ||
@@ -919,14 +932,15 @@
         if (!Array.isArray(cards) || !cards.length) return;
 
         runtime.pullStats.recordPullStats(cards);
+        mergePulledCardsIntoCollectionCache(cards);
+
+        if (!runtime.settings.isEnabled('packRecap')) return;
 
         activePackRecap = {
           openedAt: Date.now(),
           cards
         };
         packRecapDismissed = false;
-
-        mergePulledCardsIntoCollectionCache(cards);
 
         try {
           runtime.priceLoader.loadCacheForCards(cards);
@@ -1042,7 +1056,7 @@
       }
 
       function isAutoOpenEnabled() {
-        return autoOpenEnabled;
+        return runtime.settings.isEnabled('autoOpen') && autoOpenEnabled;
       }
 
       return {
