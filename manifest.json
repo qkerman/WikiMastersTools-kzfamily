@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "WikiMasters - Prix moyen collection",
   "version": "4.3.0",
-  "description": "Outils WikiMasters : prix moyens, collection, échanges, paquets, cartes full-art, Wikipédia et vue compacte.",
+  "description": "Outils WikiMasters configurables : prix moyens, collection, échanges, paquets, cartes full-art, Wikipédia et vue compacte.",
   "host_permissions": [
     "https://www.wiki-masters.com/*"
   ],
