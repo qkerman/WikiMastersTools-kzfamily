@@ -15,9 +15,13 @@ if (typeof window !== 'undefined' && typeof document !== 'undefined') {
     if (!extensionRuntime?.getURL) return;
 
     const urls = [
-      extensionRuntime.getURL('page-bridge.js'),
-      extensionRuntime.getURL('content.js')
-    ];
+      'page-bridge.js',
+      'features/card-extras.js',
+      'features/pull-stats.js',
+      'features/compact-mode.js',
+      'features/trades.js',
+      'content.js'
+    ].map((path) => extensionRuntime.getURL(path));
 
     const parent = document.head || document.documentElement;
 
