@@ -52,6 +52,11 @@ Puis cliquer sur **Recharger** dans `chrome://extensions/` et faire un F5 sur Wi
 
 *Heure de Paris*
 
+- **25/09/2026 — 18:00** — V4.2 : cartes full-art/holographiques avec couleurs adaptées à l’image, détection automatique du ratio portrait/carré/paysage, rendu plus propre du fond et suppression du flou derrière le texte. Architecture entièrement découpée par fonctionnalités : prix, collection, classement, ventes, paquets, échanges, effets de cartes et bridge réseau.
+- **24/09/2026 — 23:30** — Ouverture des paquets avec temporisation aléatoire supplémentaire pour mieux respecter le rythme du site.
+- **24/09/2026 — 23:27** — Le classement « Plus chères » fonctionne aussi avec un cache de prix partiel.
+- **24/09/2026 — 23:21** — Ajout de l’ouverture automatique des paquets toutes les 20 à 100 minutes avec récapitulatif cumulé.
+
 - **24/09/2026 — 22:32** — V4 : images manquantes via Wikimedia, statistiques de tirage, bouton Wikipédia sur les cartes et mode compact.
 - **23/09/2026 — 13:25** — Compatibilité multi-navigateurs : support officiel de Firefox (Manifest V3 / gecko ID), Brave et Opera, avec runtime universel.
 - **22/09/2026 — 17:37** — Ajout du prix moyen lors de l’inspection d’une carte dans la collection globale.
