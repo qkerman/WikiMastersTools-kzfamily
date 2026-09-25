@@ -5,7 +5,7 @@
     create(runtime) {
       const {
         isCollectionPage, isMarketplaceDetailPage, isMarketplacePage,
-        isPullsPage, isTradesPage, isGlobalCollectionPage,
+        isPullsPage, isTradesPage, isGlobalCollectionPage, isGuildPage,
         cleanupPriceCacheOnceDaily, reportError
       } = runtime.core;
 
@@ -55,7 +55,9 @@
           isMarketplacePage() ||
           isPullsPage() ||
           isTradesPage() ||
-          isGlobalCollectionPage()
+          isGlobalCollectionPage() ||
+          isGuildPage() ||
+          Boolean(document.querySelector('div[class*="glow-"] h3'))
         );
       }
 
@@ -171,7 +173,7 @@
         scheduleRender(0);
       });
 
-      console.debug('[WM Average] app module v4.3.0 prêt');
+      console.debug('[WM Average] app module v4.4.1 prêt');
 
       return { startObserver };
     }
