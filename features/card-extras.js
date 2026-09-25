@@ -3,7 +3,7 @@
 
   registry.cardExtras = {
     create(deps) {
-      const { normalizeTitle, idByTitle, cardMetaById, readLocalValue, writeLocalValue, MISSING_IMAGE_CACHE_PREFIX, MISSING_IMAGE_FOUND_TTL, MISSING_IMAGE_MISS_TTL } = deps;
+      const { normalizeTitle, idByTitle, cardMetaById, readLocalValue, writeLocalValue, MISSING_IMAGE_CACHE_PREFIX, MISSING_IMAGE_FOUND_TTL, MISSING_IMAGE_MISS_TTL, isFeatureEnabled } = deps;
       let cardExtrasObserver = null;
       const missingImagePending = new Map();
       function wikipediaUrlFor(title, meta = null) {
@@ -467,19 +467,33 @@
       }
     
       function renderCardExtras() {
-        const observer = ensureCardExtrasObserver();
-    
+        const premiumEnabled = isFeatureEnabled('premiumCards');
+        const wikipediaEnabled = isFeatureEnabled('wikipediaButtons');
+        const missingImagesEnabled = isFeatureEnabled('missingImages');
+        const observer = missingImagesEnabled ? ensureCardExtrasObserver() : null;
+
         for (const card of document.querySelectorAll('div[class*="glow-"]')) {
           if (!card.querySelector('h3')) continue;
-    
-          ensurePremiumCardFx(card);
-          ensureWikipediaButton(card);
-    
+
+          if (premiumEnabled) {
+            ensurePremiumCardFx(card);
+          } else {
+            card.classList.remove('wm-premium-card');
+            delete card.dataset.wmPremiumReady;
+          }
+
+          if (wikipediaEnabled) {
+            ensureWikipediaButton(card);
+          } else {
+            card.querySelector(':scope > .wm-wikipedia-card-button')?.remove();
+          }
+
           if (
+            missingImagesEnabled &&
             card.dataset.wmMissingImageDone !== '1' &&
             findMissingImagePlaceholder(card)
           ) {
-            observer.observe(card);
+            observer?.observe(card);
           }
         }
       }
