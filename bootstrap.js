@@ -36,6 +36,7 @@ if (typeof window !== 'undefined' && typeof document !== 'undefined') {
       'page-bridge.js',
       'features/core.js',
       'features/settings.js',
+      'features/image-resolver.js',
       'features/price-ui.js',
       'features/price-loader.js',
       'features/card-extras.js',
