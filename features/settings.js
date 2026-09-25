@@ -243,38 +243,70 @@
       }
 
       function ensureButton() {
+        const existingSlot = document.getElementById('wm-settings-currency-slot');
+
         if (!isPullsPage()) {
+          existingSlot?.remove();
           document.getElementById('wm-settings-button')?.remove();
           return;
         }
 
-        if (document.getElementById('wm-settings-button')) return;
+        const currencyButtons = [
+          ...document.querySelectorAll(
+            'button[aria-label="Ouvrir la boutique WikiBidous"], button[title*="wikibidous" i]'
+          )
+        ];
 
-        const h1 = [...document.querySelectorAll('h1')]
-          .find((el) => normalizeTitle(el.textContent) === 'Ouvrir un paquet');
-        if (!h1) return;
+        // Sur desktop, le compteur WikiBidous vit dans le bloc fixe en haut à droite.
+        // On privilégie explicitement ce bloc pour placer les paramètres juste dessous.
+        const desktopCurrencyButton = currencyButtons.find((button) => {
+          const parent = button.parentElement;
+          return parent?.classList?.contains('fixed') &&
+            parent.classList.contains('right-0') &&
+            parent.classList.contains('md:block');
+        });
 
-        const header = h1.parentElement;
-        if (!header) return;
-        header.classList.add('wm-pulls-header');
+        // Fallback si WikiMasters change légèrement son markup.
+        const currencyButton = desktopCurrencyButton || currencyButtons.find((button) => (
+          button.getClientRects().length > 0
+        ));
 
-        const button = document.createElement('button');
-        button.id = 'wm-settings-button';
-        button.type = 'button';
-        button.className = 'wm-settings-launch';
-        button.title = 'Paramètres de WikiMastersTools';
-        button.setAttribute('aria-label', 'Ouvrir les paramètres de l’extension');
+        if (!currencyButton?.parentElement) return;
 
-        const icon = document.createElement('span');
-        icon.className = 'wm-settings-launch-icon';
-        icon.textContent = '⚙';
+        const host = currencyButton.parentElement;
+        let slot = existingSlot;
 
-        const text = document.createElement('span');
-        text.textContent = 'Paramètres';
+        if (!slot || slot.parentElement !== host) {
+          slot?.remove();
+          slot = document.createElement('div');
+          slot.id = 'wm-settings-currency-slot';
+          slot.className = 'wm-settings-currency-slot';
+          currencyButton.insertAdjacentElement('afterend', slot);
+        }
 
-        button.append(icon, text);
-        button.addEventListener('click', openSettings);
-        header.append(button);
+        let button = document.getElementById('wm-settings-button');
+        if (!button) {
+          button = document.createElement('button');
+          button.id = 'wm-settings-button';
+          button.type = 'button';
+          button.className = 'wm-settings-launch';
+          button.title = 'Paramètres de WikiMastersTools';
+          button.setAttribute('aria-label', 'Ouvrir les paramètres de l’extension');
+
+          const icon = document.createElement('span');
+          icon.className = 'wm-settings-launch-icon';
+          icon.textContent = '⚙';
+
+          const text = document.createElement('span');
+          text.textContent = 'Paramètres';
+
+          button.append(icon, text);
+          button.addEventListener('click', openSettings);
+        }
+
+        if (button.parentElement !== slot) {
+          slot.append(button);
+        }
       }
 
       return {
