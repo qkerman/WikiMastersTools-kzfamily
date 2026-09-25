@@ -54,6 +54,10 @@
         return location.pathname === '/global-collection' || location.pathname.startsWith('/global-collection/');
       }
 
+      function isGuildPage() {
+        return location.pathname === '/guild' || location.pathname.startsWith('/guild/');
+      }
+
       function isLastPullCardVisible() {
         if (!isPullsPage()) return false;
 
@@ -217,7 +221,7 @@
         MISSING_IMAGE_CACHE_PREFIX, MISSING_IMAGE_FOUND_TTL, MISSING_IMAGE_MISS_TTL,
         RARITIES, DEFAULT_RARE_RARITIES, cardMetaById, idByTitle, cacheMemory,
         isCollectionPage, isMarketplaceDetailPage, isMarketplacePage, isPullsPage,
-        isTradesPage, isGlobalCollectionPage, isLastPullCardVisible, normalizeTitle,
+        isTradesPage, isGlobalCollectionPage, isGuildPage, isLastPullCardVisible, normalizeTitle,
         cacheKey, readLocalValue, writeLocalValue, storageGet, storageSet,
         isCacheEntryValid, cleanupPriceCacheOnceDaily, isContextInvalidatedError,
         reportError, registerCards, createSponsorNote
