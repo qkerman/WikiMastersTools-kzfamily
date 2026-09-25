@@ -918,7 +918,7 @@
       function handlePackOpened(cards) {
         if (!Array.isArray(cards) || !cards.length) return;
 
-        recordPullStats(cards);
+        runtime.pullStats.recordPullStats(cards);
 
         activePackRecap = {
           openedAt: Date.now(),
