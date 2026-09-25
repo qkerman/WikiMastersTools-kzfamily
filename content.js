@@ -3,6 +3,36 @@
   window.__wmAverageUiInstalled = true;
 
   const featureRegistry = window.__wmAverageFeatures || {};
+
+  const requiredFeatures = [
+    'core',
+    'settings',
+    'priceUi',
+    'priceLoader',
+    'cardExtras',
+    'pullStats',
+    'compactMode',
+    'trades',
+    'modalUi',
+    'packs',
+    'ranking',
+    'collectionBulk',
+    'app'
+  ];
+
+  const missingFeatures = requiredFeatures.filter(
+    (name) => typeof featureRegistry[name]?.create !== 'function'
+  );
+
+  if (missingFeatures.length) {
+    document.documentElement?.classList.remove('wm-premium-cards-enabled');
+    console.error(
+      '[WM Average] initialisation annulée : modules manquants',
+      missingFeatures
+    );
+    return;
+  }
+
   const runtime = {};
   window.__wmAverageRuntime = runtime;
 
@@ -64,5 +94,5 @@
   runtime.app = featureRegistry.app.create(runtime);
 
   runtime.app.startObserver();
-  console.debug('[WM Average] runtime modulaire v4.3.0 chargé');
+  console.debug('[WM Average] runtime modulaire v4.3.1 chargé');
 })();
