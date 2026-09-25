@@ -26,7 +26,7 @@ if (typeof window !== 'undefined' && typeof document !== 'undefined') {
     const extensionRuntime = getExtensionRuntime();
     if (!extensionRuntime?.getURL) return;
 
-    const urls = [
+    const paths = [
       'bridge/core.js',
       'bridge/collection.js',
       'bridge/packs.js',
@@ -48,17 +48,35 @@ if (typeof window !== 'undefined' && typeof document !== 'undefined') {
       'features/collection-bulk.js',
       'features/app.js',
       'content.js'
-    ].map((path) => extensionRuntime.getURL(path));
+    ];
 
     const parent = document.head || document.documentElement;
 
-    for (const src of urls) {
+    const injectScript = (path) => new Promise((resolve, reject) => {
       const script = document.createElement('script');
-      script.src = src;
+      script.src = extensionRuntime.getURL(path);
       script.async = false;
       script.dataset.wmAverageInjected = '1';
+
+      script.addEventListener('load', () => resolve(), { once: true });
+      script.addEventListener('error', () => {
+        reject(new Error(`Impossible de charger ${path}`));
+      }, { once: true });
+
       parent.appendChild(script);
-    }
+    });
+
+    (async () => {
+      try {
+        for (const path of paths) {
+          await injectScript(path);
+        }
+      } catch (error) {
+        // Évite de laisser les cartes masquées si l'initialisation de l'extension échoue.
+        document.documentElement?.classList.remove('wm-premium-cards-enabled');
+        console.error('[WM Average] chargement séquentiel interrompu', error);
+      }
+    })();
   })();
 }
 
