@@ -3,7 +3,7 @@
 
   registry.compactMode = {
     create(deps) {
-      const { COMPACT_MODE_KEY, readLocalValue, writeLocalValue, isCollectionPage, isGlobalCollectionPage } = deps;
+      const { COMPACT_MODE_KEY, readLocalValue, writeLocalValue, isCollectionPage, isGlobalCollectionPage, isFeatureEnabled } = deps;
       let compactModeEnabled = readLocalValue(COMPACT_MODE_KEY) === true;
       function compactEligiblePage() {
         return isCollectionPage() || isGlobalCollectionPage();
@@ -12,7 +12,7 @@
       function applyCompactMode() {
         document.body?.classList.toggle(
           'wm-compact-mode',
-          compactModeEnabled && compactEligiblePage()
+          isFeatureEnabled('compactMode') && compactModeEnabled && compactEligiblePage()
         );
     
         for (const button of document.querySelectorAll('[data-wm-compact-button]')) {
@@ -37,6 +37,13 @@
       }
     
       function ensureCompactControl() {
+        if (!isFeatureEnabled('compactMode')) {
+          document.querySelectorAll('[data-wm-compact-button]').forEach((button) => button.remove());
+          document.getElementById('wm-global-compact-tools')?.remove();
+          document.body?.classList.remove('wm-compact-mode');
+          return;
+        }
+
         if (!compactEligiblePage()) {
           applyCompactMode();
           return;
