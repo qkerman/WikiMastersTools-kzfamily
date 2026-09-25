@@ -21,6 +21,7 @@
         }
 
         if (isPullsPage()) {
+          runtime.settings.ensureButton();
           runtime.packs.ensurePullsToolbar();
           runtime.packs.updateAutoOpenToggleUi();
           runtime.pullStats.renderPullStats();
@@ -96,7 +97,7 @@
             '.wm-pulls-tools, .wm-pulls-info, .wm-pack-recap, .wm-trade-values-panel, ' +
             '.wm-trade-values-controls, #wm-open-all-overlay, .wm-pull-stats, ' +
             '.wm-wikipedia-card-button, .wm-missing-image-credit, .wm-compact-tools, .wm-price-legend, ' +
-            '.wm-auto-open-control, .wm-auto-open-help'
+            '.wm-auto-open-control, .wm-auto-open-help, .wm-settings-launch, .wm-settings-modal'
           )
         );
       }
@@ -170,7 +171,7 @@
         scheduleRender(0);
       });
 
-      console.debug('[WM Average] app module v4.2.0 prêt');
+      console.debug('[WM Average] app module v4.3.0 prêt');
 
       return { startObserver };
     }
