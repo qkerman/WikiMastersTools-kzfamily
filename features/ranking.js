@@ -97,11 +97,12 @@
       }
 
       function renderRankingModal(rows, collectionFetchedAt, status = {}) {
+        const salesEnabled = runtime.settings.isEnabled('rankingSales');
         const overlay = document.createElement('div');
         overlay.className = 'wm-modal-overlay wm-ranking-overlay';
 
         const modal = document.createElement('div');
-        modal.className = 'wm-modal wm-ranking-modal wm-ranking-sales-enabled';
+        modal.className = `wm-modal wm-ranking-modal ${salesEnabled ? 'wm-ranking-sales-enabled' : 'wm-ranking-sales-disabled'}`;
 
         const header = document.createElement('div');
         header.className = 'wm-ranking-header';
@@ -301,7 +302,8 @@
             }));
           });
 
-          item.append(rank, thumb, info, price, sellButton);
+          item.append(rank, thumb, info, price);
+          if (salesEnabled) item.append(sellButton);
           return item;
         };
 
@@ -362,7 +364,8 @@
 
         modal.append(header);
         if (cacheNotice) modal.append(cacheNotice);
-        modal.append(saleControls, list);
+        if (salesEnabled) modal.append(saleControls);
+        modal.append(list);
         overlay.append(modal);
         document.body.append(overlay);
       }
