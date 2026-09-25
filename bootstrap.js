@@ -12,8 +12,16 @@ if (typeof window !== 'undefined' && typeof document !== 'undefined') {
     window.__wmAverageBootstrapInjected = true;
 
     // Posé dès document_start : le CSS peut masquer le design WikiMasters
-    // avant le premier paint, jusqu'à ce que le rendu full-art soit prêt.
-    document.documentElement?.classList.add('wm-premium-cards-enabled');
+    // avant le premier paint, sauf si l'utilisateur a désactivé les cartes premium.
+    let premiumCardsEnabled = true;
+    try {
+      const saved = JSON.parse(localStorage.getItem('wm_feature_settings_v1') || 'null');
+      premiumCardsEnabled = saved?.premiumCards !== false;
+    } catch (_) {}
+
+    if (premiumCardsEnabled) {
+      document.documentElement?.classList.add('wm-premium-cards-enabled');
+    }
 
     const extensionRuntime = getExtensionRuntime();
     if (!extensionRuntime?.getURL) return;
@@ -27,6 +35,7 @@ if (typeof window !== 'undefined' && typeof document !== 'undefined') {
       'bridge/prices.js',
       'page-bridge.js',
       'features/core.js',
+      'features/settings.js',
       'features/price-ui.js',
       'features/price-loader.js',
       'features/card-extras.js',
