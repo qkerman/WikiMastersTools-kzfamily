@@ -5,7 +5,7 @@
     create(runtime) {
       const {
         originalFetch, MAX_COLLECTION_PAGES, MARKETPLACE_MINE_CACHE_TTL,
-        fetchJsonRetry, extractCards
+        fetchJsonRetry, extractCards, emitMarketplaceDetail
       } = runtime.core;
 
       let marketplaceMineCache = {
@@ -224,6 +224,29 @@
         return message.includes('vous ne possédez pas cette carte') ||
           message.includes('vous ne possedez pas cette carte');
       }
+
+      window.addEventListener('wm-average-load-marketplace-detail', async (event) => {
+        const auctionId = String(event.detail?.auctionId || '').trim();
+        if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(auctionId)) {
+          return;
+        }
+
+        try {
+          const json = await fetchJsonRetry(
+            `/api/marketplace/${auctionId}`,
+            {
+              method: 'GET',
+              credentials: 'include',
+              headers: { accept: '*/*' }
+            },
+            { label: 'Annonce Marketplace', maxAttempts: 3 }
+          );
+
+          emitMarketplaceDetail(json);
+        } catch (error) {
+          console.debug('[WM Average] annonce Marketplace indisponible', auctionId, error);
+        }
+      });
 
       window.addEventListener('wm-average-create-listing', async (event) => {
         const {
