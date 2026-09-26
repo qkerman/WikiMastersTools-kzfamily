@@ -3,8 +3,7 @@ PATCH NOTE EN BAS
 [Chrome Web Store](https://chromewebstore.google.com/detail/wikimasters-prix-moyen-co/pkcnhclbagpfmlmolfcgedcmbccffgci)
 
 [firefox addons](https://addons.mozilla.org/en-US/firefox/addon/wikimasters-tools-prix-moyen/)
-
-merci à rodrigorod pour le port
+merci à rodrigorod pour le port firefox
 
 # WikiMastersTools-kzfamily
 
