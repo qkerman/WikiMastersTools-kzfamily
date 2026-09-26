@@ -2,7 +2,8 @@ PATCH NOTE EN BAS
 
 [Chrome Web Store](https://chromewebstore.google.com/detail/wikimasters-prix-moyen-co/pkcnhclbagpfmlmolfcgedcmbccffgci)
 
-Firefox arrive dans quelques jours (le temps que le store valide)
+[firefox addons](https://addons.mozilla.org/en-US/firefox/addon/wikimasters-tools-prix-moyen/)
+
 merci à rodrigorod pour le port
 
 # WikiMastersTools-kzfamily
