@@ -2407,3 +2407,35 @@ div[class*="glow-"]:has(> div[class*="top-0"][class*="h-[45%]"] img):has(h3):not
     grid-column: 1 / -1;
   }
 }
+
+
+/* v4.15.1 — badge "Possédée" conservé sur les cartes full-art du marketplace */
+.wm-premium-card > .wm-owned-badge {
+  position: absolute;
+  top: 34px;
+  left: 7px;
+  z-index: 42;
+  display: inline-flex;
+  align-items: center;
+  width: max-content;
+  max-width: calc(100% - 14px);
+  padding: 3px 7px;
+  border: 1px solid rgba(110, 231, 183, 0.72);
+  border-radius: 999px;
+  background: linear-gradient(
+    180deg,
+    rgba(5, 150, 105, 0.96),
+    rgba(4, 120, 87, 0.94)
+  );
+  color: #fff;
+  box-shadow:
+    0 2px 8px rgba(0, 0, 0, 0.42),
+    0 0 10px rgba(52, 211, 153, 0.26),
+    inset 0 1px 0 rgba(255, 255, 255, 0.16);
+  font-size: 8.5px;
+  font-weight: 900;
+  line-height: 1;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+  white-space: nowrap;
+  pointer-events: none;
+}
