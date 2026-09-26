@@ -52,6 +52,7 @@ Puis cliquer sur **Recharger** dans `chrome://extensions/` et faire un F5 sur Wi
 
 *Heure de Paris*
 
+- **26/09/2026 — 10:05** — V4.15.0 : correction du numéro de version pour publication Chrome Web Store, désormais supérieur à la version déjà publiée 4.14.1.
 - **25/09/2026 — 20:24** — V4.4.1 : correction du design amélioré sur `/guild` et, plus généralement, sur toute page contenant des cartes `glow-*` après une navigation SPA. Le skeleton ne reste plus bloqué indéfiniment.
 - **25/09/2026 — 20:14** — V4.4 : amélioration des images manquantes avec des fallbacks 100 % ouverts et sans clé API : PokéAPI pour les Pokémon, Wikidata (image P18 / logo P154), puis Wikipedia/Wikimedia FR et EN. Les anciens échecs d’image sont invalidés pour être retestés.
 - **25/09/2026 — 19:27** — V4.3.2 : déplacement du bouton Paramètres sous le compteur WikiBidous sur `/pulls`.
