@@ -52,13 +52,7 @@ Puis cliquer sur **Recharger** dans `chrome://extensions/` et faire un F5 sur Wi
 
 *Heure de Paris*
 
-- **26/09/2026 — 11:22** — V4.15.2 : correction du prix moyen sur les pages détail `/marketplace/<id>`. Si la requête initiale a été faite avant l’installation du bridge, l’annonce est maintenant rechargée explicitement pour récupérer la carte et son prix moyen.
-- **26/09/2026 — 10:12** — V4.15.1 : le badge « Possédée » reste visible sur les cartes full-art du Marketplace, sans réafficher attaque/défense.
-- **26/09/2026 — 10:05** — V4.15.0 : correction du numéro de version pour publication Chrome Web Store, désormais supérieur à la version déjà publiée 4.14.1.
-- **25/09/2026 — 20:24** — V4.4.1 : correction du design amélioré sur `/guild` et, plus généralement, sur toute page contenant des cartes `glow-*` après une navigation SPA. Le skeleton ne reste plus bloqué indéfiniment.
 - **25/09/2026 — 20:14** — V4.4 : amélioration des images manquantes avec des fallbacks 100 % ouverts et sans clé API : PokéAPI pour les Pokémon, Wikidata (image P18 / logo P154), puis Wikipedia/Wikimedia FR et EN. Les anciens échecs d’image sont invalidés pour être retestés.
-- **25/09/2026 — 19:27** — V4.3.2 : déplacement du bouton Paramètres sous le compteur WikiBidous sur `/pulls`.
-- **25/09/2026 — 19:24** — V4.3.1 : correction du chargement des modules de l’extension. Les scripts sont désormais injectés strictement dans l’ordre, ce qui corrige l’erreur `settings.create` au démarrage.
 - **25/09/2026 — 19:13** — V4.3 : ajout d’un menu Paramètres sur `/pulls`, organisé par catégories, pour activer ou désactiver individuellement le design des cartes, Wikipédia/Wikimedia, les outils de prix et collection, les fonctions de paquets et l’estimation des échanges.
 - **25/09/2026 — 18:48** — V4.2.2 : correction du suivi des statistiques de tirage après la modularisation (`recordPullStats`).
 - **25/09/2026 — 18:00** — V4.2 / V4.2.1 : cartes full-art/holographiques avec couleurs adaptées à l’image, détection automatique du ratio portrait/carré/paysage, rendu plus propre du fond et suppression du flou derrière le texte. Suppression du flash de l’ancien design grâce à un skeleton/spinner avant l’affichage de la carte améliorée. Architecture entièrement découpée par fonctionnalités : prix, collection, classement, ventes, paquets, échanges, effets de cartes et bridge réseau.
