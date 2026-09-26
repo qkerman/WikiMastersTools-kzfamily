@@ -52,6 +52,7 @@ Puis cliquer sur **Recharger** dans `chrome://extensions/` et faire un F5 sur Wi
 
 *Heure de Paris*
 
+- **26/09/2026 — 11:22** — V4.15.2 : correction du prix moyen sur les pages détail `/marketplace/<id>`. Si la requête initiale a été faite avant l’installation du bridge, l’annonce est maintenant rechargée explicitement pour récupérer la carte et son prix moyen.
 - **26/09/2026 — 10:12** — V4.15.1 : le badge « Possédée » reste visible sur les cartes full-art du Marketplace, sans réafficher attaque/défense.
 - **26/09/2026 — 10:05** — V4.15.0 : correction du numéro de version pour publication Chrome Web Store, désormais supérieur à la version déjà publiée 4.14.1.
 - **25/09/2026 — 20:24** — V4.4.1 : correction du design amélioré sur `/guild` et, plus généralement, sur toute page contenant des cartes `glow-*` après une navigation SPA. Le skeleton ne reste plus bloqué indéfiniment.
