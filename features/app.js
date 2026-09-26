@@ -173,7 +173,7 @@
         scheduleRender(0);
       });
 
-      console.debug('[WM Average] app module v4.4.1 prêt');
+      console.debug('[WM Average] app module v4.15.2 prêt');
 
       return { startObserver };
     }
