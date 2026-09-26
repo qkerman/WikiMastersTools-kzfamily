@@ -11,6 +11,8 @@
 
       let collectionPriceObserver = null;
       let marketplaceCardId = null;
+      let marketplaceRequestedPath = null;
+      let marketplaceRequestedAt = 0;
       let globalCollectionCardId = null;
       let globalCollectionInitializedId = null;
 
@@ -442,6 +444,8 @@
         if (!card?.id || !card?.title) return;
 
         marketplaceCardId = card.id;
+        marketplaceRequestedPath = location.pathname;
+        marketplaceRequestedAt = Date.now();
         registerCards([card]);
         renderMarketplaceAverage(card.id);
 
@@ -469,7 +473,38 @@
 
 
       function renderMarketplaceCurrent() {
-        if (marketplaceCardId) renderMarketplaceAverage(marketplaceCardId);
+        if (!runtime.settings.isEnabled('marketplacePrice')) {
+          document.getElementById('wm-marketplace-average')?.remove();
+          return;
+        }
+
+        if (!isMarketplaceDetailPage()) return;
+
+        if (marketplaceCardId) {
+          renderMarketplaceAverage(marketplaceCardId);
+          return;
+        }
+
+        const match = location.pathname.match(
+          /^\/marketplace\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/?$/i
+        );
+        const auctionId = match?.[1];
+        if (!auctionId) return;
+
+        const now = Date.now();
+        if (
+          marketplaceRequestedPath === location.pathname &&
+          now - marketplaceRequestedAt < 2500
+        ) {
+          return;
+        }
+
+        marketplaceRequestedPath = location.pathname;
+        marketplaceRequestedAt = now;
+
+        window.dispatchEvent(new CustomEvent('wm-average-load-marketplace-detail', {
+          detail: { auctionId }
+        }));
       }
 
       return {
