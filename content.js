@@ -55,6 +55,7 @@
     idByTitle: runtime.core.idByTitle,
     cardMetaById: runtime.core.cardMetaById,
     imageResolver: runtime.imageResolver,
+    isMarketplacePage: runtime.core.isMarketplacePage,
     isFeatureEnabled: runtime.settings.isEnabled
   });
 
@@ -99,5 +100,5 @@
   runtime.app = featureRegistry.app.create(runtime);
 
   runtime.app.startObserver();
-  console.debug('[WM Average] runtime modulaire v4.4.0 chargé');
+  console.debug('[WM Average] runtime modulaire v4.15.1 chargé');
 })();
