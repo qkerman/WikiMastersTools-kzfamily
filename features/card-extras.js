@@ -3,7 +3,7 @@
 
   registry.cardExtras = {
     create(deps) {
-      const { normalizeTitle, idByTitle, cardMetaById, imageResolver, isFeatureEnabled } = deps;
+      const { normalizeTitle, idByTitle, cardMetaById, imageResolver, isMarketplacePage, isFeatureEnabled } = deps;
       let cardExtrasObserver = null;
       function wikipediaUrlFor(title, meta = null) {
         if (meta?.wikipediaUrl) return meta.wikipediaUrl;
@@ -12,6 +12,34 @@
         return `https://fr.wikipedia.org/wiki/${encodeURIComponent(normalized.replace(/ /g, '_'))}`;
       }
     
+      function ensureMarketplaceOwnedBadge(card) {
+        const existing = card?.querySelector(':scope > .wm-owned-badge');
+
+        if (!card || !isMarketplacePage()) {
+          existing?.remove();
+          return;
+        }
+
+        const source = [...card.querySelectorAll('span')].find((span) => (
+          span.getAttribute('title') === 'Dans ta collection' ||
+          normalizeTitle(span.textContent).toLocaleLowerCase('fr') === 'possédée'
+        ));
+
+        if (!source) {
+          existing?.remove();
+          return;
+        }
+
+        if (existing) return;
+
+        const badge = document.createElement('span');
+        badge.className = 'wm-owned-badge';
+        badge.textContent = 'Possédée';
+        badge.title = 'Dans ta collection';
+        badge.setAttribute('aria-label', 'Possédée — dans ta collection');
+        card.append(badge);
+      }
+
       function ensureWikipediaButton(card) {
         if (!card || card.querySelector(':scope > .wm-wikipedia-card-button')) return;
     
@@ -397,8 +425,10 @@
 
           if (premiumEnabled) {
             ensurePremiumCardFx(card);
+            ensureMarketplaceOwnedBadge(card);
           } else {
             card.classList.remove('wm-premium-card');
+            card.querySelector(':scope > .wm-owned-badge')?.remove();
             delete card.dataset.wmPremiumReady;
           }
 
