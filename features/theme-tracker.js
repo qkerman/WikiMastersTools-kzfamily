@@ -566,13 +566,32 @@ LIMIT ${MAX_SEMANTIC_TITLES}
       }
 
       async function resolveWikiMastersTitles(titles, directCards, report) {
-        const list = [...titles].slice(0, MAX_SEMANTIC_TITLES);
+        const direct = Array.isArray(directCards) ? directCards : [];
+        const directTitles = new Set(direct.map((card) => normalize(card?.title)).filter(Boolean));
+        const list = [...titles]
+          .filter((title) => !directTitles.has(normalize(title)))
+          .slice(0, MAX_SEMANTIC_TITLES);
+
+        const merged = new Map();
+        for (const card of direct) {
+          if (card?.id && card?.title) merged.set(card.id, card);
+        }
+
+        if (!list.length) {
+          report({
+            stage: 'resolve',
+            percent: 82,
+            title: 'WikiMasters',
+            detail: `Toutes les cartes ont déjà été résolues par la recherche directe.`
+          });
+          return [...merged.values()];
+        }
 
         report({
           stage: 'resolve',
           percent: 52,
           title: 'WikiMasters',
-          detail: `Correspondance de ${list.length.toLocaleString('fr-FR')} titres par lots…`
+          detail: `Correspondance de ${list.length.toLocaleString('fr-FR')} titres restants par lots…`
         });
 
         const result = await bridgeRequest(
@@ -584,7 +603,9 @@ LIMIT ${MAX_SEMANTIC_TITLES}
             progressName: 'wm-average-family-resolve-progress',
             onProgress: (progress) => {
               const ratio = progress.batches
-                ? progress.batch / progress.batches
+                ? progress.completedBatches
+                  ? progress.completedBatches / progress.batches
+                  : progress.batch / progress.batches
                 : 0;
               const percent = 52 + Math.round(ratio * 30);
 
@@ -604,20 +625,20 @@ LIMIT ${MAX_SEMANTIC_TITLES}
                   stage: 'resolve',
                   percent: Math.max(percent, 78),
                   title: 'WikiMasters — récupération',
-                  detail: `Nouveau passage sur les lots échoués : ${progress.recoveryIndex}/${progress.recoveryTotal} • ${(progress.matchedCards || 0).toLocaleString('fr-FR')} cartes récupérées`
+                  detail: `Récupération des lots problématiques • ${(progress.matchedCards || 0).toLocaleString('fr-FR')} cartes récupérées`
                 });
                 return;
               }
 
               const failedCopy = progress.failedBatches
-                ? ` • ${progress.failedBatches} lot(s) à réessayer`
+                ? ` • ${progress.failedBatches} lot(s) à récupérer`
                 : '';
 
               report({
                 stage: 'resolve',
                 percent,
                 title: 'WikiMasters',
-                detail: `Lot ${progress.batch}/${progress.batches} • ${(progress.matchedCards || 0).toLocaleString('fr-FR')} cartes trouvées${failedCopy}`
+                detail: `${progress.completedBatches || progress.batch}/${progress.batches} lots • ${(progress.matchedCards || 0).toLocaleString('fr-FR')} cartes trouvées${failedCopy}`
               });
             }
           }
@@ -632,13 +653,11 @@ LIMIT ${MAX_SEMANTIC_TITLES}
             stage: 'resolve',
             percent: 82,
             title: 'WikiMasters',
-            detail: `${(result.cards?.length || 0).toLocaleString('fr-FR')} cartes récupérées • ${result.failedBatches} lot(s) toujours indisponible(s), création poursuivie.`
+            detail: `${(result.cards?.length || 0).toLocaleString('fr-FR')} cartes récupérées • quelques titres restent indisponibles, création poursuivie.`
           });
         }
 
-        const merged = new Map();
-
-        for (const card of [...(Array.isArray(result.cards) ? result.cards : []), ...(directCards || [])]) {
+        for (const card of Array.isArray(result.cards) ? result.cards : []) {
           if (card?.id && card?.title) merged.set(card.id, card);
         }
 
