@@ -532,3 +532,150 @@ html.wm-theme-route main > :not(#wm-theme-tracker-page) {
     padding: 8px 5px;
   }
 }
+
+
+/* v4.19 — familles sémantiques + vraies cartes full-art */
+.wm-family-results {
+  grid-template-columns: repeat(auto-fill, minmax(235px, 1fr));
+  gap: 18px;
+  align-items: start;
+}
+
+.wm-family-card-slot {
+  min-width: 0;
+  width: 100%;
+}
+
+.wm-family-native-card {
+  position: relative !important;
+  width: 100% !important;
+  aspect-ratio: 288 / 420;
+  min-height: 0 !important;
+}
+
+.wm-family-native-card > div[class*="top-0"][class*="h-[45%]"] {
+  position: absolute;
+}
+
+.wm-family-native-card > div[class*="top-[45%]"] {
+  position: absolute;
+}
+
+.wm-family-native-card > div[class*="top-2"][class*="left-2"] {
+  position: absolute;
+}
+
+.wm-family-possession-badge {
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  z-index: 45;
+  display: inline-flex;
+  align-items: center;
+  min-height: 25px;
+  padding: 0 8px;
+  border: 1px solid rgba(110, 231, 183, 0.72);
+  border-radius: 8px;
+  background: rgba(6, 78, 59, 0.91);
+  color: #a7f3d0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.42);
+  font-size: 8.5px;
+  font-weight: 900;
+  line-height: 1;
+  pointer-events: none;
+}
+
+.wm-family-possession-badge.is-missing {
+  border-color: rgba(148, 163, 184, 0.42);
+  background: rgba(8, 10, 14, 0.82);
+  color: #cbd5e1;
+}
+
+.wm-family-progress-overlay {
+  cursor: wait;
+}
+
+.wm-family-progress-modal {
+  width: min(460px, 100%);
+}
+
+.wm-family-progress-modal[data-mode="error"] {
+  cursor: default;
+}
+
+.wm-family-progress-stage {
+  display: block;
+  margin-top: 20px;
+  color: var(--color-foreground);
+  font-size: 13px;
+}
+
+.wm-family-progress-detail {
+  min-height: 34px;
+  margin: 6px 0 12px !important;
+  color: color-mix(in srgb, var(--color-foreground) 58%, transparent) !important;
+  font-size: 11px !important;
+  line-height: 1.45;
+}
+
+.wm-family-build-progress {
+  width: 100%;
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-foreground) 9%, transparent);
+}
+
+.wm-family-build-progress > span {
+  display: block;
+  width: 0;
+  height: 100%;
+  border-radius: inherit;
+  background: #8b5cf6;
+  transition: width 180ms ease;
+}
+
+.wm-family-build-percent {
+  display: block;
+  margin-top: 7px;
+  color: rgb(196, 181, 253);
+  font-size: 11px;
+  font-weight: 850;
+  text-align: right;
+}
+
+.wm-family-progress-note {
+  margin-top: 14px;
+  padding: 9px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 9px;
+  color: color-mix(in srgb, var(--color-foreground) 48%, transparent);
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.wm-family-progress-modal[data-mode="error"] .wm-family-build-progress > span {
+  background: #ef4444;
+}
+
+.wm-family-progress-modal[data-mode="error"] .wm-family-build-percent {
+  color: #fca5a5;
+}
+
+.wm-family-progress-modal .wm-family-secondary {
+  margin: 14px 0 0 auto;
+}
+
+@media (max-width: 700px) {
+  .wm-family-results {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .wm-family-possession-badge {
+    top: 5px;
+    right: 5px;
+    padding: 0 6px;
+    font-size: 7.5px;
+  }
+}
