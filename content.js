@@ -19,6 +19,7 @@
     'ranking',
     'collectionBulk',
     'extraTools',
+    'themeTracker',
     'app'
   ];
 
@@ -99,6 +100,7 @@
   runtime.ranking = featureRegistry.ranking.create(runtime);
   runtime.collectionBulk = featureRegistry.collectionBulk.create(runtime);
   runtime.extraTools = featureRegistry.extraTools.create(runtime);
+  runtime.themeTracker = featureRegistry.themeTracker.create(runtime);
   runtime.app = featureRegistry.app.create(runtime);
 
   runtime.app.startObserver();
