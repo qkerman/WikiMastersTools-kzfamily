@@ -643,6 +643,80 @@
         card.addEventListener('pointercancel', resetPointer, { passive: true });
       }
     
+      function createCardElement(meta, options = {}) {
+        if (!meta?.id || !meta?.title) return null;
+
+        const rarity = ['L', 'UR', 'SR', 'R', 'PC', 'C'].includes(meta.rarity)
+          ? meta.rarity
+          : 'C';
+
+        const card = document.createElement('div');
+        card.className = `wm-family-native-card relative overflow-hidden glow-${rarity.toLowerCase()}`;
+        card.dataset.wmCardId = meta.id;
+
+        const artLayer = document.createElement('div');
+        artLayer.className = 'absolute top-0 left-0 right-0 h-[45%]';
+
+        const artInner = document.createElement('div');
+        artInner.className = 'relative w-full h-full';
+
+        const image = document.createElement('img');
+        image.alt = meta.imageUrl ? meta.title : 'WikiMasters';
+        image.loading = 'lazy';
+        image.referrerPolicy = 'no-referrer';
+        if (meta.imageUrl) {
+          image.src = meta.imageUrl;
+          image.crossOrigin = 'anonymous';
+        } else {
+          image.src = '/logo.png';
+        }
+
+        const oldFade = document.createElement('div');
+        oldFade.className = 'absolute bottom-0 left-0 right-0 h-1/2';
+
+        artInner.append(image, oldFade);
+        artLayer.append(artInner);
+
+        const textLayer = document.createElement('div');
+        textLayer.className = 'absolute top-[45%] left-0 right-0 bottom-0 flex flex-col';
+
+        const title = document.createElement('h3');
+        title.textContent = meta.title;
+
+        const description = document.createElement('p');
+        description.textContent =
+          String(meta.category || '').trim() ||
+          String(meta.summary || '').replace(/\s+/g, ' ').trim().slice(0, 120);
+
+        const stats = document.createElement('div');
+        stats.className = 'mt-auto';
+
+        textLayer.append(title);
+        if (description.textContent) textLayer.append(description);
+        textLayer.append(stats);
+
+        const rarityBadge = document.createElement('div');
+        rarityBadge.className = 'absolute top-2 left-2';
+        rarityBadge.textContent = rarity;
+
+        if (options.owned === true) {
+          const owned = document.createElement('span');
+          owned.className = 'wm-family-possession-badge';
+          owned.textContent = Number(options.ownedCount) > 1
+            ? `✓ Possédée ×${Number(options.ownedCount)}`
+            : '✓ Possédée';
+          card.append(owned);
+        } else if (options.owned === false) {
+          const missing = document.createElement('span');
+          missing.className = 'wm-family-possession-badge is-missing';
+          missing.textContent = 'Manquante';
+          card.append(missing);
+        }
+
+        card.append(artLayer, textLayer, rarityBadge);
+        return card;
+      }
+
       function renderCardExtras() {
         const premiumEnabled = isFeatureEnabled('premiumCards');
         const wikipediaEnabled = isFeatureEnabled('wikipediaButtons');
@@ -690,7 +764,7 @@
       }
     
     
-      return { renderCardExtras };
+      return { renderCardExtras, createCardElement };
     }
   };
 })();
