@@ -4,11 +4,8 @@
   registry.themeTracker = {
     create(runtime) {
       const {
-        ALL_COLLECTION_KEY,
         readLocalValue,
         writeLocalValue,
-        storageGet,
-        storageSet,
         registerCards
       } = runtime.core;
 
@@ -20,6 +17,9 @@
       const MAX_CATEGORY_REQUESTS = 12;
       const MAX_CATEGORY_DEPTH = 2;
       const MAX_DIRECT_SEARCH_PAGES = 4;
+      const MAX_OWNERSHIP_KEYWORDS = 8;
+      const MAX_OWNERSHIP_PAGES_PER_KEYWORD = 10;
+      const OWNERSHIP_COVERAGE_TARGET = 0.92;
 
       let activeFamilyId = null;
       let currentFilter = 'all';
@@ -645,68 +645,268 @@ LIMIT ${MAX_SEMANTIC_TITLES}
         return [...merged.values()];
       }
 
-      async function loadOwnedCards(report) {
-        const cached = storageGet(ALL_COLLECTION_KEY)[ALL_COLLECTION_KEY];
+      const OWNERSHIP_STOPWORDS = new Set([
+        'avec', 'dans', 'pour', 'sans', 'sous', 'chez', 'entre', 'vers', 'plus',
+        'moins', 'ainsi', 'comme', 'dont', 'leur', 'leurs', 'cette', 'celui', 'celle',
+        'ceux', 'elles', 'elle', 'lui', 'des', 'les', 'une', 'un', 'du', 'de', 'la',
+        'le', 'et', 'en', 'au', 'aux', 'sur', 'par', 'est', 'sont', 'être',
+        'groupe', 'type', 'genre', 'forme', 'personne', 'personnes', 'article'
+      ]);
 
-        if (
-          cached?.complete === true &&
-          Array.isArray(cached.cards) &&
-          Date.now() - (Number(cached.fetchedAt) || 0) < 5 * 60 * 1000
+      function tokenizeOwnershipText(value) {
+        return normalize(value)
+          .split(' ')
+          .map((token) => token.trim())
+          .filter((token) =>
+            token.length >= 4 &&
+            !OWNERSHIP_STOPWORDS.has(token) &&
+            !/^\d+$/.test(token)
+          );
+      }
+
+      function ownershipCorpus(card) {
+        return normalize([
+          card?.title,
+          card?.category
+        ].filter(Boolean).join(' '));
+      }
+
+      function buildOwnershipKeywords(cards, familyKeyword) {
+        const familyIds = new Set(cards.map((card) => card.id).filter(Boolean));
+        const corpusById = new Map(
+          cards
+            .filter((card) => card?.id)
+            .map((card) => [card.id, ownershipCorpus(card)])
+        );
+
+        const coverage = new Map();
+
+        const addCandidate = (candidate) => {
+          const clean = normalize(candidate);
+          if (!clean || clean.length < 4 || OWNERSHIP_STOPWORDS.has(clean)) return;
+
+          let set = coverage.get(clean);
+          if (!set) {
+            set = new Set();
+            coverage.set(clean, set);
+          }
+
+          for (const [id, corpus] of corpusById) {
+            if (corpus.includes(clean)) set.add(id);
+          }
+        };
+
+        addCandidate(familyKeyword);
+
+        for (const card of cards) {
+          const titleTokens = tokenizeOwnershipText(card?.title);
+          const categoryTokens = tokenizeOwnershipText(card?.category);
+
+          for (const token of [...titleTokens, ...categoryTokens]) {
+            addCandidate(token);
+          }
+
+          const phrases = [];
+          for (const tokens of [titleTokens, categoryTokens]) {
+            for (let index = 0; index < tokens.length - 1; index += 1) {
+              phrases.push(`${tokens[index]} ${tokens[index + 1]}`);
+            }
+          }
+
+          for (const phrase of phrases) addCandidate(phrase);
+        }
+
+        // Supprime les termes qui ne couvrent pratiquement rien.
+        for (const [keyword, ids] of [...coverage]) {
+          if (!ids.size) coverage.delete(keyword);
+        }
+
+        const selected = [];
+        const covered = new Set();
+        const normalizedFamilyKeyword = normalize(familyKeyword);
+
+        const addSelected = (keyword) => {
+          if (!keyword || selected.includes(keyword)) return;
+          selected.push(keyword);
+          for (const id of coverage.get(keyword) || []) covered.add(id);
+        };
+
+        if (coverage.has(normalizedFamilyKeyword)) {
+          addSelected(normalizedFamilyKeyword);
+        }
+
+        while (
+          selected.length < MAX_OWNERSHIP_KEYWORDS &&
+          covered.size / Math.max(1, familyIds.size) < OWNERSHIP_COVERAGE_TARGET
         ) {
+          let best = null;
+
+          for (const [keyword, ids] of coverage) {
+            if (selected.includes(keyword)) continue;
+
+            let gain = 0;
+            for (const id of ids) {
+              if (!covered.has(id)) gain += 1;
+            }
+
+            if (!gain) continue;
+
+            const score =
+              gain * 100 +
+              Math.min(ids.size, 30) +
+              Math.min(keyword.length, 24) / 100;
+
+            if (!best || score > best.score) {
+              best = { keyword, gain, score, total: ids.size };
+            }
+          }
+
+          if (!best) break;
+          addSelected(best.keyword);
+        }
+
+        return {
+          keywords: selected,
+          coveredCards: covered.size,
+          totalCards: familyIds.size,
+          estimatedCoverage: familyIds.size
+            ? covered.size / familyIds.size
+            : 0
+        };
+      }
+
+      function mapOwnedCollectionEntry(entry) {
+        const card = entry?.card;
+        const id = entry?.card_id || card?.id;
+        if (!id) return null;
+
+        return {
+          id,
+          count: Math.max(1, Number(entry?.count) || 1),
+          ownedCardId: entry?.id || null
+        };
+      }
+
+      async function searchOwnedByKeyword(keyword, familyIds, report, keywordIndex, keywordTotal) {
+        const found = new Map();
+        let firstPageSize = 0;
+
+        for (let page = 0; page < MAX_OWNERSHIP_PAGES_PER_KEYWORD; page += 1) {
+          const url = `/api/my-collection?sort=rarity&q=${encodeURIComponent(keyword)}&page=${page}&stats=0`;
+          const json = await fetchJson(url, { credentials: 'include' });
+          const rows = Array.isArray(json?.collection) ? json.collection : [];
+
+          if (page === 0) firstPageSize = rows.length;
+
+          for (const row of rows) {
+            const owned = mapOwnedCollectionEntry(row);
+            if (!owned || !familyIds.has(owned.id)) continue;
+
+            const previous = found.get(owned.id) || {
+              id: owned.id,
+              count: 0,
+              ownedCardIds: new Set()
+            };
+
+            previous.count += owned.count;
+            if (owned.ownedCardId) previous.ownedCardIds.add(owned.ownedCardId);
+            found.set(owned.id, previous);
+          }
+
           report({
             stage: 'ownership',
-            percent: 94,
+            percent: 84 + Math.round(((keywordIndex + (page + 1) / MAX_OWNERSHIP_PAGES_PER_KEYWORD) / Math.max(1, keywordTotal)) * 10),
             title: 'Ta collection',
-            detail: `${cached.cards.length.toLocaleString('fr-FR')} cartes déjà en cache.`
+            detail: `${keywordIndex + 1}/${keywordTotal} : “${keyword}” • ${found.size.toLocaleString('fr-FR')} carte(s) de cette famille retrouvée(s)`
           });
-          return cached.cards;
+
+          const hasMore =
+            typeof json?.searchHasMore === 'boolean'
+              ? json.searchHasMore
+              : null;
+
+          if (!rows.length || hasMore === false) break;
+          if (hasMore == null && firstPageSize > 0 && rows.length < firstPageSize) break;
+
+          await wait(45);
         }
+
+        return [...found.values()].map((item) => ({
+          id: item.id,
+          count: Math.max(item.count, item.ownedCardIds.size || 1),
+          ownedCardIds: [...item.ownedCardIds]
+        }));
+      }
+
+      async function loadOwnedCardsForFamily(cards, familyKeyword, report) {
+        const plan = buildOwnershipKeywords(cards, familyKeyword);
+        const keywords = plan.keywords.length
+          ? plan.keywords
+          : [normalize(familyKeyword)].filter(Boolean);
 
         report({
           stage: 'ownership',
           percent: 84,
           title: 'Ta collection',
-          detail: 'Synchronisation des cartes possédées…'
+          detail: `${keywords.length} mot(s)-clé(s) retenu(s) • couverture estimée ${Math.round(plan.estimatedCoverage * 100)} %`
         });
 
-        const result = await bridgeRequest(
-          'wm-average-load-all-collection',
-          'wm-average-all-collection',
-          { selectedRarities: [] },
-          {
-            timeoutMs: 120000,
-            progressName: 'wm-average-all-collection-progress',
-            onProgress: (progress) => {
-              const totalPages = Number(progress.totalPages) || 0;
-              const loadedPages = Number(progress.loadedPages) || 0;
-              const ratio = totalPages > 0 ? loadedPages / totalPages : 0;
+        const familyIds = new Set(cards.map((card) => card.id).filter(Boolean));
+        const merged = new Map();
 
-              report({
-                stage: 'ownership',
-                percent: 84 + Math.min(10, Math.round(ratio * 10)),
-                title: 'Ta collection',
-                detail: totalPages > 0
-                  ? `Page ${loadedPages}/${totalPages}`
-                  : `Page ${loadedPages}`
-              });
-            }
+        for (let index = 0; index < keywords.length; index += 1) {
+          let results = [];
+
+          try {
+            results = await searchOwnedByKeyword(
+              keywords[index],
+              familyIds,
+              report,
+              index,
+              keywords.length
+            );
+          } catch (error) {
+            console.debug('[WM Average] recherche possession ignorée après retries', keywords[index], error);
+            report({
+              stage: 'ownership',
+              percent: 84 + Math.round(((index + 1) / Math.max(1, keywords.length)) * 10),
+              title: 'Ta collection',
+              detail: `“${keywords[index]}” indisponible après plusieurs essais • poursuite`
+            });
+            continue;
           }
-        );
 
-        if (!result.ok) {
-          throw new Error(result.error || 'Impossible de synchroniser ta collection.');
+          for (const item of results) {
+            const previous = merged.get(item.id) || {
+              id: item.id,
+              count: 0,
+              ownedCardIds: new Set()
+            };
+
+            previous.count = Math.max(previous.count, item.count || 1);
+            for (const ownedId of item.ownedCardIds || []) {
+              previous.ownedCardIds.add(ownedId);
+            }
+            merged.set(item.id, previous);
+          }
         }
 
-        const cards = Array.isArray(result.cards) ? result.cards : [];
-        storageSet({
-          [ALL_COLLECTION_KEY]: {
-            fetchedAt: Date.now(),
-            cards,
-            complete: result.complete !== false
-          }
+        report({
+          stage: 'ownership',
+          percent: 94,
+          title: 'Ta collection',
+          detail: `${merged.size.toLocaleString('fr-FR')} carte(s) possédée(s) retrouvée(s) avec ${keywords.length} recherche(s)`
         });
 
-        return cards;
+        return {
+          ownedCards: [...merged.values()].map((item) => ({
+            id: item.id,
+            count: Math.max(item.count, item.ownedCardIds.size || 1),
+            ownedCardIds: [...item.ownedCardIds]
+          })),
+          keywords,
+          estimatedCoverage: plan.estimatedCoverage
+        };
       }
 
       function applyOwnership(cards, ownedCards) {
@@ -793,8 +993,8 @@ LIMIT ${MAX_SEMANTIC_TITLES}
           throw new Error('Aucune carte WikiMasters correspondante n’a été trouvée.');
         }
 
-        const ownedCards = await loadOwnedCards(report);
-        const cards = applyOwnership(resolved, ownedCards)
+        const ownership = await loadOwnedCardsForFamily(resolved, cleanKeyword, report);
+        const cards = applyOwnership(resolved, ownership.ownedCards)
           .sort((a, b) => a.title.localeCompare(b.title, 'fr'));
 
         registerCards(cards.map((card) => ({
@@ -828,7 +1028,9 @@ LIMIT ${MAX_SEMANTIC_TITLES}
             matchedCards: cards.length,
             wikidataEntity: wikidata?.entity || null,
             wikipediaCategories: wikipedia?.roots || [],
-            semanticVersion: 1
+            semanticVersion: 2,
+            ownershipKeywords: ownership.keywords,
+            ownershipCoverage: ownership.estimatedCoverage
           }
         };
 
