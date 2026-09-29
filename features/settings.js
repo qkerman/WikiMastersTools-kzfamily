@@ -19,6 +19,7 @@
         bulkPriceLoader: true,
         ranking: true,
         rankingSales: true,
+        themeTracker: true,
         compactMode: true,
         packRecap: true,
         pullStats: true,
@@ -51,6 +52,7 @@
             ['bulkPriceLoader', 'Chargement massif des prix', 'Ajoute « Charger les prix » avec sélection des raretés.'],
             ['ranking', 'Classement « Plus chères »', 'Ajoute le classement des cartes connues par prix moyen.'],
             ['rankingSales', 'Mise en vente depuis le classement', 'Affiche les contrôles pour mettre directement une carte en vente depuis le classement.'],
+            ['themeTracker', 'Collections thématiques', 'Ajoute la page violette de suivi par thème dans le menu WikiMasters.'],
             ['compactMode', 'Mode compact', 'Ajoute le bouton Compact dans les vues collection.']
           ]
         },
