@@ -8,6 +8,7 @@
       const MAX_BULK_PACKS = 100;
       const RARITY_ORDER = ['L', 'UR', 'SR', 'R', 'PC', 'C'];
       const MARKETPLACE_MINE_CACHE_TTL = 15 * 1000;
+      let globalCardsRequestTemplate = null;
 
       function mapEntry(entry) {
         const card = entry && entry.card;
@@ -67,6 +68,82 @@
         } catch (_) {
           return false;
         }
+      }
+
+      function isGlobalCardsApi(url) {
+        try {
+          const parsed = new URL(url, location.origin);
+          return parsed.hostname === 'cyrxjeppjqsxxjayfrur.supabase.co' &&
+            parsed.pathname === '/rest/v1/cards';
+        } catch (_) {
+          return false;
+        }
+      }
+
+      function headersToObject(headers) {
+        const result = {};
+        if (!headers) return result;
+        try {
+          new Headers(headers).forEach((value, key) => {
+            result[key] = value;
+          });
+        } catch (_) {}
+        return result;
+      }
+
+      function captureGlobalCardsRequest(input, init = {}) {
+        try {
+          const url = typeof input === 'string' ? input : input?.url;
+          if (!url || !isGlobalCardsApi(url)) return;
+
+          const headers = {
+            ...headersToObject(input?.headers),
+            ...headersToObject(init?.headers)
+          };
+
+          globalCardsRequestTemplate = { url: String(url), headers };
+        } catch (_) {}
+      }
+
+      function getGlobalCardsRequestTemplate() {
+        if (!globalCardsRequestTemplate) return null;
+        return {
+          url: globalCardsRequestTemplate.url,
+          headers: { ...(globalCardsRequestTemplate.headers || {}) }
+        };
+      }
+
+      function extractGlobalCards(json) {
+        const rows = Array.isArray(json)
+          ? json
+          : Array.isArray(json?.data)
+            ? json.data
+            : [];
+
+        return rows.map((card) => {
+          if (!card?.id || !card?.wikipedia_title) return null;
+          return {
+            id: card.id,
+            title: card.wikipedia_title,
+            rarity: card.rarity || null,
+            imageUrl: card.image_url || null,
+            wikipediaUrl: card.wikipedia_url || null,
+            summary: typeof card.summary === 'string'
+              ? card.summary
+              : card.summary
+                ? JSON.stringify(card.summary)
+                : '',
+            count: 1
+          };
+        }).filter(Boolean);
+      }
+
+      function emitGlobalCatalogue(json) {
+        const cards = extractGlobalCards(json);
+        if (!cards.length) return;
+        window.dispatchEvent(new CustomEvent('wm-average-global-catalogue', {
+          detail: { cards }
+        }));
       }
 
       function getGlobalCollectionSummaryCardId(url) {
@@ -268,6 +345,8 @@
         originalFetch, MAX_COLLECTION_PAGES, MAX_BULK_PACKS, RARITY_ORDER,
         MARKETPLACE_MINE_CACHE_TTL, mapEntry, extractCards, emitCollection,
         isMarketplaceDetailApi, isPacksOpenApi, isTradesApi,
+        isGlobalCardsApi, captureGlobalCardsRequest, getGlobalCardsRequestTemplate,
+        extractGlobalCards, emitGlobalCatalogue,
         getGlobalCollectionSummaryCardId, emitGlobalCollectionInspectedCard,
         mapPackCards, emitPackOpened, mapTrade, emitTrades, fetchTrades,
         emitMarketplaceDetail, fetchJsonRetry
