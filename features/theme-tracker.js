@@ -1252,9 +1252,12 @@ LIMIT ${MAX_SEMANTIC_TITLES}
         return slot;
       }
 
-      function renderDetailGrid(family, container) {
+      function renderDetailGrid(family, container, options = {}) {
         const cards = filteredCards(family);
-        const shown = cards.slice(0, visibleCount);
+        const grid = container.querySelector('[data-role="cards"]');
+        const count = container.querySelector('[data-role="count"]');
+        const more = container.querySelector('[data-role="more"]');
+        if (!grid || !count || !more) return;
 
         registerCards((family.cards || []).map((card) => ({
           id: card.id,
@@ -1265,24 +1268,27 @@ LIMIT ${MAX_SEMANTIC_TITLES}
           count: Math.max(1, card.ownedCount || 1)
         })));
 
-        const grid = container.querySelector('[data-role="cards"]');
-        const count = container.querySelector('[data-role="count"]');
-        const more = container.querySelector('[data-role="more"]');
+        const append = Boolean(options.append);
+        const previousVisible = append
+          ? Math.min(Number(grid.dataset.visibleCount) || 0, cards.length)
+          : 0;
+        const nextVisible = Math.min(visibleCount, cards.length);
 
-        grid.replaceChildren();
+        if (!append) grid.replaceChildren();
+
         const fragment = document.createDocumentFragment();
-
-        for (const card of shown) {
+        for (const card of cards.slice(previousVisible, nextVisible)) {
           const element = createRealCard(card);
           if (element) fragment.append(element);
         }
 
         grid.append(fragment);
+        grid.dataset.visibleCount = String(nextVisible);
         count.textContent = `${cards.length.toLocaleString('fr-FR')} carte${cards.length > 1 ? 's' : ''}`;
 
-        if (shown.length < cards.length) {
+        if (nextVisible < cards.length) {
           more.hidden = false;
-          more.textContent = `Afficher ${Math.min(CARD_BATCH, cards.length - shown.length)} de plus`;
+          more.textContent = `Afficher ${Math.min(CARD_BATCH, cards.length - nextVisible)} de plus`;
         } else {
           more.hidden = true;
         }
@@ -1412,7 +1418,7 @@ LIMIT ${MAX_SEMANTIC_TITLES}
         more.dataset.role = 'more';
         more.addEventListener('click', () => {
           visibleCount += CARD_BATCH;
-          renderDetailGrid(family, wrap);
+          renderDetailGrid(family, wrap, { append: true });
         });
 
         wrap.append(top, heading, progress, filters, toolbar, grid, more);
