@@ -258,7 +258,7 @@
 
           if (page === 0) {
             total = readTotal(json, pageRows.length);
-            firstPageSize = pageRows.length || PAGE_SIZE_FALLBACK;
+            firstPageSize = PAGE_SIZE_FALLBACK;
 
             if (total != null && total > MAX_RESULTS) {
               throw new Error(`Cette recherche contient ${total.toLocaleString('fr-FR')} résultats. Utilise un mot-clé plus précis (maximum ${MAX_RESULTS.toLocaleString('fr-FR')}).`);
