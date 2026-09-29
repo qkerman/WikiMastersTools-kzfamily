@@ -11,6 +11,7 @@
 
       function renderAll() {
         runtime.settings.ensureButton();
+        runtime.themeTracker.render();
 
         if (isCollectionPage()) {
           runtime.collectionBulk.ensureToolbar();
@@ -37,7 +38,7 @@
           runtime.trades.renderTradeDetailCards();
         }
 
-        if (isGlobalCollectionPage()) {
+        if (isGlobalCollectionPage() && !runtime.themeTracker.isThemePage()) {
           runtime.priceUi.ensureGlobalCollectionInspectedCard();
           runtime.priceUi.renderGlobalCollectionInspectedCard();
         }
@@ -105,7 +106,7 @@
             '.wm-trade-values-controls, #wm-open-all-overlay, .wm-pull-stats, ' +
             '.wm-wikipedia-card-button, .wm-missing-image-credit, .wm-missing-title-art, .wm-compact-tools, .wm-price-legend, ' +
             '.wm-auto-open-control, .wm-auto-open-help, .wm-settings-launch, .wm-settings-modal, ' +
-            '.wm-copy-card-button, .wm-trade-preview-card'
+            '.wm-copy-card-button, .wm-trade-preview-card, #wm-theme-tracker-page, #wm-theme-tracker-nav'
           )
         );
       }
