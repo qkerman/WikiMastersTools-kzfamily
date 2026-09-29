@@ -11,6 +11,8 @@
       const SUPABASE_HOST = 'cyrxjeppjqsxxjayfrur.supabase.co';
       const BATCH_SIZE = 40;
       const TEMPLATE_WAIT_MS = 5000;
+      const RETRY_ATTEMPTS = 4;
+      const RECOVERY_ATTEMPTS = 3;
 
       const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -47,7 +49,23 @@
         };
       }
 
-      async function fetchBatch(template, titles) {
+      function retryDelay(attempt) {
+        return Math.min(5000, 550 * (2 ** Math.max(0, attempt - 1)));
+      }
+
+      function shouldRetry(error) {
+        const status = Number(error?.status);
+        if (!Number.isFinite(status)) return true;
+        return status === 408 || status === 425 || status === 429 || status >= 500;
+      }
+
+      function emitProgress(detail) {
+        window.dispatchEvent(new CustomEvent('wm-average-family-resolve-progress', {
+          detail
+        }));
+      }
+
+      async function fetchBatchOnce(template, titles) {
         const url = new URL(`https://${SUPABASE_HOST}/rest/v1/cards`);
         url.searchParams.set(
           'select',
@@ -67,18 +85,72 @@
         delete headers['if-none-match'];
         delete headers['If-None-Match'];
 
-        const response = await originalFetch(url.toString(), {
-          method: 'GET',
-          credentials: 'omit',
-          headers
-        });
+        let response;
+
+        try {
+          response = await originalFetch(url.toString(), {
+            method: 'GET',
+            credentials: 'omit',
+            headers
+          });
+        } catch (error) {
+          const wrapped = new Error(String(error?.message || error || 'Failed to fetch'));
+          wrapped.cause = error;
+          throw wrapped;
+        }
 
         if (!response.ok) {
-          throw new Error(`WikiMasters : HTTP ${response.status}`);
+          const error = new Error(`WikiMasters : HTTP ${response.status}`);
+          error.status = response.status;
+          throw error;
         }
 
         const json = await response.json();
         return Array.isArray(json) ? json.map(mapCard).filter(Boolean) : [];
+      }
+
+      async function fetchBatchWithRetry({
+        requestId,
+        template,
+        titles,
+        batch,
+        batches,
+        maxAttempts = RETRY_ATTEMPTS,
+        phase = 'normal'
+      }) {
+        let lastError = null;
+
+        for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+          try {
+            return await fetchBatchOnce(template, titles);
+          } catch (error) {
+            lastError = error;
+
+            if (attempt >= maxAttempts || !shouldRetry(error)) {
+              break;
+            }
+
+            const delayMs = retryDelay(attempt);
+
+            emitProgress({
+              requestId,
+              batch,
+              batches,
+              retryAttempt: attempt + 1,
+              retryMax: maxAttempts,
+              retryDelayMs: delayMs,
+              retryError: String(error?.message || error),
+              phase
+            });
+
+            await sleep(delayMs);
+
+            // Un nouveau token/header a pu être observé entre-temps.
+            template = getSupabaseRequestTemplate() || template;
+          }
+        }
+
+        throw lastError || new Error('Lot WikiMasters indisponible');
       }
 
       async function resolveTitles(requestId, rawTitles) {
@@ -91,12 +163,12 @@
 
           if (!titles.length) {
             window.dispatchEvent(new CustomEvent('wm-average-family-resolve-result', {
-              detail: { requestId, ok: true, cards: [], totalTitles: 0 }
+              detail: { requestId, ok: true, cards: [], totalTitles: 0, failedBatches: 0 }
             }));
             return;
           }
 
-          const template = await waitForTemplate();
+          let template = await waitForTemplate();
           if (!template?.headers || !Object.keys(template.headers).length) {
             throw new Error('Connexion au catalogue WikiMasters non détectée. Recharge la page puis réessaie.');
           }
@@ -108,23 +180,81 @@
             batches.push(titles.slice(index, index + BATCH_SIZE));
           }
 
-          for (let index = 0; index < batches.length; index += 1) {
-            const cards = await fetchBatch(template, batches[index]);
+          let failed = [];
 
-            for (const card of cards) {
-              cardsById.set(card.id, card);
+          for (let index = 0; index < batches.length; index += 1) {
+            try {
+              const cards = await fetchBatchWithRetry({
+                requestId,
+                template,
+                titles: batches[index],
+                batch: index + 1,
+                batches: batches.length
+              });
+
+              for (const card of cards) {
+                cardsById.set(card.id, card);
+              }
+            } catch (error) {
+              failed.push({
+                index,
+                titles: batches[index],
+                error: String(error?.message || error)
+              });
             }
 
-            window.dispatchEvent(new CustomEvent('wm-average-family-resolve-progress', {
-              detail: {
+            emitProgress({
+              requestId,
+              batch: index + 1,
+              batches: batches.length,
+              processedTitles: Math.min((index + 1) * BATCH_SIZE, titles.length),
+              totalTitles: titles.length,
+              matchedCards: cardsById.size,
+              failedBatches: failed.length,
+              phase: 'normal'
+            });
+          }
+
+          // Deuxième passage uniquement sur les lots qui ont vraiment échoué.
+          if (failed.length) {
+            const retryList = failed;
+            failed = [];
+            template = getSupabaseRequestTemplate() || template;
+
+            for (let recoveryIndex = 0; recoveryIndex < retryList.length; recoveryIndex += 1) {
+              const item = retryList[recoveryIndex];
+
+              emitProgress({
                 requestId,
-                batch: index + 1,
+                batch: item.index + 1,
                 batches: batches.length,
-                processedTitles: Math.min((index + 1) * BATCH_SIZE, titles.length),
-                totalTitles: titles.length,
-                matchedCards: cardsById.size
+                matchedCards: cardsById.size,
+                recoveryIndex: recoveryIndex + 1,
+                recoveryTotal: retryList.length,
+                phase: 'recovery'
+              });
+
+              try {
+                const cards = await fetchBatchWithRetry({
+                  requestId,
+                  template,
+                  titles: item.titles,
+                  batch: item.index + 1,
+                  batches: batches.length,
+                  maxAttempts: RECOVERY_ATTEMPTS,
+                  phase: 'recovery'
+                });
+
+                for (const card of cards) {
+                  cardsById.set(card.id, card);
+                }
+              } catch (error) {
+                failed.push({
+                  ...item,
+                  error: String(error?.message || error)
+                });
               }
-            }));
+            }
           }
 
           window.dispatchEvent(new CustomEvent('wm-average-family-resolve-result', {
@@ -132,7 +262,11 @@
               requestId,
               ok: true,
               cards: [...cardsById.values()],
-              totalTitles: titles.length
+              totalTitles: titles.length,
+              failedBatches: failed.length,
+              failedTitles: failed.reduce((sum, item) => sum + item.titles.length, 0),
+              partial: failed.length > 0,
+              warnings: failed.map((item) => item.error)
             }
           }));
         } catch (error) {
