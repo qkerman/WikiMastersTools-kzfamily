@@ -1461,9 +1461,13 @@ LIMIT ${MAX_SEMANTIC_TITLES}
         const info = document.createElement('p');
         const familyDate = formatDate(family.updatedAt);
         const ownershipDate = formatDate(family.ownershipUpdatedAt || family.updatedAt);
+        const verifiedCoverage = Number(discovery?.ownershipVerifiedCoverage);
+        const verifiedCopy = Number.isFinite(verifiedCoverage)
+          ? ` • ${Math.round(verifiedCoverage * 100)} % vérifié`
+          : '';
         info.textContent = discovery?.candidateTitles
-          ? `${discovery.candidateTitles.toLocaleString('fr-FR')} pages liées → ${stats.total.toLocaleString('fr-FR')} cartes WikiMasters • famille ${familyDate} • possessions ${ownershipDate}`
-          : `Thème : “${family.keyword}” • possessions ${ownershipDate}`;
+          ? `${discovery.candidateTitles.toLocaleString('fr-FR')} pages liées → ${stats.total.toLocaleString('fr-FR')} cartes WikiMasters • famille ${familyDate} • possessions ${ownershipDate}${verifiedCopy}`
+          : `Thème : “${family.keyword}” • possessions ${ownershipDate}${verifiedCopy}`;
 
         copy.append(title, info);
 
