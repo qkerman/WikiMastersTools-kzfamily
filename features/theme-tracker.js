@@ -1605,9 +1605,11 @@ LIMIT ${MAX_SEMANTIC_TITLES}
         return {
           update(progress) {
             const requested = Math.max(0, Math.min(100, Number(progress?.percent) || 0));
+            if (requested >= highestPercent) {
+              stage.textContent = progress?.title || 'Création';
+              detail.textContent = progress?.detail || '';
+            }
             highestPercent = Math.max(highestPercent, requested);
-            stage.textContent = progress?.title || 'Création';
-            detail.textContent = progress?.detail || '';
             fill.style.width = `${highestPercent}%`;
             percent.textContent = `${Math.round(highestPercent)}%`;
           },
