@@ -5,20 +5,27 @@
     create(runtime) {
       const {
         originalFetch, emitCollection, isMarketplaceDetailApi, isPacksOpenApi,
-        isTradesApi, getGlobalCollectionSummaryCardId,
-        emitGlobalCollectionInspectedCard, emitTrades, fetchTrades,
+        isTradesApi, isGlobalCardsApi, captureGlobalCardsRequest,
+        getGlobalCollectionSummaryCardId, emitGlobalCollectionInspectedCard,
+        emitGlobalCatalogue, emitTrades, fetchTrades,
         emitMarketplaceDetail, emitPackOpened
       } = runtime.core;
 
       window.fetch = (...args) => {
+        try {
+          captureGlobalCardsRequest(args[0], args[1] || {});
+        } catch (_) {}
         const fetchPromise = originalFetch(...args);
 
         fetchPromise.then((response) => {
           try {
             const input = args[0];
             const url = typeof input === 'string' ? input : input?.url;
-            if (url && getGlobalCollectionSummaryCardId(url)) {
-              if (response.ok) emitGlobalCollectionInspectedCard(url);
+            if (url && isGlobalCardsApi(url)) {
+              if (response.ok) {
+                response.clone().json().then(emitGlobalCatalogue).catch(() => {});
+                if (getGlobalCollectionSummaryCardId(url)) emitGlobalCollectionInspectedCard(url);
+              }
             } else if (url && url.includes('/api/my-collection')) {
               response.clone().json().then(emitCollection).catch(() => {});
             } else if (url && isTradesApi(url)) {
@@ -51,7 +58,7 @@
             this.__wmUrl &&
             (
               this.__wmUrl.includes('/api/my-collection') ||
-              Boolean(getGlobalCollectionSummaryCardId(this.__wmUrl)) ||
+              isGlobalCardsApi(this.__wmUrl) ||
               isTradesApi(this.__wmUrl) ||
               isMarketplaceDetailApi(this.__wmUrl) ||
               isPacksOpenApi(this.__wmUrl)
@@ -60,8 +67,11 @@
             this.addEventListener('load', () => {
               try {
                 const json = JSON.parse(this.responseText);
-                if (getGlobalCollectionSummaryCardId(this.__wmUrl)) {
-                  emitGlobalCollectionInspectedCard(this.__wmUrl);
+                if (isGlobalCardsApi(this.__wmUrl)) {
+                  emitGlobalCatalogue(json);
+                  if (getGlobalCollectionSummaryCardId(this.__wmUrl)) {
+                    emitGlobalCollectionInspectedCard(this.__wmUrl);
+                  }
                 } else if (this.__wmUrl.includes('/api/my-collection')) {
                   emitCollection(json);
                 } else if (isTradesApi(this.__wmUrl)) {
