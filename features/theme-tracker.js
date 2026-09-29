@@ -980,8 +980,6 @@ LIMIT ${MAX_SEMANTIC_TITLES}
         const cleanKeyword = String(keyword || '').trim();
         if (!cleanKeyword) throw new Error('Entre un thème.');
 
-        const titles = new Set();
-
         report({
           stage: 'start',
           percent: 4,
@@ -989,46 +987,46 @@ LIMIT ${MAX_SEMANTIC_TITLES}
           detail: `Préparation de « ${cleanKeyword} »…`
         });
 
-        let wikidata = null;
-        let wikipedia = null;
+        // Les trois sources sont indépendantes : on les lance ensemble pour
+        // éviter d'additionner leurs temps de réponse.
+        const wikidataTitles = new Set();
+        const wikipediaTitles = new Set();
+        const directTitles = new Set();
 
-        try {
-          wikidata = await discoverWikidata(cleanKeyword, titles, report);
-        } catch (error) {
-          console.debug('[WM Average] découverte Wikidata ignorée', error);
-          report({
-            stage: 'wikidata',
-            percent: 25,
-            title: 'Wikidata',
-            detail: 'Source indisponible, poursuite avec Wikipédia.'
-          });
+        const [wikidataResult, wikipediaResult, directResult] = await Promise.allSettled([
+          discoverWikidata(cleanKeyword, wikidataTitles, report),
+          discoverWikipediaCategories(cleanKeyword, wikipediaTitles, report),
+          discoverDirectWikiMasters(cleanKeyword, directTitles, report)
+        ]);
+
+        const wikidata = wikidataResult.status === 'fulfilled'
+          ? wikidataResult.value
+          : null;
+        const wikipedia = wikipediaResult.status === 'fulfilled'
+          ? wikipediaResult.value
+          : null;
+        const directCards = directResult.status === 'fulfilled'
+          ? directResult.value
+          : [];
+
+        if (wikidataResult.status === 'rejected') {
+          console.debug('[WM Average] découverte Wikidata ignorée', wikidataResult.reason);
+        }
+        if (wikipediaResult.status === 'rejected') {
+          console.debug('[WM Average] catégories Wikipédia ignorées', wikipediaResult.reason);
+        }
+        if (directResult.status === 'rejected') {
+          console.debug('[WM Average] recherche WikiMasters directe ignorée après retries', directResult.reason);
         }
 
-        try {
-          wikipedia = await discoverWikipediaCategories(cleanKeyword, titles, report);
-        } catch (error) {
-          console.debug('[WM Average] catégories Wikipédia ignorées', error);
-          report({
-            stage: 'wikipedia',
-            percent: 45,
-            title: 'Wikipédia',
-            detail: 'Catégories indisponibles, poursuite avec WikiMasters.'
-          });
-        }
+        const titles = new Set();
 
-        let directCards = [];
-
-        try {
-          directCards = await discoverDirectWikiMasters(cleanKeyword, titles, report);
-        } catch (error) {
-          console.debug('[WM Average] recherche WikiMasters directe ignorée après retries', error);
-          report({
-            stage: 'wikimasters-search',
-            percent: 50,
-            title: 'WikiMasters',
-            detail: 'Recherche directe momentanément indisponible après plusieurs essais. Poursuite avec les pages sémantiques.'
-          });
-        }
+        // Priorité aux sources les plus proches du catalogue : recherche directe,
+        // catégories Wikipédia, puis Wikidata. Une source ne peut donc plus
+        // remplir seule les 650 places avant les autres.
+        for (const title of directTitles) addTitle(titles, title);
+        for (const title of wikipediaTitles) addTitle(titles, title);
+        for (const title of wikidataTitles) addTitle(titles, title);
 
         if (!titles.size) {
           throw new Error('Aucune page liée à ce thème n’a été trouvée.');
@@ -1041,8 +1039,11 @@ LIMIT ${MAX_SEMANTIC_TITLES}
         }
 
         const ownership = await loadOwnedCardsForFamily(resolved, cleanKeyword, report);
-        const cards = applyOwnership(resolved, ownership.ownedCards)
-          .sort((a, b) => a.title.localeCompare(b.title, 'fr'));
+        const cards = applyOwnership(
+          resolved,
+          ownership.ownedCards,
+          ownership.verifiedIds
+        ).sort((a, b) => a.title.localeCompare(b.title, 'fr'));
 
         registerCards(cards.map((card) => ({
           id: card.id,
@@ -1070,14 +1071,17 @@ LIMIT ${MAX_SEMANTIC_TITLES}
           cards,
           createdAt: previous?.createdAt || now,
           updatedAt: now,
+          ownershipUpdatedAt: now,
           discovery: {
             candidateTitles: titles.size,
             matchedCards: cards.length,
             wikidataEntity: wikidata?.entity || null,
             wikipediaCategories: wikipedia?.roots || [],
-            semanticVersion: 2,
+            semanticVersion: 3,
             ownershipKeywords: ownership.keywords,
-            ownershipCoverage: ownership.estimatedCoverage
+            ownershipCoverage: ownership.estimatedCoverage,
+            ownershipVerifiedCoverage: ownership.verifiedCoverage,
+            ownershipFailedKeywords: ownership.failedKeywords
           }
         };
 
@@ -1085,7 +1089,7 @@ LIMIT ${MAX_SEMANTIC_TITLES}
           stage: 'done',
           percent: 100,
           title: 'Terminé',
-          detail: `${cards.length.toLocaleString('fr-FR')} cartes • ${cards.filter((card) => card.owned).length.toLocaleString('fr-FR')} possédées`
+          detail: `${cards.length.toLocaleString('fr-FR')} cartes • ${cards.filter((card) => card.owned === true).length.toLocaleString('fr-FR')} possédées`
         });
 
         return family;
@@ -1093,13 +1097,16 @@ LIMIT ${MAX_SEMANTIC_TITLES}
 
       function familyStats(family) {
         const cards = Array.isArray(family?.cards) ? family.cards : [];
-        const owned = cards.filter((card) => card.owned).length;
+        const owned = cards.filter((card) => card.owned === true).length;
+        const missing = cards.filter((card) => card.owned === false).length;
+        const unchecked = cards.filter((card) => card.owned == null).length;
         const total = cards.length;
 
         return {
           total,
           owned,
-          missing: Math.max(0, total - owned),
+          missing,
+          unchecked,
           percent: total ? Math.round((owned / total) * 100) : 0
         };
       }
