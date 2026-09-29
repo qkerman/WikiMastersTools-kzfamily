@@ -50,7 +50,7 @@
 
 
       let renderTimer = null;
-      let previousPath = location.pathname;
+      let previousPath = location.pathname + location.search;
       let observedMain = null;
 
       function routeIsSupported() {
@@ -68,7 +68,7 @@
       }
 
       function handlePathChange() {
-        const currentPath = location.pathname;
+        const currentPath = location.pathname + location.search;
         if (currentPath === previousPath) return false;
 
         previousPath = currentPath;
@@ -175,7 +175,7 @@
       }
 
       window.addEventListener('popstate', () => {
-        previousPath = location.pathname;
+        previousPath = location.pathname + location.search;
         attachMainObserver();
         scheduleRender(0);
       });
