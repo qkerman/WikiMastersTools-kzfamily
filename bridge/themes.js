@@ -67,9 +67,8 @@
 
           const card =
             heading.closest('div[class*="glow-"]') ||
-            heading.closest('div[class*="rounded-2xl"]') ||
-            heading.closest('article') ||
-            heading.parentElement;
+            heading.closest('div[class*="rounded-2xl"][class*="overflow-hidden"]') ||
+            heading.closest('article:has(img)');
 
           if (!card || card.closest('#wm-theme-tracker-page')) continue;
 
