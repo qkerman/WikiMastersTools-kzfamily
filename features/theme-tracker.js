@@ -1600,14 +1600,16 @@ LIMIT ${MAX_SEMANTIC_TITLES}
 
         const close = () => overlay.remove();
         closeButton.addEventListener('click', close);
+        let highestPercent = 0;
 
         return {
           update(progress) {
-            const value = Math.max(0, Math.min(100, Number(progress?.percent) || 0));
+            const requested = Math.max(0, Math.min(100, Number(progress?.percent) || 0));
+            highestPercent = Math.max(highestPercent, requested);
             stage.textContent = progress?.title || 'Création';
             detail.textContent = progress?.detail || '';
-            fill.style.width = `${value}%`;
-            percent.textContent = `${value}%`;
+            fill.style.width = `${highestPercent}%`;
+            percent.textContent = `${Math.round(highestPercent)}%`;
           },
           fail(message) {
             stage.textContent = 'Erreur';
