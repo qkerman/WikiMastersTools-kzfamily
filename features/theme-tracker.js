@@ -200,6 +200,14 @@
         return Math.max(...valid);
       }
 
+      function readSearchHasMore(json) {
+        if (typeof json?.searchHasMore === 'boolean') return json.searchHasMore;
+        if (typeof json?.hasMore === 'boolean') return json.hasMore;
+        if (typeof json?.pagination?.hasMore === 'boolean') return json.pagination.hasMore;
+        if (typeof json?.meta?.hasMore === 'boolean') return json.meta.hasMore;
+        return null;
+      }
+
       async function fetchJson(url) {
         const response = await fetch(url, {
           method: 'GET',
@@ -226,11 +234,14 @@
         const json = await fetchJson(endpointUrl('global', keyword, 0));
         const rows = extractRows(json, false);
         const total = readTotal(json, rows.length);
+        const searchHasMore = readSearchHasMore(json);
+        const exact = total != null || searchHasMore === false;
 
         return {
           total: total == null ? rows.length : total,
           firstPageSize: rows.length || PAGE_SIZE_FALLBACK,
-          exact: total != null
+          exact,
+          searchHasMore
         };
       }
 
@@ -243,6 +254,7 @@
         for (let page = 0; page < MAX_PAGES; page += 1) {
           const json = await fetchJson(endpointUrl(kind, keyword, page));
           const pageRows = extractRows(json, owned);
+          const searchHasMore = readSearchHasMore(json);
 
           if (page === 0) {
             total = readTotal(json, pageRows.length);
@@ -255,17 +267,25 @@
 
           rows.push(...pageRows);
 
+          const effectiveTotal =
+            total != null
+              ? total
+              : searchHasMore === false
+                ? rows.length
+                : null;
+
           onProgress?.({
             kind,
             page: page + 1,
             loaded: rows.length,
-            total
+            total: effectiveTotal
           });
 
           const reachedTotal = total != null && rows.length >= total;
           const shortPage = pageRows.length < (firstPageSize || PAGE_SIZE_FALLBACK);
 
-          if (!pageRows.length || reachedTotal || shortPage) break;
+          if (!pageRows.length || reachedTotal || searchHasMore === false) break;
+          if (searchHasMore == null && shortPage) break;
           if (rows.length >= MAX_RESULTS) break;
 
           await wait(REQUEST_DELAY_MS);
