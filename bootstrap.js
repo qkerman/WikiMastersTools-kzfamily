@@ -90,6 +90,7 @@ if (typeof window !== 'undefined' && typeof document !== 'undefined') {
       'bridge/intercept.js',
       'bridge/marketplace.js',
       'bridge/prices.js',
+      'bridge/themes.js',
       'page-bridge.js',
       'features/core.js',
       'features/settings.js',
@@ -105,6 +106,7 @@ if (typeof window !== 'undefined' && typeof document !== 'undefined') {
       'features/ranking.js',
       'features/collection-bulk.js',
       'features/extra-tools.js',
+      'features/theme-tracker.js',
       'features/app.js',
       'content.js'
     ];
