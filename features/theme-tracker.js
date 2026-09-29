@@ -1021,12 +1021,30 @@ LIMIT ${MAX_SEMANTIC_TITLES}
 
         const titles = new Set();
 
-        // Priorité aux sources les plus proches du catalogue : recherche directe,
-        // catégories Wikipédia, puis Wikidata. Une source ne peut donc plus
-        // remplir seule les 650 places avant les autres.
+        // Les résultats WikiMasters directs sont prioritaires. Ensuite on
+        // entrelace Wikipédia et Wikidata (2:1) pour qu'une source très large
+        // ne puisse pas monopoliser seule la limite des candidats.
         for (const title of directTitles) addTitle(titles, title);
-        for (const title of wikipediaTitles) addTitle(titles, title);
-        for (const title of wikidataTitles) addTitle(titles, title);
+
+        const wikipediaList = [...wikipediaTitles];
+        const wikidataList = [...wikidataTitles];
+        let wikipediaIndex = 0;
+        let wikidataIndex = 0;
+
+        while (
+          titles.size < MAX_SEMANTIC_TITLES &&
+          (wikipediaIndex < wikipediaList.length || wikidataIndex < wikidataList.length)
+        ) {
+          for (let step = 0; step < 2 && wikipediaIndex < wikipediaList.length; step += 1) {
+            addTitle(titles, wikipediaList[wikipediaIndex]);
+            wikipediaIndex += 1;
+          }
+
+          if (wikidataIndex < wikidataList.length) {
+            addTitle(titles, wikidataList[wikidataIndex]);
+            wikidataIndex += 1;
+          }
+        }
 
         if (!titles.size) {
           throw new Error('Aucune page liée à ce thème n’a été trouvée.');
