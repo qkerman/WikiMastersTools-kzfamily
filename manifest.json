@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "WikiMasters - Prix moyen collection",
-  "version": "4.16.14",
+  "version": "4.17.0",
   "description": "Outils WikiMasters configurables : prix moyens, collection, échanges, paquets, cartes full-art, Wikipédia et vue compacte.",
   "permissions": [
     "clipboardWrite"
@@ -28,7 +28,8 @@
         "bootstrap.js"
       ],
       "css": [
-        "styles.css"
+        "styles.css",
+        "theme-tracker.css"
       ],
       "run_at": "document_start"
     }
@@ -42,6 +43,7 @@
         "bridge/intercept.js",
         "bridge/marketplace.js",
         "bridge/prices.js",
+        "bridge/themes.js",
         "page-bridge.js",
         "features/core.js",
         "features/settings.js",
@@ -57,6 +59,7 @@
         "features/ranking.js",
         "features/collection-bulk.js",
         "features/extra-tools.js",
+        "features/theme-tracker.js",
         "features/app.js",
         "content.js"
       ],
