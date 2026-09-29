@@ -4,19 +4,22 @@
   registry.themeTracker = {
     create(runtime) {
       const {
+        ALL_COLLECTION_KEY,
         readLocalValue,
         writeLocalValue,
+        storageGet,
+        storageSet,
         registerCards
       } = runtime.core;
 
       const PAGE_ID = 'wm-theme-tracker-page';
       const NAV_ID = 'wm-theme-tracker-nav';
       const STORAGE_KEY = 'wm_families_v1';
-      const PAGE_SIZE_FALLBACK = 50;
-      const MAX_RESULTS = 3000;
-      const MAX_PAGES = 60;
-      const REQUEST_DELAY_MS = 70;
-      const CARD_BATCH = 120;
+      const CARD_BATCH = 80;
+      const MAX_SEMANTIC_TITLES = 650;
+      const MAX_CATEGORY_REQUESTS = 12;
+      const MAX_CATEGORY_DEPTH = 2;
+      const MAX_DIRECT_SEARCH_PAGES = 4;
 
       let activeFamilyId = null;
       let currentFilter = 'all';
@@ -36,8 +39,14 @@
           .normalize('NFD')
           .replace(/[\u0300-\u036f]/g, '')
           .toLocaleLowerCase('fr')
+          .replace(/[’']/g, "'")
+          .replace(/[^a-z0-9' -]+/g, ' ')
           .replace(/\s+/g, ' ')
           .trim();
+      }
+
+      function compact(value) {
+        return normalize(value).replace(/[^a-z0-9]+/g, '');
       }
 
       function wait(ms) {
@@ -50,7 +59,9 @@
 
       function readFamilies() {
         const value = readLocalValue(STORAGE_KEY);
-        return Array.isArray(value) ? value.filter((item) => item?.id && item?.name && Array.isArray(item.cards)) : [];
+        return Array.isArray(value)
+          ? value.filter((item) => item?.id && item?.name && Array.isArray(item.cards))
+          : [];
       }
 
       function writeFamilies(families) {
@@ -128,84 +139,12 @@
         else link.removeAttribute('aria-current');
       }
 
-      function extractRows(json, owned = false) {
-        const candidates = owned
-          ? [json?.collection, json?.cards, json?.items, json?.results, json?.data]
-          : [json?.cards, json?.collection, json?.items, json?.results, json?.data];
-
-        for (const candidate of candidates) {
-          if (Array.isArray(candidate)) return candidate;
-        }
-
-        if (Array.isArray(json)) return json;
-        return [];
-      }
-
-      function mapGlobalRow(row, ownedCount = 0) {
-        const card = row?.card || row;
-        const id = row?.card_id || card?.id;
-        const title = card?.wikipedia_title || card?.title;
-
-        if (!id || !title) return null;
-
-        return {
-          id,
-          title,
-          rarity: card?.rarity || row?.rarity || null,
-          category: card?.category || row?.category || null,
-          imageUrl: card?.image_url || row?.image_url || null,
-          wikipediaUrl: card?.wikipedia_url || row?.wikipedia_url || null,
-          owned: ownedCount > 0,
-          ownedCount
-        };
-      }
-
-      function countOwnedIds(json) {
-        const counts = new Map();
-
-        for (const id of Array.isArray(json?.ownedCardIds) ? json.ownedCardIds : []) {
-          if (!id) continue;
-          counts.set(id, (counts.get(id) || 0) + 1);
-        }
-
-        return counts;
-      }
-
-      function readTotal(json, currentRowCount = 0) {
-        const values = [
-          json?.total,
-          json?.total_count,
-          json?.pagination?.total,
-          json?.pagination?.total_count,
-          json?.meta?.total,
-          json?.meta?.total_count
-        ];
-
-        const valid = values
-          .map(Number)
-          .filter((number) =>
-            Number.isFinite(number) &&
-            number >= 0 &&
-            number >= currentRowCount
-          );
-
-        if (!valid.length) return null;
-        return Math.max(...valid);
-      }
-
-      function readSearchHasMore(json) {
-        if (typeof json?.searchHasMore === 'boolean') return json.searchHasMore;
-        if (typeof json?.hasMore === 'boolean') return json.hasMore;
-        if (typeof json?.pagination?.hasMore === 'boolean') return json.pagination.hasMore;
-        if (typeof json?.meta?.hasMore === 'boolean') return json.meta.hasMore;
-        return null;
-      }
-
-      async function fetchJson(url) {
+      async function fetchJson(url, init = {}) {
         const response = await fetch(url, {
           method: 'GET',
-          credentials: 'include',
-          headers: { accept: '*/*' }
+          credentials: init.credentials ?? 'omit',
+          referrerPolicy: 'no-referrer',
+          headers: { accept: 'application/json', ...(init.headers || {}) }
         });
 
         if (!response.ok) {
@@ -215,100 +154,523 @@
         return response.json();
       }
 
-      function endpointUrl(keyword, page) {
-        const q = encodeURIComponent(keyword);
-        return `/api/cards?page=${encodeURIComponent(page)}&q=${q}&sort=rarity`;
+      function titleFromWikipediaUrl(url) {
+        try {
+          const parsed = new URL(url);
+          const raw = parsed.pathname.replace(/^\/wiki\//, '');
+          return decodeURIComponent(raw).replace(/_/g, ' ').trim();
+        } catch (_) {
+          return '';
+        }
       }
 
-      async function previewKeyword(keyword) {
-        const json = await fetchJson(endpointUrl(keyword, 0));
-        const rows = extractRows(json, false);
-        const total = readTotal(json, rows.length);
-        const searchHasMore = readSearchHasMore(json);
-        const exact = total != null || searchHasMore === false;
+      function addTitle(set, title) {
+        const clean = String(title || '').trim();
+        if (!clean || clean.startsWith('Catégorie:')) return false;
+        if (set.size >= MAX_SEMANTIC_TITLES) return false;
+        set.add(clean);
+        return true;
+      }
+
+      async function discoverWikidata(keyword, titles, report) {
+        report({
+          stage: 'wikidata',
+          percent: 10,
+          title: 'Wikidata',
+          detail: 'Recherche du concept…'
+        });
+
+        const search = new URL('https://www.wikidata.org/w/api.php');
+        search.searchParams.set('action', 'wbsearchentities');
+        search.searchParams.set('search', keyword);
+        search.searchParams.set('language', 'fr');
+        search.searchParams.set('uselang', 'fr');
+        search.searchParams.set('type', 'item');
+        search.searchParams.set('limit', '5');
+        search.searchParams.set('format', 'json');
+        search.searchParams.set('origin', '*');
+
+        const json = await fetchJson(search.toString());
+        const candidates = Array.isArray(json?.search) ? json.search : [];
+        const entity = candidates[0];
+
+        if (!entity?.id || !/^Q\d+$/.test(entity.id)) {
+          report({
+            stage: 'wikidata',
+            percent: 24,
+            title: 'Wikidata',
+            detail: 'Aucun concept précis trouvé, passage aux catégories Wikipédia.'
+          });
+          return { entity: null, added: 0 };
+        }
+
+        const query = `
+PREFIX wd: <http://www.wikidata.org/entity/>
+PREFIX wdt: <http://www.wikidata.org/prop/direct/>
+PREFIX schema: <http://schema.org/>
+SELECT DISTINCT ?article WHERE {
+  VALUES ?theme { wd:${entity.id} }
+  {
+    ?item wdt:P136 ?genre .
+    ?genre wdt:P279* ?theme .
+  }
+  UNION
+  {
+    ?item wdt:P31 ?class .
+    ?class wdt:P279* ?theme .
+  }
+  UNION
+  {
+    ?item wdt:P279* ?theme .
+  }
+  ?article schema:about ?item ;
+           schema:isPartOf <https://fr.wikipedia.org/> .
+}
+LIMIT ${MAX_SEMANTIC_TITLES}
+        `.trim();
+
+        report({
+          stage: 'wikidata',
+          percent: 16,
+          title: 'Wikidata',
+          detail: `Concept : ${entity.label || keyword}. Recherche des pages liées…`
+        });
+
+        const endpoint = new URL('https://query.wikidata.org/sparql');
+        endpoint.searchParams.set('query', query);
+        endpoint.searchParams.set('format', 'json');
+        endpoint.searchParams.set('origin', '*');
+
+        const before = titles.size;
+
+        try {
+          const result = await fetchJson(endpoint.toString(), {
+            headers: { accept: 'application/sparql-results+json' }
+          });
+
+          for (const row of result?.results?.bindings || []) {
+            addTitle(titles, titleFromWikipediaUrl(row?.article?.value));
+          }
+        } catch (error) {
+          console.debug('[WM Average] Wikidata SPARQL indisponible', error);
+        }
+
+        report({
+          stage: 'wikidata',
+          percent: 25,
+          title: 'Wikidata',
+          detail: `${(titles.size - before).toLocaleString('fr-FR')} pages liées trouvées.`
+        });
 
         return {
-          total: total == null ? rows.length : total,
-          firstPageSize: rows.length || PAGE_SIZE_FALLBACK,
-          exact,
-          searchHasMore
+          entity: {
+            id: entity.id,
+            label: entity.label || keyword,
+            description: entity.description || ''
+          },
+          added: titles.size - before
         };
       }
 
-      async function fetchAll(keyword, onProgress) {
-        const rows = [];
-        const ownedCounts = new Map();
-        let total = null;
+      function categoryScore(title, keyword) {
+        const candidate = String(title || '').replace(/^Cat[ée]gorie\s*:/i, '').trim();
+        const a = compact(candidate);
+        const b = compact(keyword);
 
-        for (let page = 0; page < MAX_PAGES; page += 1) {
-          const json = await fetchJson(endpointUrl(keyword, page));
-          const pageRows = extractRows(json, false);
-          const pageOwnedCounts = countOwnedIds(json);
-          const searchHasMore = readSearchHasMore(json);
-
-          if (page === 0) {
-            total = readTotal(json, pageRows.length);
-
-            if (total != null && total > MAX_RESULTS) {
-              throw new Error(`Cette recherche contient ${total.toLocaleString('fr-FR')} résultats. Utilise un mot-clé plus précis (maximum ${MAX_RESULTS.toLocaleString('fr-FR')}).`);
-            }
-          }
-
-          rows.push(...pageRows);
-
-          for (const [id, count] of pageOwnedCounts) {
-            ownedCounts.set(id, Math.max(ownedCounts.get(id) || 0, count));
-          }
-
-          const effectiveTotal =
-            total != null
-              ? total
-              : searchHasMore === false
-                ? rows.length
-                : null;
-
-          onProgress?.({
-            page: page + 1,
-            loaded: rows.length,
-            total: effectiveTotal
-          });
-
-          const reachedTotal = total != null && rows.length >= total;
-          const shortPage = pageRows.length < PAGE_SIZE_FALLBACK;
-
-          if (!pageRows.length || reachedTotal || searchHasMore === false) break;
-          if (searchHasMore == null && shortPage) break;
-
-          if (rows.length >= MAX_RESULTS) {
-            throw new Error(`Cette recherche dépasse ${MAX_RESULTS.toLocaleString('fr-FR')} cartes. Utilise un mot-clé plus précis.`);
-          }
-
-          await wait(REQUEST_DELAY_MS);
-        }
-
-        return { rows, ownedCounts };
+        if (!a || !b) return 0;
+        if (a === b) return 1000;
+        if (a.startsWith(b) || b.startsWith(a)) return 850;
+        if (a.includes(b)) return 720;
+        return 0;
       }
 
-      function mergeFamilyCards(globalRows, ownedCounts) {
-        const cardsById = new Map();
+      async function discoverWikipediaCategories(keyword, titles, report) {
+        report({
+          stage: 'wikipedia',
+          percent: 28,
+          title: 'Wikipédia',
+          detail: 'Recherche des catégories…'
+        });
 
-        for (const raw of globalRows) {
-          const rawId = raw?.card_id || raw?.card?.id || raw?.id;
-          const card = mapGlobalRow(raw, ownedCounts.get(rawId) || 0);
-          if (!card) continue;
+        const search = new URL('https://fr.wikipedia.org/w/api.php');
+        search.searchParams.set('action', 'query');
+        search.searchParams.set('list', 'search');
+        search.searchParams.set('srnamespace', '14');
+        search.searchParams.set('srlimit', '8');
+        search.searchParams.set('srsearch', keyword);
+        search.searchParams.set('format', 'json');
+        search.searchParams.set('formatversion', '2');
+        search.searchParams.set('origin', '*');
 
-          const previous = cardsById.get(card.id);
-          cardsById.set(card.id, previous ? {
-            ...previous,
-            ...card,
-            imageUrl: card.imageUrl || previous.imageUrl || null,
-            category: card.category || previous.category || null,
-            owned: previous.owned || card.owned,
-            ownedCount: Math.max(previous.ownedCount || 0, card.ownedCount || 0)
-          } : card);
+        const json = await fetchJson(search.toString());
+        const categories = (Array.isArray(json?.query?.search) ? json.query.search : [])
+          .map((item) => ({
+            title: item.title,
+            score: categoryScore(item.title, keyword)
+          }))
+          .filter((item) => item.score > 0)
+          .sort((a, b) => b.score - a.score)
+          .slice(0, 2);
+
+        if (!categories.length) {
+          report({
+            stage: 'wikipedia',
+            percent: 44,
+            title: 'Wikipédia',
+            detail: 'Pas de catégorie suffisamment proche.'
+          });
+          return { roots: [], requests: 1, added: 0 };
         }
 
-        const cards = [...cardsById.values()]
+        const before = titles.size;
+        const queue = categories.map((item) => ({
+          title: item.title,
+          depth: 0
+        }));
+        const queued = new Set(queue.map((item) => item.title));
+        const visited = new Set();
+        let requests = 1;
+
+        while (
+          queue.length &&
+          requests < MAX_CATEGORY_REQUESTS &&
+          titles.size < MAX_SEMANTIC_TITLES
+        ) {
+          const current = queue.shift();
+          if (!current || visited.has(current.title)) continue;
+          visited.add(current.title);
+
+          let continuation = null;
+
+          do {
+            const url = new URL('https://fr.wikipedia.org/w/api.php');
+            url.searchParams.set('action', 'query');
+            url.searchParams.set('list', 'categorymembers');
+            url.searchParams.set('cmtitle', current.title);
+            url.searchParams.set('cmnamespace', '0|14');
+            url.searchParams.set('cmtype', 'page|subcat');
+            url.searchParams.set('cmlimit', '500');
+            url.searchParams.set('format', 'json');
+            url.searchParams.set('formatversion', '2');
+            url.searchParams.set('origin', '*');
+            if (continuation) url.searchParams.set('cmcontinue', continuation);
+
+            const page = await fetchJson(url.toString());
+            requests += 1;
+
+            for (const member of page?.query?.categorymembers || []) {
+              if (Number(member?.ns) === 0) {
+                addTitle(titles, member.title);
+              } else if (
+                Number(member?.ns) === 14 &&
+                current.depth < MAX_CATEGORY_DEPTH &&
+                queue.length + visited.size < 70 &&
+                !queued.has(member.title)
+              ) {
+                queued.add(member.title);
+                queue.push({
+                  title: member.title,
+                  depth: current.depth + 1
+                });
+              }
+
+              if (titles.size >= MAX_SEMANTIC_TITLES) break;
+            }
+
+            continuation = page?.continue?.cmcontinue || null;
+
+            report({
+              stage: 'wikipedia',
+              percent: Math.min(45, 30 + Math.round((requests / MAX_CATEGORY_REQUESTS) * 15)),
+              title: 'Wikipédia',
+              detail: `${titles.size.toLocaleString('fr-FR')} pages candidates • ${requests} requêtes`
+            });
+
+            if (requests >= MAX_CATEGORY_REQUESTS || titles.size >= MAX_SEMANTIC_TITLES) {
+              break;
+            }
+
+            await wait(55);
+          } while (continuation);
+        }
+
+        return {
+          roots: categories.map((item) => item.title),
+          requests,
+          added: titles.size - before
+        };
+      }
+
+      function readSearchHasMore(json) {
+        if (typeof json?.searchHasMore === 'boolean') return json.searchHasMore;
+        if (typeof json?.hasMore === 'boolean') return json.hasMore;
+        return null;
+      }
+
+      async function discoverDirectWikiMasters(keyword, titles, report) {
+        report({
+          stage: 'wikimasters-search',
+          percent: 46,
+          title: 'WikiMasters',
+          detail: 'Ajout des correspondances textuelles directes…'
+        });
+
+        const cards = new Map();
+
+        for (let page = 0; page < MAX_DIRECT_SEARCH_PAGES; page += 1) {
+          const url = `/api/cards?page=${page}&q=${encodeURIComponent(keyword)}&sort=rarity`;
+          const json = await fetchJson(url, { credentials: 'include' });
+
+          for (const card of Array.isArray(json?.cards) ? json.cards : []) {
+            if (!card?.id || !card?.wikipedia_title) continue;
+            cards.set(card.id, {
+              id: card.id,
+              title: card.wikipedia_title,
+              rarity: card.rarity || null,
+              category: card.category || null,
+              summary: card.summary || null,
+              imageUrl: card.image_url || null,
+              wikipediaUrl: card.wikipedia_url || null,
+              atk: Number.isFinite(Number(card.atk)) ? Number(card.atk) : null,
+              def: Number.isFinite(Number(card.def)) ? Number(card.def) : null
+            });
+            addTitle(titles, card.wikipedia_title);
+          }
+
+          report({
+            stage: 'wikimasters-search',
+            percent: Math.min(50, 47 + page),
+            title: 'WikiMasters',
+            detail: `${cards.size.toLocaleString('fr-FR')} correspondances directes ajoutées.`
+          });
+
+          if (readSearchHasMore(json) === false) break;
+          await wait(55);
+        }
+
+        return [...cards.values()];
+      }
+
+      function bridgeRequest(eventName, resultName, detail, options = {}) {
+        return new Promise((resolve, reject) => {
+          const requestId = `${eventName}:${Date.now()}:${Math.random().toString(36).slice(2)}`;
+          const timeoutMs = options.timeoutMs || 90000;
+          let timer = null;
+
+          const cleanup = () => {
+            clearTimeout(timer);
+            window.removeEventListener(resultName, onResult);
+            if (options.progressName) {
+              window.removeEventListener(options.progressName, onProgress);
+            }
+          };
+
+          const onResult = (event) => {
+            if (event.detail?.requestId !== requestId) return;
+            cleanup();
+            resolve(event.detail || {});
+          };
+
+          const onProgress = (event) => {
+            if (event.detail?.requestId !== requestId) return;
+            options.onProgress?.(event.detail || {});
+          };
+
+          window.addEventListener(resultName, onResult);
+          if (options.progressName) {
+            window.addEventListener(options.progressName, onProgress);
+          }
+
+          timer = setTimeout(() => {
+            cleanup();
+            reject(new Error('Délai dépassé'));
+          }, timeoutMs);
+
+          window.dispatchEvent(new CustomEvent(eventName, {
+            detail: { ...(detail || {}), requestId }
+          }));
+        });
+      }
+
+      async function resolveWikiMastersTitles(titles, directCards, report) {
+        const list = [...titles].slice(0, MAX_SEMANTIC_TITLES);
+
+        report({
+          stage: 'resolve',
+          percent: 52,
+          title: 'WikiMasters',
+          detail: `Correspondance de ${list.length.toLocaleString('fr-FR')} titres par lots…`
+        });
+
+        const result = await bridgeRequest(
+          'wm-average-family-resolve',
+          'wm-average-family-resolve-result',
+          { titles: list },
+          {
+            timeoutMs: 120000,
+            progressName: 'wm-average-family-resolve-progress',
+            onProgress: (progress) => {
+              const ratio = progress.batches
+                ? progress.batch / progress.batches
+                : 0;
+
+              report({
+                stage: 'resolve',
+                percent: 52 + Math.round(ratio * 30),
+                title: 'WikiMasters',
+                detail: `Lot ${progress.batch}/${progress.batches} • ${progress.matchedCards.toLocaleString('fr-FR')} cartes trouvées`
+              });
+            }
+          }
+        );
+
+        if (!result.ok) {
+          throw new Error(result.error || 'Impossible de faire correspondre les cartes WikiMasters.');
+        }
+
+        const merged = new Map();
+
+        for (const card of [...(Array.isArray(result.cards) ? result.cards : []), ...(directCards || [])]) {
+          if (card?.id && card?.title) merged.set(card.id, card);
+        }
+
+        return [...merged.values()];
+      }
+
+      async function loadOwnedCards(report) {
+        const cached = storageGet(ALL_COLLECTION_KEY)[ALL_COLLECTION_KEY];
+
+        if (cached?.complete === true && Array.isArray(cached.cards)) {
+          report({
+            stage: 'ownership',
+            percent: 94,
+            title: 'Ta collection',
+            detail: `${cached.cards.length.toLocaleString('fr-FR')} cartes déjà en cache.`
+          });
+          return cached.cards;
+        }
+
+        report({
+          stage: 'ownership',
+          percent: 84,
+          title: 'Ta collection',
+          detail: 'Synchronisation des cartes possédées…'
+        });
+
+        const result = await bridgeRequest(
+          'wm-average-load-all-collection',
+          'wm-average-all-collection',
+          { selectedRarities: [] },
+          {
+            timeoutMs: 120000,
+            progressName: 'wm-average-all-collection-progress',
+            onProgress: (progress) => {
+              const totalPages = Number(progress.totalPages) || 0;
+              const loadedPages = Number(progress.loadedPages) || 0;
+              const ratio = totalPages > 0 ? loadedPages / totalPages : 0;
+
+              report({
+                stage: 'ownership',
+                percent: 84 + Math.min(10, Math.round(ratio * 10)),
+                title: 'Ta collection',
+                detail: totalPages > 0
+                  ? `Page ${loadedPages}/${totalPages}`
+                  : `Page ${loadedPages}`
+              });
+            }
+          }
+        );
+
+        if (!result.ok) {
+          throw new Error(result.error || 'Impossible de synchroniser ta collection.');
+        }
+
+        const cards = Array.isArray(result.cards) ? result.cards : [];
+        storageSet({
+          [ALL_COLLECTION_KEY]: {
+            fetchedAt: Date.now(),
+            cards,
+            complete: result.complete !== false
+          }
+        });
+
+        return cards;
+      }
+
+      function applyOwnership(cards, ownedCards) {
+        const owned = new Map();
+
+        for (const card of ownedCards || []) {
+          if (!card?.id) continue;
+          const count = Math.max(
+            Number(card.count) || 1,
+            Array.isArray(card.ownedCardIds) ? card.ownedCardIds.length : 0
+          );
+          const previous = owned.get(card.id) || 0;
+          owned.set(card.id, Math.max(previous, count));
+        }
+
+        return cards.map((card) => ({
+          ...card,
+          owned: owned.has(card.id),
+          ownedCount: owned.get(card.id) || 0
+        }));
+      }
+
+      async function buildFamily({ id = null, name, keyword }, report = () => {}) {
+        const cleanKeyword = String(keyword || '').trim();
+        if (!cleanKeyword) throw new Error('Entre un thème.');
+
+        const titles = new Set();
+
+        report({
+          stage: 'start',
+          percent: 4,
+          title: 'Analyse du thème',
+          detail: `Préparation de « ${cleanKeyword} »…`
+        });
+
+        let wikidata = null;
+        let wikipedia = null;
+
+        try {
+          wikidata = await discoverWikidata(cleanKeyword, titles, report);
+        } catch (error) {
+          console.debug('[WM Average] découverte Wikidata ignorée', error);
+          report({
+            stage: 'wikidata',
+            percent: 25,
+            title: 'Wikidata',
+            detail: 'Source indisponible, poursuite avec Wikipédia.'
+          });
+        }
+
+        try {
+          wikipedia = await discoverWikipediaCategories(cleanKeyword, titles, report);
+        } catch (error) {
+          console.debug('[WM Average] catégories Wikipédia ignorées', error);
+          report({
+            stage: 'wikipedia',
+            percent: 45,
+            title: 'Wikipédia',
+            detail: 'Catégories indisponibles, poursuite avec WikiMasters.'
+          });
+        }
+
+        const directCards = await discoverDirectWikiMasters(cleanKeyword, titles, report);
+
+        if (!titles.size) {
+          throw new Error('Aucune page liée à ce thème n’a été trouvée.');
+        }
+
+        const resolved = await resolveWikiMastersTitles(titles, directCards, report);
+
+        if (!resolved.length) {
+          throw new Error('Aucune carte WikiMasters correspondante n’a été trouvée.');
+        }
+
+        const ownedCards = await loadOwnedCards(report);
+        const cards = applyOwnership(resolved, ownedCards)
           .sort((a, b) => a.title.localeCompare(b.title, 'fr'));
 
         registerCards(cards.map((card) => ({
@@ -320,7 +682,40 @@
           count: Math.max(1, card.ownedCount || 1)
         })));
 
-        return cards;
+        const now = Date.now();
+        const previous = id ? getFamily(id) : null;
+
+        report({
+          stage: 'save',
+          percent: 98,
+          title: 'Enregistrement',
+          detail: `${cards.length.toLocaleString('fr-FR')} cartes dans la famille.`
+        });
+
+        const family = {
+          id: id || familyId(),
+          name: String(name || cleanKeyword).trim(),
+          keyword: cleanKeyword,
+          cards,
+          createdAt: previous?.createdAt || now,
+          updatedAt: now,
+          discovery: {
+            candidateTitles: titles.size,
+            matchedCards: cards.length,
+            wikidataEntity: wikidata?.entity || null,
+            wikipediaCategories: wikipedia?.roots || [],
+            semanticVersion: 1
+          }
+        };
+
+        report({
+          stage: 'done',
+          percent: 100,
+          title: 'Terminé',
+          detail: `${cards.length.toLocaleString('fr-FR')} cartes • ${cards.filter((card) => card.owned).length.toLocaleString('fr-FR')} possédées`
+        });
+
+        return family;
       }
 
       function familyStats(family) {
@@ -333,21 +728,6 @@
           owned,
           missing: Math.max(0, total - owned),
           percent: total ? Math.round((owned / total) * 100) : 0
-        };
-      }
-
-      async function buildFamily({ id = null, name, keyword }, onProgress) {
-        const result = await fetchAll(keyword, onProgress);
-        const cards = mergeFamilyCards(result.rows, result.ownedCounts);
-        const now = Date.now();
-
-        return {
-          id: id || familyId(),
-          name: String(name || keyword).trim(),
-          keyword: String(keyword || '').trim(),
-          cards,
-          createdAt: id ? (getFamily(id)?.createdAt || now) : now,
-          updatedAt: now
         };
       }
 
@@ -427,7 +807,7 @@
         title.textContent = 'Familles';
 
         const subtitle = document.createElement('p');
-        subtitle.textContent = 'Crée des groupes de cartes à partir d’un mot-clé.';
+        subtitle.textContent = 'Crée des groupes de cartes à partir d’un thème.';
 
         copy.append(title, subtitle);
 
@@ -447,7 +827,7 @@
         if (!families.length) {
           const empty = document.createElement('div');
           empty.className = 'wm-family-empty';
-          empty.innerHTML = '<strong>Aucune famille</strong><span>Ajoute un mot-clé pour commencer.</span>';
+          empty.innerHTML = '<strong>Aucune famille</strong><span>Ajoute un thème pour commencer.</span>';
 
           const emptyButton = document.createElement('button');
           emptyButton.type = 'button';
@@ -475,54 +855,18 @@
         return cards.sort((a, b) => a.title.localeCompare(b.title, 'fr'));
       }
 
-      function createResultCard(card) {
-        const item = document.createElement('article');
-        item.className = `wm-family-result ${card.owned ? 'is-owned' : 'is-missing'}`;
+      function createRealCard(card) {
+        const element = runtime.cardExtras.createCardElement(card, {
+          owned: Boolean(card.owned),
+          ownedCount: card.ownedCount || 0
+        });
 
-        const visual = document.createElement('div');
-        visual.className = 'wm-family-result-image';
+        if (!element) return null;
 
-        if (card.imageUrl) {
-          const image = document.createElement('img');
-          image.src = card.imageUrl;
-          image.alt = '';
-          image.loading = 'lazy';
-          visual.append(image);
-        } else {
-          visual.textContent = '✦';
-        }
-
-        const badge = document.createElement('span');
-        badge.className = `wm-family-owned-badge ${card.owned ? 'is-owned' : ''}`;
-        badge.textContent = card.owned
-          ? `✓ Possédée${card.ownedCount > 1 ? ` ×${card.ownedCount}` : ''}`
-          : 'Manquante';
-        visual.append(badge);
-
-        const body = document.createElement('div');
-        body.className = 'wm-family-result-body';
-
-        const title = document.createElement('h3');
-        title.textContent = card.title;
-
-        const meta = document.createElement('div');
-        meta.className = 'wm-family-result-meta';
-
-        if (card.rarity) {
-          const rarity = document.createElement('span');
-          rarity.textContent = card.rarity;
-          meta.append(rarity);
-        }
-
-        if (card.category) {
-          const category = document.createElement('span');
-          category.textContent = card.category;
-          meta.append(category);
-        }
-
-        body.append(title, meta);
-        item.append(visual, body);
-        return item;
+        const slot = document.createElement('div');
+        slot.className = 'wm-family-card-slot';
+        slot.append(element);
+        return slot;
       }
 
       function renderDetailGrid(family, container) {
@@ -535,9 +879,13 @@
 
         grid.replaceChildren();
         const fragment = document.createDocumentFragment();
-        shown.forEach((card) => fragment.append(createResultCard(card)));
-        grid.append(fragment);
 
+        for (const card of shown) {
+          const element = createRealCard(card);
+          if (element) fragment.append(element);
+        }
+
+        grid.append(fragment);
         count.textContent = `${cards.length.toLocaleString('fr-FR')} carte${cards.length > 1 ? 's' : ''}`;
 
         if (shown.length < cards.length) {
@@ -545,6 +893,29 @@
           more.textContent = `Afficher ${Math.min(CARD_BATCH, cards.length - shown.length)} de plus`;
         } else {
           more.hidden = true;
+        }
+
+        requestAnimationFrame(() => {
+          runtime.cardExtras.renderCardExtras();
+        });
+      }
+
+      async function rebuildFamily(family) {
+        const progress = openProgressModal(`Actualisation de « ${family.name} »`);
+
+        try {
+          const updated = await buildFamily({
+            id: family.id,
+            name: family.name,
+            keyword: family.keyword
+          }, progress.update);
+
+          saveFamily(updated);
+          await wait(450);
+          progress.close();
+          renderPageContent();
+        } catch (error) {
+          progress.fail(String(error?.message || error));
         }
       }
 
@@ -572,30 +943,7 @@
         refresh.type = 'button';
         refresh.className = 'wm-family-secondary';
         refresh.textContent = 'Actualiser';
-        refresh.addEventListener('click', async () => {
-          refresh.disabled = true;
-          refresh.textContent = 'Actualisation…';
-
-          try {
-            const updated = await buildFamily({
-              id: family.id,
-              name: family.name,
-              keyword: family.keyword
-            }, (progress) => {
-              const totalText = Number.isFinite(progress.total)
-                ? ` / ${progress.total.toLocaleString('fr-FR')}`
-                : '';
-              refresh.textContent = `Cartes ${progress.loaded.toLocaleString('fr-FR')}${totalText}`;
-            });
-
-            saveFamily(updated);
-            renderPageContent();
-          } catch (error) {
-            window.alert(String(error?.message || error));
-            refresh.disabled = false;
-            refresh.textContent = 'Actualiser';
-          }
-        });
+        refresh.addEventListener('click', () => rebuildFamily(family));
 
         const remove = document.createElement('button');
         remove.type = 'button';
@@ -618,8 +966,11 @@
         const title = document.createElement('h1');
         title.textContent = family.name;
 
+        const discovery = family.discovery;
         const info = document.createElement('p');
-        info.textContent = `Mot-clé : “${family.keyword}” • actualisée le ${formatDate(family.updatedAt)}`;
+        info.textContent = discovery?.candidateTitles
+          ? `${discovery.candidateTitles.toLocaleString('fr-FR')} pages liées → ${stats.total.toLocaleString('fr-FR')} cartes WikiMasters • actualisée le ${formatDate(family.updatedAt)}`
+          : `Thème : “${family.keyword}” • actualisée le ${formatDate(family.updatedAt)}`;
 
         copy.append(title, info);
 
@@ -730,8 +1081,69 @@
         }
       }
 
-      function closeModal(overlay) {
-        overlay?.remove();
+      function openProgressModal(titleText) {
+        const overlay = document.createElement('div');
+        overlay.className = 'wm-family-modal-overlay wm-family-progress-overlay';
+
+        const modal = document.createElement('div');
+        modal.className = 'wm-family-modal wm-family-progress-modal';
+
+        const title = document.createElement('h2');
+        title.textContent = titleText;
+
+        const stage = document.createElement('strong');
+        stage.className = 'wm-family-progress-stage';
+        stage.textContent = 'Préparation';
+
+        const detail = document.createElement('p');
+        detail.className = 'wm-family-progress-detail';
+        detail.textContent = 'Initialisation…';
+
+        const bar = document.createElement('div');
+        bar.className = 'wm-family-build-progress';
+        const fill = document.createElement('span');
+        bar.append(fill);
+
+        const percent = document.createElement('span');
+        percent.className = 'wm-family-build-percent';
+        percent.textContent = '0 %';
+
+        const note = document.createElement('div');
+        note.className = 'wm-family-progress-note';
+        note.textContent = 'Tu peux laisser cette fenêtre ouverte pendant la création.';
+
+        const closeButton = document.createElement('button');
+        closeButton.type = 'button';
+        closeButton.className = 'wm-family-secondary';
+        closeButton.textContent = 'Fermer';
+        closeButton.hidden = true;
+
+        modal.append(title, stage, detail, bar, percent, note, closeButton);
+        overlay.append(modal);
+        document.body.append(overlay);
+
+        const close = () => overlay.remove();
+        closeButton.addEventListener('click', close);
+
+        return {
+          update(progress) {
+            const value = Math.max(0, Math.min(100, Number(progress?.percent) || 0));
+            stage.textContent = progress?.title || 'Création';
+            detail.textContent = progress?.detail || '';
+            fill.style.width = `${value}%`;
+            percent.textContent = `${value}%`;
+          },
+          fail(message) {
+            stage.textContent = 'Erreur';
+            detail.textContent = message;
+            modal.dataset.mode = 'error';
+            fill.style.width = '100%';
+            percent.textContent = 'Erreur';
+            note.textContent = 'La famille n’a pas été modifiée.';
+            closeButton.hidden = false;
+          },
+          close
+        };
       }
 
       function openCreateModal() {
@@ -747,7 +1159,7 @@
         title.textContent = 'Ajouter une famille';
 
         const description = document.createElement('p');
-        description.textContent = 'Le mot-clé est recherché dans les cartes WikiMasters.';
+        description.textContent = 'Le thème est recherché dans Wikidata, Wikipédia puis associé aux cartes WikiMasters.';
 
         const nameLabel = document.createElement('label');
         nameLabel.textContent = 'Nom';
@@ -756,17 +1168,17 @@
         nameInput.placeholder = 'Ex. K-pop';
 
         const keywordLabel = document.createElement('label');
-        keywordLabel.textContent = 'Mot-clé';
+        keywordLabel.textContent = 'Thème';
         const keywordInput = document.createElement('input');
         keywordInput.type = 'text';
-        keywordInput.placeholder = 'Ex. kpop';
+        keywordInput.placeholder = 'Ex. K-pop';
 
         nameLabel.append(nameInput);
         keywordLabel.append(keywordInput);
 
-        const status = document.createElement('div');
-        status.className = 'wm-family-modal-status';
-        status.textContent = 'Vérifie le mot-clé avant de créer la famille.';
+        const hint = document.createElement('div');
+        hint.className = 'wm-family-modal-status';
+        hint.textContent = 'La création peut prendre quelques secondes selon la taille du thème.';
 
         const actions = document.createElement('div');
         actions.className = 'wm-family-modal-actions';
@@ -776,121 +1188,45 @@
         cancel.className = 'wm-family-secondary';
         cancel.textContent = 'Annuler';
 
-        const preview = document.createElement('button');
-        preview.type = 'button';
-        preview.className = 'wm-family-secondary';
-        preview.textContent = 'Vérifier';
-
         const create = document.createElement('button');
         create.type = 'button';
         create.className = 'wm-family-primary';
         create.textContent = 'Créer';
-        create.disabled = true;
 
-        let checkedKeyword = '';
-
-        const resetPreview = () => {
-          checkedKeyword = '';
-          create.disabled = true;
-          status.dataset.mode = '';
-          status.textContent = 'Vérifie le mot-clé avant de créer la famille.';
-        };
-
-        keywordInput.addEventListener('input', resetPreview);
-
-        preview.addEventListener('click', async () => {
-          const keyword = keywordInput.value.trim();
-          if (!keyword) {
-            status.dataset.mode = 'error';
-            status.textContent = 'Entre un mot-clé.';
-            return;
-          }
-
-          preview.disabled = true;
-          status.dataset.mode = '';
-          status.textContent = 'Recherche…';
-
-          try {
-            const result = await previewKeyword(keyword);
-
-            if (result.total > MAX_RESULTS) {
-              checkedKeyword = '';
-              create.disabled = true;
-              status.dataset.mode = 'error';
-              status.textContent = `${result.total.toLocaleString('fr-FR')} résultats : mot-clé trop large. Affine la recherche.`;
-            } else if (!result.total) {
-              checkedKeyword = '';
-              create.disabled = true;
-              status.dataset.mode = 'error';
-              status.textContent = 'Aucune carte trouvée.';
-            } else {
-              checkedKeyword = keyword;
-              create.disabled = false;
-              status.dataset.mode = 'success';
-              status.textContent = result.exact
-                ? `${result.total.toLocaleString('fr-FR')} cartes trouvées.`
-                : `Au moins ${result.total.toLocaleString('fr-FR')} cartes trouvées.`;
-
-              if (!nameInput.value.trim()) {
-                nameInput.value = keyword.charAt(0).toUpperCase() + keyword.slice(1);
-              }
-            }
-          } catch (error) {
-            checkedKeyword = '';
-            create.disabled = true;
-            status.dataset.mode = 'error';
-            status.textContent = `Erreur : ${String(error?.message || error)}`;
-          } finally {
-            preview.disabled = false;
-          }
+        cancel.addEventListener('click', () => overlay.remove());
+        overlay.addEventListener('click', (event) => {
+          if (event.target === overlay) overlay.remove();
         });
 
         create.addEventListener('click', async () => {
           const keyword = keywordInput.value.trim();
           const name = nameInput.value.trim() || keyword;
 
-          if (!keyword || keyword !== checkedKeyword) {
-            status.dataset.mode = 'error';
-            status.textContent = 'Vérifie à nouveau ce mot-clé.';
-            create.disabled = true;
+          if (!keyword) {
+            hint.dataset.mode = 'error';
+            hint.textContent = 'Entre un thème.';
             return;
           }
 
-          create.disabled = true;
-          preview.disabled = true;
-          cancel.disabled = true;
+          overlay.remove();
+          const progress = openProgressModal(`Création de « ${name} »`);
 
           try {
-            const family = await buildFamily({ name, keyword }, (progress) => {
-              const total = Number.isFinite(progress.total)
-                ? ` / ${progress.total.toLocaleString('fr-FR')}`
-                : '';
-              status.dataset.mode = '';
-              status.textContent = `Cartes : ${progress.loaded.toLocaleString('fr-FR')}${total}`;
-            });
-
+            const family = await buildFamily({ name, keyword }, progress.update);
             saveFamily(family);
             activeFamilyId = family.id;
             currentFilter = 'all';
             visibleCount = CARD_BATCH;
-            closeModal(overlay);
+            await wait(500);
+            progress.close();
             renderPageContent();
           } catch (error) {
-            status.dataset.mode = 'error';
-            status.textContent = String(error?.message || error);
-            create.disabled = false;
-            preview.disabled = false;
-            cancel.disabled = false;
+            progress.fail(String(error?.message || error));
           }
         });
 
-        cancel.addEventListener('click', () => closeModal(overlay));
-        overlay.addEventListener('click', (event) => {
-          if (event.target === overlay) closeModal(overlay);
-        });
-
-        actions.append(cancel, preview, create);
-        modal.append(title, description, nameLabel, keywordLabel, status, actions);
+        actions.append(cancel, create);
+        modal.append(title, description, nameLabel, keywordLabel, hint, actions);
         overlay.append(modal);
         document.body.append(overlay);
         nameInput.focus();
