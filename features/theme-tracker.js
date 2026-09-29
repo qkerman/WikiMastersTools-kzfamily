@@ -13,8 +13,8 @@
       const NAV_ID = 'wm-theme-tracker-nav';
       const STORAGE_KEY = 'wm_families_v1';
       const PAGE_SIZE_FALLBACK = 50;
-      const MAX_RESULTS = 10000;
-      const MAX_PAGES = 200;
+      const MAX_RESULTS = 3000;
+      const MAX_PAGES = 60;
       const REQUEST_DELAY_MS = 70;
       const CARD_BATCH = 120;
 
