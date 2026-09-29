@@ -711,6 +711,11 @@
           missing.className = 'wm-family-possession-badge is-missing';
           missing.textContent = 'Manquante';
           card.append(missing);
+        } else {
+          const unchecked = document.createElement('span');
+          unchecked.className = 'wm-family-possession-badge is-unchecked';
+          unchecked.textContent = 'À vérifier';
+          card.append(unchecked);
         }
 
         card.append(artLayer, textLayer, rarityBadge);
