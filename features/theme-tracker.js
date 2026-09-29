@@ -65,7 +65,9 @@
       }
 
       function writeFamilies(families) {
-        writeLocalValue(STORAGE_KEY, families);
+        if (!writeLocalValue(STORAGE_KEY, families)) {
+          throw new Error('Impossible d’enregistrer les Familles dans le stockage local du navigateur.');
+        }
       }
 
       function getFamily(id) {
