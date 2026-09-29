@@ -9,7 +9,7 @@
       } = runtime.core;
 
       const SUPABASE_HOST = 'cyrxjeppjqsxxjayfrur.supabase.co';
-      const BATCH_SIZE = 25;
+      const BATCH_SIZE = 40;
       const TEMPLATE_WAIT_MS = 5000;
 
       const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
