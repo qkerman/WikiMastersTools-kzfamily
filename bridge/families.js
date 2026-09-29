@@ -13,6 +13,8 @@
       const TEMPLATE_WAIT_MS = 5000;
       const RETRY_ATTEMPTS = 4;
       const RECOVERY_ATTEMPTS = 3;
+      const MAX_CONCURRENT_BATCHES = 2;
+      const MIN_SPLIT_BATCH_SIZE = 10;
 
       const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -180,46 +182,105 @@
             batches.push(titles.slice(index, index + BATCH_SIZE));
           }
 
+          let cursor = 0;
+          let completedBatches = 0;
           let failed = [];
 
-          for (let index = 0; index < batches.length; index += 1) {
+          const runInitialWorker = async () => {
+            while (true) {
+              const index = cursor;
+              cursor += 1;
+              if (index >= batches.length) return;
+
+              try {
+                const cards = await fetchBatchWithRetry({
+                  requestId,
+                  template,
+                  titles: batches[index],
+                  batch: index + 1,
+                  batches: batches.length
+                });
+
+                for (const card of cards) {
+                  cardsById.set(card.id, card);
+                }
+              } catch (error) {
+                failed.push({
+                  index,
+                  titles: batches[index],
+                  error: String(error?.message || error)
+                });
+              }
+
+              completedBatches += 1;
+              emitProgress({
+                requestId,
+                batch: index + 1,
+                batches: batches.length,
+                completedBatches,
+                processedTitles: Math.min(completedBatches * BATCH_SIZE, titles.length),
+                totalTitles: titles.length,
+                matchedCards: cardsById.size,
+                failedBatches: failed.length,
+                phase: 'normal'
+              });
+            }
+          };
+
+          await Promise.all(
+            Array.from(
+              { length: Math.min(MAX_CONCURRENT_BATCHES, batches.length) },
+              () => runInitialWorker()
+            )
+          );
+
+          const finalFailures = [];
+
+          async function recoverTitles(item, titlesToRecover, depth = 0) {
             try {
+              template = getSupabaseRequestTemplate() || template;
               const cards = await fetchBatchWithRetry({
                 requestId,
                 template,
-                titles: batches[index],
-                batch: index + 1,
-                batches: batches.length
+                titles: titlesToRecover,
+                batch: item.index + 1,
+                batches: batches.length,
+                maxAttempts: RECOVERY_ATTEMPTS,
+                phase: 'recovery'
               });
 
               for (const card of cards) {
                 cardsById.set(card.id, card);
               }
+              return;
             } catch (error) {
-              failed.push({
-                index,
-                titles: batches[index],
+              if (
+                titlesToRecover.length > MIN_SPLIT_BATCH_SIZE &&
+                depth < 2
+              ) {
+                const middle = Math.ceil(titlesToRecover.length / 2);
+                const halves = [
+                  titlesToRecover.slice(0, middle),
+                  titlesToRecover.slice(middle)
+                ].filter((part) => part.length);
+
+                for (const half of halves) {
+                  await recoverTitles(item, half, depth + 1);
+                }
+                return;
+              }
+
+              finalFailures.push({
+                index: item.index,
+                titles: titlesToRecover,
                 error: String(error?.message || error)
               });
             }
-
-            emitProgress({
-              requestId,
-              batch: index + 1,
-              batches: batches.length,
-              processedTitles: Math.min((index + 1) * BATCH_SIZE, titles.length),
-              totalTitles: titles.length,
-              matchedCards: cardsById.size,
-              failedBatches: failed.length,
-              phase: 'normal'
-            });
           }
 
-          // Deuxième passage uniquement sur les lots qui ont vraiment échoué.
           if (failed.length) {
             const retryList = failed;
             failed = [];
-            template = getSupabaseRequestTemplate() || template;
 
             for (let recoveryIndex = 0; recoveryIndex < retryList.length; recoveryIndex += 1) {
               const item = retryList[recoveryIndex];
@@ -228,32 +289,14 @@
                 requestId,
                 batch: item.index + 1,
                 batches: batches.length,
+                completedBatches,
                 matchedCards: cardsById.size,
                 recoveryIndex: recoveryIndex + 1,
                 recoveryTotal: retryList.length,
                 phase: 'recovery'
               });
 
-              try {
-                const cards = await fetchBatchWithRetry({
-                  requestId,
-                  template,
-                  titles: item.titles,
-                  batch: item.index + 1,
-                  batches: batches.length,
-                  maxAttempts: RECOVERY_ATTEMPTS,
-                  phase: 'recovery'
-                });
-
-                for (const card of cards) {
-                  cardsById.set(card.id, card);
-                }
-              } catch (error) {
-                failed.push({
-                  ...item,
-                  error: String(error?.message || error)
-                });
-              }
+              await recoverTitles(item, item.titles);
             }
           }
 
@@ -263,10 +306,10 @@
               ok: true,
               cards: [...cardsById.values()],
               totalTitles: titles.length,
-              failedBatches: failed.length,
-              failedTitles: failed.reduce((sum, item) => sum + item.titles.length, 0),
-              partial: failed.length > 0,
-              warnings: failed.map((item) => item.error)
+              failedBatches: finalFailures.length,
+              failedTitles: finalFailures.reduce((sum, item) => sum + item.titles.length, 0),
+              partial: finalFailures.length > 0,
+              warnings: finalFailures.map((item) => item.error)
             }
           }));
         } catch (error) {
