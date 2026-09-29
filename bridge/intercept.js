@@ -5,7 +5,7 @@
     create(runtime) {
       const {
         originalFetch, emitCollection, isMarketplaceDetailApi, isPacksOpenApi,
-        isTradesApi, isGlobalCardsApi, captureGlobalCardsRequest,
+        isTradesApi, isGlobalCardsApi, captureSupabaseRequest, captureGlobalCardsRequest,
         getGlobalCollectionSummaryCardId, emitGlobalCollectionInspectedCard,
         emitGlobalCatalogue, emitTrades, fetchTrades,
         emitMarketplaceDetail, emitPackOpened
@@ -13,6 +13,7 @@
 
       window.fetch = (...args) => {
         try {
+          captureSupabaseRequest(args[0], args[1] || {});
           captureGlobalCardsRequest(args[0], args[1] || {});
         } catch (_) {}
         const fetchPromise = originalFetch(...args);
