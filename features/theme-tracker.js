@@ -167,7 +167,7 @@
           timer = setTimeout(() => {
             window.removeEventListener('message', handler);
             reject(new Error('Délai dépassé pour la source externe'));
-          }, 30000);
+          }, 60000);
 
           window.postMessage({
             source: 'wm-average-page',
@@ -580,7 +580,7 @@ LIMIT ${MAX_SEMANTIC_TITLES}
           'wm-average-family-resolve-result',
           { titles: list },
           {
-            timeoutMs: 120000,
+            timeoutMs: 180000,
             progressName: 'wm-average-family-resolve-progress',
             onProgress: (progress) => {
               const ratio = progress.batches
