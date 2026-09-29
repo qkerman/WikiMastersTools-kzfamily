@@ -12,6 +12,7 @@
   runtime.intercept = registry.bridgeIntercept.create(runtime);
   runtime.marketplace = registry.bridgeMarketplace.create(runtime);
   runtime.prices = registry.bridgePrices.create(runtime);
+  runtime.themes = registry.bridgeThemes.create(runtime);
 
   console.debug('[WM Average] bridge modulaire v4.2.0 installé');
 })();
