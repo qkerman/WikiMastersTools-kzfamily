@@ -679,3 +679,17 @@ html.wm-theme-route main > :not(#wm-theme-tracker-page) {
     font-size: 7.5px;
   }
 }
+
+
+/* v4.21 — états de possession vérifiés */
+.wm-family-possession-badge.is-unchecked {
+  border-color: rgba(250, 204, 21, 0.42);
+  background: rgba(113, 63, 18, 0.84);
+  color: #fde68a;
+}
+
+@media (max-width: 700px) {
+  .wm-family-filters {
+    grid-template-columns: repeat(auto-fit, minmax(82px, 1fr));
+  }
+}
