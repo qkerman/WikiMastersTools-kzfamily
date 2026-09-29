@@ -925,6 +925,15 @@ LIMIT ${MAX_SEMANTIC_TITLES}
         const cards = filteredCards(family);
         const shown = cards.slice(0, visibleCount);
 
+        registerCards((family.cards || []).map((card) => ({
+          id: card.id,
+          title: card.title,
+          rarity: card.rarity,
+          imageUrl: card.imageUrl,
+          wikipediaUrl: card.wikipediaUrl,
+          count: Math.max(1, card.ownedCount || 1)
+        })));
+
         const grid = container.querySelector('[data-role="cards"]');
         const count = container.querySelector('[data-role="count"]');
         const more = container.querySelector('[data-role="more"]');
