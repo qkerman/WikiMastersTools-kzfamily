@@ -4,93 +4,23 @@
   registry.themeTracker = {
     create(runtime) {
       const {
-        ALL_COLLECTION_KEY,
-        storageGet,
+        readLocalValue,
+        writeLocalValue,
         registerCards
       } = runtime.core;
 
       const PAGE_ID = 'wm-theme-tracker-page';
       const NAV_ID = 'wm-theme-tracker-nav';
-      const RARITY_ORDER = ['L', 'UR', 'SR', 'R', 'PC', 'C'];
+      const STORAGE_KEY = 'wm_families_v1';
+      const PAGE_SIZE_FALLBACK = 50;
+      const MAX_RESULTS = 10000;
+      const MAX_PAGES = 200;
+      const REQUEST_DELAY_MS = 70;
+      const CARD_BATCH = 120;
 
-      const CATEGORIES = [
-        {
-          key: 'animaux',
-          label: 'Animaux',
-          icon: '🐾',
-          description: 'Faune, espèces, oiseaux, poissons, insectes…',
-          terms: [
-            'animal', 'animaux', 'mammifere', 'mammiferes', 'oiseau', 'oiseaux', 'poisson',
-            'poissons', 'reptile', 'reptiles', 'amphibien', 'amphibiens', 'insecte', 'insectes',
-            'arachnide', 'arachnides', 'mollusque', 'mollusques', 'crustace', 'crustaces',
-            'felin', 'felins', 'canide', 'canides', 'primate', 'primates', 'chien', 'chiens',
-            'chat', 'chats', 'lion', 'tigre', 'panthere', 'leopard', 'guepard', 'lynx', 'loup',
-            'renard', 'ours', 'panda', 'cheval', 'zebre', 'girafe', 'elephant', 'rhinoceros',
-            'hippopotame', 'singe', 'gorille', 'chimpanze', 'requin', 'baleine', 'dauphin',
-            'orque', 'tortue', 'serpent', 'crocodile', 'aigle', 'faucon', 'hibou', 'chouette',
-            'papillon', 'abeille', 'fourmi', 'scarabee', 'araignee', 'pieuvre', 'poulpe'
-          ]
-        },
-        {
-          key: 'chateaux',
-          label: 'Châteaux',
-          icon: '🏰',
-          description: 'Châteaux, palais, forteresses et citadelles.',
-          terms: ['chateau', 'chateaux', 'forteresse', 'forteresses', 'citadelle', 'citadelles', 'palais', 'donjon']
-        },
-        {
-          key: 'automobiles',
-          label: 'Automobiles',
-          icon: '🏎️',
-          description: 'Voitures, marques et modèles automobiles.',
-          terms: ['voiture', 'voitures', 'automobile', 'automobiles', 'vehicule', 'vehicules', 'ferrari', 'porsche', 'bugatti', 'lamborghini']
-        },
-        {
-          key: 'espace',
-          label: 'Espace',
-          icon: '🪐',
-          description: 'Astronomie, planètes, étoiles et exploration spatiale.',
-          terms: ['espace', 'astronomie', 'planete', 'planetes', 'etoile', 'etoiles', 'galaxie', 'galaxies', 'satellite', 'cosmos', 'nebuleuse', 'lune']
-        },
-        {
-          key: 'dinosaures',
-          label: 'Dinosaures',
-          icon: '🦖',
-          description: 'Dinosaures et espèces préhistoriques.',
-          terms: ['dinosaure', 'dinosaures', 'tyrannosaure', 'triceratops', 'velociraptor', 'sauropode', 'theropode', 'ceratopsien']
-        },
-        {
-          key: 'sport',
-          label: 'Sport',
-          icon: '🏆',
-          description: 'Sports, athlètes et grandes compétitions.',
-          terms: ['sport', 'sportif', 'sportive', 'football', 'tennis', 'basketball', 'rugby', 'cyclisme', 'athlete', 'athletisme']
-        },
-        {
-          key: 'musique',
-          label: 'Musique',
-          icon: '🎵',
-          description: 'Artistes, groupes, instruments et compositeurs.',
-          terms: ['musique', 'musicien', 'musicienne', 'chanteur', 'chanteuse', 'compositeur', 'groupe musical', 'album', 'instrument']
-        },
-        {
-          key: 'mythologie',
-          label: 'Mythologie',
-          icon: '⚡',
-          description: 'Dieux, déesses, héros et créatures mythologiques.',
-          terms: ['mythologie', 'mythologique', 'dieu', 'deesse', 'divinite', 'legende', 'mythe']
-        }
-      ];
-
-      let catalogueCards = [];
-      let catalogueComplete = false;
-      let catalogueSource = 'none';
-      let ownedCards = [];
-      let currentRows = [];
+      let activeFamilyId = null;
       let currentFilter = 'all';
-      let currentSort = 'relevance';
-      let currentCategory = null;
-      let searchGeneration = 0;
+      let visibleCount = CARD_BATCH;
 
       function isThemePage() {
         if (location.pathname !== '/global-collection') return false;
@@ -106,22 +36,54 @@
           .normalize('NFD')
           .replace(/[\u0300-\u036f]/g, '')
           .toLocaleLowerCase('fr')
-          .replace(/[’']/g, "'")
-          .replace(/[^a-z0-9' -]+/g, ' ')
           .replace(/\s+/g, ' ')
           .trim();
       }
 
-      function createIcon() {
-        const wrap = document.createElement('span');
-        wrap.className = 'flex shrink-0 items-center justify-center wm-theme-nav-icon';
-        wrap.innerHTML = `
-          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M12 3l1.6 4.4L18 9l-4.4 1.6L12 15l-1.6-4.4L6 9l4.4-1.6L12 3z"></path>
-            <path d="M19 15l.9 2.1L22 18l-2.1.9L19 21l-.9-2.1L16 18l2.1-.9L19 15z"></path>
-            <path d="M5 13l.8 1.7L7.5 15l-1.7.8L5 17.5l-.8-1.7L2.5 15l1.7-.8L5 13z"></path>
-          </svg>`;
-        return wrap;
+      function wait(ms) {
+        return new Promise((resolve) => setTimeout(resolve, ms));
+      }
+
+      function familyId() {
+        return `family-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      }
+
+      function readFamilies() {
+        const value = readLocalValue(STORAGE_KEY);
+        return Array.isArray(value) ? value.filter((item) => item?.id && item?.name && Array.isArray(item.cards)) : [];
+      }
+
+      function writeFamilies(families) {
+        writeLocalValue(STORAGE_KEY, families);
+      }
+
+      function getFamily(id) {
+        return readFamilies().find((item) => item.id === id) || null;
+      }
+
+      function saveFamily(family) {
+        const families = readFamilies();
+        const index = families.findIndex((item) => item.id === family.id);
+        if (index >= 0) families[index] = family;
+        else families.unshift(family);
+        writeFamilies(families);
+      }
+
+      function removeFamily(id) {
+        writeFamilies(readFamilies().filter((item) => item.id !== id));
+      }
+
+      function formatDate(timestamp) {
+        if (!timestamp) return '';
+        try {
+          return new Intl.DateTimeFormat('fr-FR', {
+            day: 'numeric',
+            month: 'short',
+            year: 'numeric'
+          }).format(new Date(timestamp));
+        } catch (_) {
+          return '';
+        }
       }
 
       function ensureNavLink() {
@@ -133,26 +95,31 @@
         let link = document.getElementById(NAV_ID);
 
         if (!link) {
-          const collectionLink = document.querySelector('nav a[href="/collection"]');
-          const globalLink = document.querySelector('nav a[href="/global-collection"]');
-          const anchor = collectionLink || globalLink;
+          const anchor =
+            document.querySelector('nav a[href="/collection"]') ||
+            document.querySelector('nav a[href="/global-collection"]');
+
           if (!anchor?.parentElement) return;
 
           link = document.createElement('a');
           link.id = NAV_ID;
           link.href = '/global-collection?wm=themes';
-          link.className = 'wm-theme-nav-link flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200';
-          link.title = 'Fonction ajoutée par WikiMastersTools';
+          link.className = 'wm-family-nav flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200';
+
+          const icon = document.createElement('span');
+          icon.className = 'wm-family-nav-icon';
+          icon.innerHTML = `
+            <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <rect x="3" y="4" width="7" height="7" rx="2"></rect>
+              <rect x="14" y="4" width="7" height="7" rx="2"></rect>
+              <rect x="3" y="14" width="7" height="7" rx="2"></rect>
+              <rect x="14" y="14" width="7" height="7" rx="2"></rect>
+            </svg>`;
 
           const label = document.createElement('span');
-          label.className = 'wm-theme-nav-label';
-          label.textContent = 'Collections thématiques';
+          label.textContent = 'Familles';
 
-          const badge = document.createElement('span');
-          badge.className = 'wm-theme-nav-badge';
-          badge.textContent = 'EXT';
-
-          link.append(createIcon(), label, badge);
+          link.append(icon, label);
           anchor.insertAdjacentElement('afterend', link);
         }
 
@@ -161,139 +128,595 @@
         else link.removeAttribute('aria-current');
       }
 
-      function setStatus(text, mode = 'normal') {
-        const status = document.querySelector(`#${PAGE_ID} [data-role="status"]`);
-        if (!status) return;
-        status.textContent = text || '';
-        status.dataset.mode = mode;
+      function extractRows(json, owned = false) {
+        const candidates = owned
+          ? [json?.collection, json?.cards, json?.items, json?.results, json?.data]
+          : [json?.cards, json?.collection, json?.items, json?.results, json?.data];
+
+        for (const candidate of candidates) {
+          if (Array.isArray(candidate)) return candidate;
+        }
+
+        if (Array.isArray(json)) return json;
+        return [];
       }
 
-      function updateProgress(loaded) {
-        if (!isThemePage() || !loaded) return;
-        setStatus(`Chargement du répertoire… ${loaded.toLocaleString('fr-FR')} cartes`);
+      function mapGlobalRow(row) {
+        const card = row?.card || row;
+        const id = row?.card_id || card?.id;
+        const title = card?.wikipedia_title || card?.title;
+
+        if (!id || !title) return null;
+
+        return {
+          id,
+          title,
+          rarity: card?.rarity || row?.rarity || null,
+          category: card?.category || row?.category || null,
+          imageUrl: card?.image_url || row?.image_url || null,
+          wikipediaUrl: card?.wikipedia_url || row?.wikipedia_url || null,
+          owned: false,
+          ownedCount: 0
+        };
+      }
+
+      function mapOwnedRow(row) {
+        const card = row?.card || row;
+        const id = row?.card_id || card?.id;
+        const title = card?.wikipedia_title || card?.title;
+
+        if (!id || !title) return null;
+
+        return {
+          id,
+          title,
+          rarity: card?.rarity || row?.rarity || null,
+          category: card?.category || row?.category || null,
+          imageUrl: card?.image_url || row?.image_url || null,
+          wikipediaUrl: card?.wikipedia_url || row?.wikipedia_url || null,
+          count: Math.max(1, Number(row?.count) || 1)
+        };
+      }
+
+      function readTotal(json) {
+        const values = [
+          json?.total,
+          json?.count,
+          json?.total_count,
+          json?.pagination?.total,
+          json?.meta?.total
+        ];
+
+        for (const value of values) {
+          const number = Number(value);
+          if (Number.isFinite(number) && number >= 0) return number;
+        }
+
+        return null;
+      }
+
+      async function fetchJson(url) {
+        const response = await fetch(url, {
+          method: 'GET',
+          credentials: 'include',
+          headers: { accept: '*/*' }
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+
+        return response.json();
+      }
+
+      function endpointUrl(kind, keyword, page) {
+        const q = encodeURIComponent(keyword);
+        if (kind === 'owned') {
+          return `/api/my-collection?sort=rarity&q=${q}&page=${encodeURIComponent(page)}&stats=0`;
+        }
+        return `/api/cards?page=${encodeURIComponent(page)}&q=${q}&sort=rarity`;
+      }
+
+      async function previewKeyword(keyword) {
+        const json = await fetchJson(endpointUrl('global', keyword, 0));
+        const rows = extractRows(json, false);
+        const total = readTotal(json);
+
+        return {
+          total: total == null ? rows.length : total,
+          firstPageSize: rows.length || PAGE_SIZE_FALLBACK,
+          exact: total != null
+        };
+      }
+
+      async function fetchAll(kind, keyword, onProgress) {
+        const owned = kind === 'owned';
+        const rows = [];
+        let total = null;
+        let firstPageSize = null;
+
+        for (let page = 0; page < MAX_PAGES; page += 1) {
+          const json = await fetchJson(endpointUrl(kind, keyword, page));
+          const pageRows = extractRows(json, owned);
+
+          if (page === 0) {
+            total = readTotal(json);
+            firstPageSize = pageRows.length || PAGE_SIZE_FALLBACK;
+
+            if (total != null && total > MAX_RESULTS) {
+              throw new Error(`Cette recherche contient ${total.toLocaleString('fr-FR')} résultats. Utilise un mot-clé plus précis (maximum ${MAX_RESULTS.toLocaleString('fr-FR')}).`);
+            }
+          }
+
+          rows.push(...pageRows);
+
+          onProgress?.({
+            kind,
+            page: page + 1,
+            loaded: rows.length,
+            total
+          });
+
+          const reachedTotal = total != null && rows.length >= total;
+          const shortPage = pageRows.length < (firstPageSize || PAGE_SIZE_FALLBACK);
+
+          if (!pageRows.length || reachedTotal || shortPage) break;
+          if (rows.length >= MAX_RESULTS) break;
+
+          await wait(REQUEST_DELAY_MS);
+        }
+
+        return rows;
+      }
+
+      function mergeFamilyCards(globalRows, ownedRows) {
+        const globalById = new Map();
+        const ownedById = new Map();
+
+        for (const raw of globalRows) {
+          const card = mapGlobalRow(raw);
+          if (!card) continue;
+
+          const previous = globalById.get(card.id);
+          globalById.set(card.id, previous ? {
+            ...previous,
+            ...card,
+            imageUrl: card.imageUrl || previous.imageUrl || null,
+            category: card.category || previous.category || null
+          } : card);
+        }
+
+        for (const raw of ownedRows) {
+          const card = mapOwnedRow(raw);
+          if (!card) continue;
+
+          const previous = ownedById.get(card.id);
+          ownedById.set(card.id, previous ? {
+            ...previous,
+            ...card,
+            count: (Number(previous.count) || 0) + (Number(card.count) || 0),
+            imageUrl: card.imageUrl || previous.imageUrl || null
+          } : card);
+        }
+
+        for (const ownedCard of ownedById.values()) {
+          const globalCard = globalById.get(ownedCard.id);
+
+          if (globalCard) {
+            globalById.set(ownedCard.id, {
+              ...globalCard,
+              rarity: ownedCard.rarity || globalCard.rarity || null,
+              imageUrl: ownedCard.imageUrl || globalCard.imageUrl || null,
+              category: ownedCard.category || globalCard.category || null,
+              owned: true,
+              ownedCount: ownedCard.count
+            });
+          } else {
+            globalById.set(ownedCard.id, {
+              ...ownedCard,
+              owned: true,
+              ownedCount: ownedCard.count
+            });
+          }
+        }
+
+        const cards = [...globalById.values()]
+          .sort((a, b) => a.title.localeCompare(b.title, 'fr'));
+
+        registerCards(cards.map((card) => ({
+          id: card.id,
+          title: card.title,
+          rarity: card.rarity,
+          imageUrl: card.imageUrl,
+          wikipediaUrl: card.wikipediaUrl,
+          count: Math.max(1, card.ownedCount || 1)
+        })));
+
+        return cards;
+      }
+
+      function familyStats(family) {
+        const cards = Array.isArray(family?.cards) ? family.cards : [];
+        const owned = cards.filter((card) => card.owned).length;
+        const total = cards.length;
+
+        return {
+          total,
+          owned,
+          missing: Math.max(0, total - owned),
+          percent: total ? Math.round((owned / total) * 100) : 0
+        };
+      }
+
+      async function buildFamily({ id = null, name, keyword }, onProgress) {
+        const globalRows = await fetchAll('global', keyword, onProgress);
+        const ownedRows = await fetchAll('owned', keyword, onProgress);
+        const cards = mergeFamilyCards(globalRows, ownedRows);
+        const now = Date.now();
+
+        return {
+          id: id || familyId(),
+          name: String(name || keyword).trim(),
+          keyword: String(keyword || '').trim(),
+          cards,
+          createdAt: id ? (getFamily(id)?.createdAt || now) : now,
+          updatedAt: now
+        };
+      }
+
+      function createFamilyCard(family) {
+        const stats = familyStats(family);
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'wm-family-card';
+
+        const imageUrl = family.cards.find((card) => card.imageUrl)?.imageUrl || null;
+
+        const thumb = document.createElement('span');
+        thumb.className = 'wm-family-card-thumb';
+
+        if (imageUrl) {
+          const image = document.createElement('img');
+          image.src = imageUrl;
+          image.alt = '';
+          image.loading = 'lazy';
+          thumb.append(image);
+        } else {
+          thumb.textContent = '✦';
+        }
+
+        const body = document.createElement('span');
+        body.className = 'wm-family-card-body';
+
+        const title = document.createElement('strong');
+        title.textContent = family.name;
+
+        const keyword = document.createElement('span');
+        keyword.className = 'wm-family-card-keyword';
+        keyword.textContent = `“${family.keyword}”`;
+
+        const numbers = document.createElement('span');
+        numbers.className = 'wm-family-card-numbers';
+        numbers.textContent = `${stats.owned.toLocaleString('fr-FR')} / ${stats.total.toLocaleString('fr-FR')} possédées`;
+
+        const progress = document.createElement('span');
+        progress.className = 'wm-family-progress';
+
+        const fill = document.createElement('span');
+        fill.style.width = `${stats.percent}%`;
+        progress.append(fill);
+
+        body.append(title, keyword, numbers, progress);
+        button.append(thumb, body);
+
+        button.addEventListener('click', () => {
+          activeFamilyId = family.id;
+          currentFilter = 'all';
+          visibleCount = CARD_BATCH;
+          renderPageContent();
+        });
+
+        return button;
+      }
+
+      function createAddCard() {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'wm-family-add-card';
+        button.innerHTML = '<span>+</span><strong>Ajouter une famille</strong>';
+        button.addEventListener('click', openCreateModal);
+        return button;
+      }
+
+      function buildHome() {
+        const wrap = document.createElement('div');
+        wrap.className = 'wm-family-home';
+
+        const heading = document.createElement('div');
+        heading.className = 'wm-family-page-head';
+
+        const copy = document.createElement('div');
+        const title = document.createElement('h1');
+        title.textContent = 'Familles';
+
+        const subtitle = document.createElement('p');
+        subtitle.textContent = 'Crée des groupes de cartes à partir d’un mot-clé.';
+
+        copy.append(title, subtitle);
+
+        const add = document.createElement('button');
+        add.type = 'button';
+        add.className = 'wm-family-primary';
+        add.textContent = '+ Ajouter une famille';
+        add.addEventListener('click', openCreateModal);
+
+        heading.append(copy, add);
+
+        const grid = document.createElement('div');
+        grid.className = 'wm-family-grid';
+
+        const families = readFamilies();
+
+        if (!families.length) {
+          const empty = document.createElement('div');
+          empty.className = 'wm-family-empty';
+          empty.innerHTML = '<strong>Aucune famille</strong><span>Ajoute un mot-clé pour commencer.</span>';
+
+          const emptyButton = document.createElement('button');
+          emptyButton.type = 'button';
+          emptyButton.className = 'wm-family-primary';
+          emptyButton.textContent = 'Ajouter une famille';
+          emptyButton.addEventListener('click', openCreateModal);
+
+          empty.append(emptyButton);
+          grid.append(empty);
+        } else {
+          families.forEach((family) => grid.append(createFamilyCard(family)));
+          grid.append(createAddCard());
+        }
+
+        wrap.append(heading, grid);
+        return wrap;
+      }
+
+      function filteredCards(family) {
+        let cards = [...family.cards];
+
+        if (currentFilter === 'owned') cards = cards.filter((card) => card.owned);
+        if (currentFilter === 'missing') cards = cards.filter((card) => !card.owned);
+
+        return cards.sort((a, b) => a.title.localeCompare(b.title, 'fr'));
+      }
+
+      function createResultCard(card) {
+        const item = document.createElement('article');
+        item.className = `wm-family-result ${card.owned ? 'is-owned' : 'is-missing'}`;
+
+        const visual = document.createElement('div');
+        visual.className = 'wm-family-result-image';
+
+        if (card.imageUrl) {
+          const image = document.createElement('img');
+          image.src = card.imageUrl;
+          image.alt = '';
+          image.loading = 'lazy';
+          visual.append(image);
+        } else {
+          visual.textContent = '✦';
+        }
+
+        const badge = document.createElement('span');
+        badge.className = `wm-family-owned-badge ${card.owned ? 'is-owned' : ''}`;
+        badge.textContent = card.owned
+          ? `✓ Possédée${card.ownedCount > 1 ? ` ×${card.ownedCount}` : ''}`
+          : 'Manquante';
+        visual.append(badge);
+
+        const body = document.createElement('div');
+        body.className = 'wm-family-result-body';
+
+        const title = document.createElement('h3');
+        title.textContent = card.title;
+
+        const meta = document.createElement('div');
+        meta.className = 'wm-family-result-meta';
+
+        if (card.rarity) {
+          const rarity = document.createElement('span');
+          rarity.textContent = card.rarity;
+          meta.append(rarity);
+        }
+
+        if (card.category) {
+          const category = document.createElement('span');
+          category.textContent = card.category;
+          meta.append(category);
+        }
+
+        body.append(title, meta);
+        item.append(visual, body);
+        return item;
+      }
+
+      function renderDetailGrid(family, container) {
+        const cards = filteredCards(family);
+        const shown = cards.slice(0, visibleCount);
+
+        const grid = container.querySelector('[data-role="cards"]');
+        const count = container.querySelector('[data-role="count"]');
+        const more = container.querySelector('[data-role="more"]');
+
+        grid.replaceChildren();
+        const fragment = document.createDocumentFragment();
+        shown.forEach((card) => fragment.append(createResultCard(card)));
+        grid.append(fragment);
+
+        count.textContent = `${cards.length.toLocaleString('fr-FR')} carte${cards.length > 1 ? 's' : ''}`;
+
+        if (shown.length < cards.length) {
+          more.hidden = false;
+          more.textContent = `Afficher ${Math.min(CARD_BATCH, cards.length - shown.length)} de plus`;
+        } else {
+          more.hidden = true;
+        }
+      }
+
+      function buildDetail(family) {
+        const stats = familyStats(family);
+        const wrap = document.createElement('div');
+        wrap.className = 'wm-family-detail';
+
+        const top = document.createElement('div');
+        top.className = 'wm-family-detail-top';
+
+        const back = document.createElement('button');
+        back.type = 'button';
+        back.className = 'wm-family-link-button';
+        back.textContent = '← Familles';
+        back.addEventListener('click', () => {
+          activeFamilyId = null;
+          renderPageContent();
+        });
+
+        const actions = document.createElement('div');
+        actions.className = 'wm-family-actions';
+
+        const refresh = document.createElement('button');
+        refresh.type = 'button';
+        refresh.className = 'wm-family-secondary';
+        refresh.textContent = 'Actualiser';
+        refresh.addEventListener('click', async () => {
+          refresh.disabled = true;
+          refresh.textContent = 'Actualisation…';
+
+          try {
+            const updated = await buildFamily({
+              id: family.id,
+              name: family.name,
+              keyword: family.keyword
+            }, (progress) => {
+              const totalText = Number.isFinite(progress.total)
+                ? ` / ${progress.total.toLocaleString('fr-FR')}`
+                : '';
+              refresh.textContent = `${progress.kind === 'global' ? 'Cartes' : 'Possédées'} ${progress.loaded.toLocaleString('fr-FR')}${totalText}`;
+            });
+
+            saveFamily(updated);
+            renderPageContent();
+          } catch (error) {
+            window.alert(String(error?.message || error));
+            refresh.disabled = false;
+            refresh.textContent = 'Actualiser';
+          }
+        });
+
+        const remove = document.createElement('button');
+        remove.type = 'button';
+        remove.className = 'wm-family-danger';
+        remove.textContent = 'Supprimer';
+        remove.addEventListener('click', () => {
+          if (!window.confirm(`Supprimer « ${family.name} » ?`)) return;
+          removeFamily(family.id);
+          activeFamilyId = null;
+          renderPageContent();
+        });
+
+        actions.append(refresh, remove);
+        top.append(back, actions);
+
+        const heading = document.createElement('div');
+        heading.className = 'wm-family-detail-head';
+
+        const copy = document.createElement('div');
+        const title = document.createElement('h1');
+        title.textContent = family.name;
+
+        const info = document.createElement('p');
+        info.textContent = `Mot-clé : “${family.keyword}” • actualisée le ${formatDate(family.updatedAt)}`;
+
+        copy.append(title, info);
+
+        const progressCopy = document.createElement('strong');
+        progressCopy.textContent = `${stats.percent} %`;
+
+        heading.append(copy, progressCopy);
+
+        const progress = document.createElement('div');
+        progress.className = 'wm-family-progress is-large';
+        const progressFill = document.createElement('span');
+        progressFill.style.width = `${stats.percent}%`;
+        progress.append(progressFill);
+
+        const filters = document.createElement('div');
+        filters.className = 'wm-family-filters';
+        filters.innerHTML = `
+          <button type="button" data-filter="all">Toutes <strong>${stats.total.toLocaleString('fr-FR')}</strong></button>
+          <button type="button" data-filter="owned">Possédées <strong>${stats.owned.toLocaleString('fr-FR')}</strong></button>
+          <button type="button" data-filter="missing">Manquantes <strong>${stats.missing.toLocaleString('fr-FR')}</strong></button>
+        `;
+
+        filters.querySelectorAll('[data-filter]').forEach((button) => {
+          button.classList.toggle('is-active', button.dataset.filter === currentFilter);
+          button.addEventListener('click', () => {
+            currentFilter = button.dataset.filter || 'all';
+            visibleCount = CARD_BATCH;
+            filters.querySelectorAll('[data-filter]').forEach((item) => {
+              item.classList.toggle('is-active', item === button);
+            });
+            renderDetailGrid(family, wrap);
+          });
+        });
+
+        const toolbar = document.createElement('div');
+        toolbar.className = 'wm-family-toolbar';
+        toolbar.innerHTML = '<span data-role="count"></span>';
+
+        const grid = document.createElement('div');
+        grid.className = 'wm-family-results';
+        grid.dataset.role = 'cards';
+
+        const more = document.createElement('button');
+        more.type = 'button';
+        more.className = 'wm-family-secondary wm-family-more';
+        more.dataset.role = 'more';
+        more.addEventListener('click', () => {
+          visibleCount += CARD_BATCH;
+          renderDetailGrid(family, wrap);
+        });
+
+        wrap.append(top, heading, progress, filters, toolbar, grid, more);
+        requestAnimationFrame(() => renderDetailGrid(family, wrap));
+        return wrap;
       }
 
       function buildPage() {
         const page = document.createElement('section');
         page.id = PAGE_ID;
-        page.className = 'wm-theme-tracker-page';
-        page.innerHTML = `
-          <div class="wm-theme-shell">
-            <header class="wm-theme-hero">
-              <div class="wm-theme-hero-copy">
-                <div class="wm-theme-kicker"><span>WikiMastersTools</span><strong>EXTENSION</strong></div>
-                <h1>Collections thématiques</h1>
-                <p>Parcours les cartes par catégorie et vois immédiatement celles que tu possèdes et celles qu’il te manque.</p>
-              </div>
-              <div class="wm-theme-hero-orb" aria-hidden="true">✦</div>
-            </header>
+        page.className = 'wm-family-page';
 
-            <section class="wm-theme-categories-section">
-              <div class="wm-theme-section-heading">
-                <div>
-                  <span class="wm-theme-eyebrow">Répertoire</span>
-                  <h2>Choisis une catégorie</h2>
-                </div>
-              </div>
-              <div class="wm-theme-categories" data-role="categories"></div>
-            </section>
+        const shell = document.createElement('div');
+        shell.className = 'wm-family-shell';
 
-            <form class="wm-theme-search" data-role="search-form">
-              <div class="wm-theme-search-box">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg>
-                <input data-role="search-input" type="search" autocomplete="off" placeholder="Ou cherche un autre thème…" aria-label="Rechercher un thème">
-                <button type="submit">Explorer</button>
-              </div>
-            </form>
+        const content = document.createElement('div');
+        content.dataset.role = 'page-content';
 
-            <div class="wm-theme-status" data-role="status">Préparation du répertoire…</div>
-
-            <section class="wm-theme-dashboard is-hidden" data-role="dashboard">
-              <div class="wm-theme-summary-head">
-                <div>
-                  <span class="wm-theme-eyebrow">Collection</span>
-                  <h2 data-role="theme-title">—</h2>
-                </div>
-                <div class="wm-theme-progress-copy"><strong data-role="progress-value">0 %</strong><span>complétée</span></div>
-              </div>
-
-              <div class="wm-theme-progress"><span data-role="progress-bar"></span></div>
-
-              <div class="wm-theme-stats">
-                <button type="button" class="wm-theme-stat is-active" data-filter="all"><span>Toutes</span><strong data-role="count-all">0</strong></button>
-                <button type="button" class="wm-theme-stat" data-filter="owned"><span>Possédées</span><strong data-role="count-owned">0</strong></button>
-                <button type="button" class="wm-theme-stat" data-filter="missing"><span>Manquantes</span><strong data-role="count-missing">0</strong></button>
-              </div>
-
-              <div class="wm-theme-toolbar">
-                <span data-role="result-copy">0 carte</span>
-                <label>Trier
-                  <select data-role="sort">
-                    <option value="relevance">Pertinence</option>
-                    <option value="rarity">Rareté</option>
-                    <option value="title">Nom</option>
-                  </select>
-                </label>
-              </div>
-
-              <div class="wm-theme-grid" data-role="grid"></div>
-              <div class="wm-theme-empty is-hidden" data-role="empty">Aucune carte dans ce filtre.</div>
-            </section>
-          </div>`;
-
-        const categories = page.querySelector('[data-role="categories"]');
-
-        for (const category of CATEGORIES) {
-          const button = document.createElement('button');
-          button.type = 'button';
-          button.className = 'wm-theme-category';
-          button.dataset.category = category.key;
-
-          const icon = document.createElement('span');
-          icon.className = 'wm-theme-category-icon';
-          icon.textContent = category.icon;
-
-          const copy = document.createElement('span');
-          copy.className = 'wm-theme-category-copy';
-
-          const title = document.createElement('strong');
-          title.textContent = category.label;
-
-          const description = document.createElement('span');
-          description.textContent = category.description;
-
-          copy.append(title, description);
-          button.append(icon, copy);
-
-          button.addEventListener('click', () => runCategory(category));
-          categories.append(button);
-        }
-
-        const form = page.querySelector('[data-role="search-form"]');
-        const input = page.querySelector('[data-role="search-input"]');
-
-        form.addEventListener('submit', (event) => {
-          event.preventDefault();
-          const query = String(input.value || '').trim();
-          if (query) runSearch(query);
-        });
-
-        page.querySelectorAll('[data-filter]').forEach((button) => {
-          button.addEventListener('click', () => {
-            currentFilter = button.dataset.filter || 'all';
-            page.querySelectorAll('[data-filter]').forEach((item) => {
-              item.classList.toggle('is-active', item === button);
-            });
-            renderRows();
-          });
-        });
-
-        page.querySelector('[data-role="sort"]').addEventListener('change', (event) => {
-          currentSort = event.target.value || 'relevance';
-          renderRows();
-        });
-
+        shell.append(content);
+        page.append(shell);
         return page;
+      }
+
+      function renderPageContent() {
+        const page = document.getElementById(PAGE_ID);
+        const content = page?.querySelector('[data-role="page-content"]');
+        if (!content) return;
+
+        const family = activeFamilyId ? getFamily(activeFamilyId) : null;
+
+        if (activeFamilyId && !family) activeFamilyId = null;
+
+        content.replaceChildren(
+          family ? buildDetail(family) : buildHome()
+        );
       }
 
       function ensurePage() {
@@ -314,431 +737,188 @@
         if (!page) {
           page = buildPage();
           main.append(page);
-          primeData();
+          renderPageContent();
         } else if (page.parentElement !== main) {
           main.append(page);
         }
       }
 
-      function mergeCatalogue(cards) {
-        if (!Array.isArray(cards) || !cards.length) return;
-
-        const merged = new Map(
-          catalogueCards.map((card) => [normalize(card.title) || card.id, { ...card }])
-        );
-
-        for (const card of cards) {
-          if (!card?.title) continue;
-          const key = normalize(card.title) || card.id;
-          const previous = merged.get(key) || {};
-
-          merged.set(key, {
-            ...previous,
-            ...card,
-            id: card.id || previous.id || `title:${key}`,
-            rarity: card.rarity || previous.rarity || null,
-            imageUrl: card.imageUrl || previous.imageUrl || null,
-            summary: card.summary || previous.summary || ''
-          });
-        }
-
-        catalogueCards = [...merged.values()];
-        registerCards(catalogueCards.filter((card) => card.id && card.title));
+      function closeModal(overlay) {
+        overlay?.remove();
       }
 
-      function requestBridge(eventName, resultName, detail = {}, timeoutMs = 30000) {
-        return new Promise((resolve, reject) => {
-          const requestId = `${eventName}:${Date.now()}:${Math.random().toString(36).slice(2)}`;
-          let timer = null;
+      function openCreateModal() {
+        if (document.querySelector('.wm-family-modal-overlay')) return;
 
-          const handler = (event) => {
-            if (event.detail?.requestId !== requestId) return;
-            clearTimeout(timer);
-            window.removeEventListener(resultName, handler);
-            resolve(event.detail || {});
-          };
+        const overlay = document.createElement('div');
+        overlay.className = 'wm-family-modal-overlay';
 
-          window.addEventListener(resultName, handler);
+        const modal = document.createElement('div');
+        modal.className = 'wm-family-modal';
 
-          timer = setTimeout(() => {
-            window.removeEventListener(resultName, handler);
-            reject(new Error('Délai dépassé'));
-          }, timeoutMs);
+        const title = document.createElement('h2');
+        title.textContent = 'Ajouter une famille';
 
-          window.dispatchEvent(new CustomEvent(eventName, {
-            detail: { ...detail, requestId }
-          }));
-        });
-      }
+        const description = document.createElement('p');
+        description.textContent = 'Le mot-clé est recherché dans les cartes WikiMasters.';
 
-      async function loadCatalogue(force = false) {
-        if (catalogueCards.length && !force) return catalogueCards;
+        const nameLabel = document.createElement('label');
+        nameLabel.textContent = 'Nom';
+        const nameInput = document.createElement('input');
+        nameInput.type = 'text';
+        nameInput.placeholder = 'Ex. Muscles';
 
-        const result = await requestBridge(
-          'wm-average-theme-load-catalogue',
-          'wm-average-theme-catalogue-result',
-          {},
-          45000
-        );
+        const keywordLabel = document.createElement('label');
+        keywordLabel.textContent = 'Mot-clé';
+        const keywordInput = document.createElement('input');
+        keywordInput.type = 'text';
+        keywordInput.placeholder = 'Ex. musc';
 
-        if (!result.ok) throw new Error(result.error || 'Catalogue indisponible');
+        nameLabel.append(nameInput);
+        keywordLabel.append(keywordInput);
 
-        mergeCatalogue(result.cards);
-        catalogueComplete = result.complete === true;
-        catalogueSource = result.source || 'unknown';
+        const status = document.createElement('div');
+        status.className = 'wm-family-modal-status';
+        status.textContent = 'Vérifie le mot-clé avant de créer la famille.';
 
-        return catalogueCards;
-      }
+        const actions = document.createElement('div');
+        actions.className = 'wm-family-modal-actions';
 
-      async function loadOwnedCollection() {
-        const stored = storageGet(ALL_COLLECTION_KEY)[ALL_COLLECTION_KEY];
+        const cancel = document.createElement('button');
+        cancel.type = 'button';
+        cancel.className = 'wm-family-secondary';
+        cancel.textContent = 'Annuler';
 
-        if (stored?.complete === true && Array.isArray(stored.cards)) {
-          ownedCards = stored.cards;
-          registerCards(ownedCards);
-          return ownedCards;
-        }
+        const preview = document.createElement('button');
+        preview.type = 'button';
+        preview.className = 'wm-family-secondary';
+        preview.textContent = 'Vérifier';
 
-        const result = await requestBridge(
-          'wm-average-load-all-collection',
-          'wm-average-all-collection',
-          { selectedRarities: [] },
-          45000
-        );
+        const create = document.createElement('button');
+        create.type = 'button';
+        create.className = 'wm-family-primary';
+        create.textContent = 'Créer';
+        create.disabled = true;
 
-        if (!result.ok) throw new Error(result.error || 'Collection indisponible');
+        let checkedKeyword = '';
 
-        ownedCards = Array.isArray(result.cards) ? result.cards : [];
-        registerCards(ownedCards);
-        return ownedCards;
-      }
+        const resetPreview = () => {
+          checkedKeyword = '';
+          create.disabled = true;
+          status.dataset.mode = '';
+          status.textContent = 'Vérifie le mot-clé avant de créer la famille.';
+        };
 
-      async function primeData() {
-        if (!isThemePage()) return;
+        keywordInput.addEventListener('input', resetPreview);
 
-        try {
-          await Promise.allSettled([loadCatalogue(false), loadOwnedCollection()]);
-
-          if (catalogueCards.length) {
-            const suffix = catalogueComplete
-              ? 'répertoire prêt'
-              : catalogueSource === 'page'
-                ? 'répertoire détecté depuis « Toutes les cartes »'
-                : 'répertoire partiel';
-
-            setStatus(
-              `${catalogueCards.length.toLocaleString('fr-FR')} cartes disponibles • ${suffix}`,
-              catalogueComplete ? 'success' : 'normal'
-            );
-          } else {
-            setStatus('Impossible de préparer le répertoire des cartes.', 'error');
-          }
-        } catch (error) {
-          setStatus(`Impossible de préparer le répertoire : ${String(error?.message || error)}`, 'error');
-        }
-      }
-
-      function termsForQuery(query) {
-        const normalized = normalize(query);
-        return [...new Set([
-          normalized,
-          ...normalized.split(' ').filter((word) => word.length >= 3)
-        ])].filter(Boolean);
-      }
-
-      function scoreCard(card, terms, exactQuery = '') {
-        const title = normalize(card.title);
-        const summary = normalize(card.summary);
-        const query = normalize(exactQuery);
-        let score = 0;
-
-        if (query) {
-          if (title === query) score += 260;
-          else if (title.startsWith(query)) score += 150;
-          else if (title.includes(query)) score += 105;
-
-          if (summary.includes(query)) score += 45;
-        }
-
-        for (const term of terms) {
-          if (!term || term.length < 3) continue;
-
-          if (title === term) score += 85;
-          else if (title.includes(term)) score += 28;
-
-          if (summary.includes(term)) score += 8;
-        }
-
-        return score;
-      }
-
-      function ownershipMaps() {
-        const byId = new Map();
-        const byTitle = new Map();
-
-        for (const card of ownedCards) {
-          if (card?.id) byId.set(card.id, card);
-          if (card?.title) byTitle.set(normalize(card.title), card);
-        }
-
-        return { byId, byTitle };
-      }
-
-      function buildRows(terms, query = '') {
-        const { byId, byTitle } = ownershipMaps();
-
-        return catalogueCards
-          .map((card) => {
-            const score = scoreCard(card, terms, query);
-            if (score <= 0) return null;
-
-            const owned =
-              (card.id ? byId.get(card.id) : null) ||
-              byTitle.get(normalize(card.title)) ||
-              null;
-
-            return {
-              ...card,
-              score,
-              owned: Boolean(owned),
-              ownedCount: Number(owned?.count) || (owned ? 1 : 0)
-            };
-          })
-          .filter(Boolean);
-      }
-
-      function rarityRank(rarity) {
-        const index = RARITY_ORDER.indexOf(rarity);
-        return index < 0 ? 999 : index;
-      }
-
-      function filteredRows() {
-        let rows = currentRows.filter((row) => {
-          if (currentFilter === 'owned') return row.owned;
-          if (currentFilter === 'missing') return !row.owned;
-          return true;
-        });
-
-        rows = [...rows].sort((a, b) => {
-          if (currentSort === 'title') return a.title.localeCompare(b.title, 'fr');
-
-          if (currentSort === 'rarity') {
-            const diff = rarityRank(a.rarity) - rarityRank(b.rarity);
-            return diff || a.title.localeCompare(b.title, 'fr');
+        preview.addEventListener('click', async () => {
+          const keyword = keywordInput.value.trim();
+          if (!keyword) {
+            status.dataset.mode = 'error';
+            status.textContent = 'Entre un mot-clé.';
+            return;
           }
 
-          return b.score - a.score || a.title.localeCompare(b.title, 'fr');
+          preview.disabled = true;
+          status.dataset.mode = '';
+          status.textContent = 'Recherche…';
+
+          try {
+            const result = await previewKeyword(keyword);
+
+            if (result.total > MAX_RESULTS) {
+              checkedKeyword = '';
+              create.disabled = true;
+              status.dataset.mode = 'error';
+              status.textContent = `${result.total.toLocaleString('fr-FR')} résultats : mot-clé trop large. Affine la recherche.`;
+            } else if (!result.total) {
+              checkedKeyword = '';
+              create.disabled = true;
+              status.dataset.mode = 'error';
+              status.textContent = 'Aucune carte trouvée.';
+            } else {
+              checkedKeyword = keyword;
+              create.disabled = false;
+              status.dataset.mode = 'success';
+              status.textContent = result.exact
+                ? `${result.total.toLocaleString('fr-FR')} cartes trouvées.`
+                : `Au moins ${result.total.toLocaleString('fr-FR')} cartes trouvées.`;
+
+              if (!nameInput.value.trim()) {
+                nameInput.value = keyword.charAt(0).toUpperCase() + keyword.slice(1);
+              }
+            }
+          } catch (error) {
+            checkedKeyword = '';
+            create.disabled = true;
+            status.dataset.mode = 'error';
+            status.textContent = `Erreur : ${String(error?.message || error)}`;
+          } finally {
+            preview.disabled = false;
+          }
         });
 
-        return rows;
-      }
+        create.addEventListener('click', async () => {
+          const keyword = keywordInput.value.trim();
+          const name = nameInput.value.trim() || keyword;
 
-      function createResultCard(row) {
-        const card = document.createElement('article');
-        card.className = `wm-theme-card ${row.owned ? 'is-owned' : 'is-missing'}`;
+          if (!keyword || keyword !== checkedKeyword) {
+            status.dataset.mode = 'error';
+            status.textContent = 'Vérifie à nouveau ce mot-clé.';
+            create.disabled = true;
+            return;
+          }
 
-        const visual = document.createElement('div');
-        visual.className = 'wm-theme-card-visual';
+          create.disabled = true;
+          preview.disabled = true;
+          cancel.disabled = true;
 
-        if (row.imageUrl) {
-          const image = document.createElement('img');
-          image.src = row.imageUrl;
-          image.alt = '';
-          image.loading = 'lazy';
-          visual.append(image);
-        } else {
-          const fallback = document.createElement('div');
-          fallback.className = 'wm-theme-card-fallback';
-          fallback.textContent = '✦';
-          visual.append(fallback);
-        }
+          try {
+            const family = await buildFamily({ name, keyword }, (progress) => {
+              const label = progress.kind === 'global' ? 'Cartes' : 'Possédées';
+              const total = Number.isFinite(progress.total)
+                ? ` / ${progress.total.toLocaleString('fr-FR')}`
+                : '';
+              status.dataset.mode = '';
+              status.textContent = `${label} : ${progress.loaded.toLocaleString('fr-FR')}${total}`;
+            });
 
-        const badges = document.createElement('div');
-        badges.className = 'wm-theme-card-badges';
-
-        if (row.rarity) {
-          const rarity = document.createElement('span');
-          rarity.className = `wm-theme-rarity wm-theme-rarity-${String(row.rarity).toLowerCase()}`;
-          rarity.textContent = row.rarity;
-          badges.append(rarity);
-        }
-
-        const state = document.createElement('span');
-        state.className = `wm-theme-state ${row.owned ? 'is-owned' : 'is-missing'}`;
-        state.textContent = row.owned
-          ? `✓ Possédée${row.ownedCount > 1 ? ` ×${row.ownedCount}` : ''}`
-          : 'Manquante';
-        badges.append(state);
-        visual.append(badges);
-
-        const body = document.createElement('div');
-        body.className = 'wm-theme-card-body';
-
-        const title = document.createElement('h3');
-        title.textContent = row.title;
-
-        const ownership = document.createElement('span');
-        ownership.className = `wm-theme-ownership-copy ${row.owned ? 'is-owned' : 'is-missing'}`;
-        ownership.textContent = row.owned ? 'Dans ta collection' : 'À obtenir';
-
-        body.append(title, ownership);
-        card.append(visual, body);
-
-        return card;
-      }
-
-      function renderRows() {
-        const page = document.getElementById(PAGE_ID);
-        if (!page) return;
-
-        const grid = page.querySelector('[data-role="grid"]');
-        const empty = page.querySelector('[data-role="empty"]');
-        const resultCopy = page.querySelector('[data-role="result-copy"]');
-        if (!grid || !empty || !resultCopy) return;
-
-        const rows = filteredRows();
-        grid.replaceChildren();
-
-        const fragment = document.createDocumentFragment();
-        rows.forEach((row) => fragment.append(createResultCard(row)));
-        grid.append(fragment);
-
-        empty.classList.toggle('is-hidden', rows.length > 0);
-        resultCopy.textContent = `${rows.length.toLocaleString('fr-FR')} carte${rows.length > 1 ? 's' : ''}`;
-      }
-
-      function updateDashboard(label) {
-        const page = document.getElementById(PAGE_ID);
-        if (!page) return;
-
-        const dashboard = page.querySelector('[data-role="dashboard"]');
-        dashboard.classList.remove('is-hidden');
-
-        const total = currentRows.length;
-        const owned = currentRows.filter((row) => row.owned).length;
-        const missing = Math.max(0, total - owned);
-        const percent = total ? Math.round((owned / total) * 100) : 0;
-
-        page.querySelector('[data-role="theme-title"]').textContent = label;
-        page.querySelector('[data-role="progress-value"]').textContent = `${percent} %`;
-        page.querySelector('[data-role="progress-bar"]').style.width = `${percent}%`;
-        page.querySelector('[data-role="count-all"]').textContent = total.toLocaleString('fr-FR');
-        page.querySelector('[data-role="count-owned"]').textContent = owned.toLocaleString('fr-FR');
-        page.querySelector('[data-role="count-missing"]').textContent = missing.toLocaleString('fr-FR');
-
-        renderRows();
-      }
-
-      async function prepareSearch() {
-        const results = await Promise.allSettled([
-          loadCatalogue(false),
-          loadOwnedCollection()
-        ]);
-
-        if (!catalogueCards.length && results[0].status === 'rejected') {
-          throw results[0].reason;
-        }
-
-        if (results[1].status === 'rejected') {
-          ownedCards = [];
-        }
-      }
-
-      async function runCategory(category) {
-        if (!category || !isThemePage()) return;
-
-        const generation = ++searchGeneration;
-        currentCategory = category.key;
-        currentFilter = 'all';
-        currentSort = 'relevance';
-
-        const page = document.getElementById(PAGE_ID);
-        page?.querySelectorAll('[data-category]').forEach((button) => {
-          button.classList.toggle('is-active', button.dataset.category === category.key);
+            saveFamily(family);
+            activeFamilyId = family.id;
+            currentFilter = 'all';
+            visibleCount = CARD_BATCH;
+            closeModal(overlay);
+            renderPageContent();
+          } catch (error) {
+            status.dataset.mode = 'error';
+            status.textContent = String(error?.message || error);
+            create.disabled = false;
+            preview.disabled = false;
+            cancel.disabled = false;
+          }
         });
-        page?.querySelectorAll('[data-filter]').forEach((button) => {
-          button.classList.toggle('is-active', button.dataset.filter === 'all');
+
+        cancel.addEventListener('click', () => closeModal(overlay));
+        overlay.addEventListener('click', (event) => {
+          if (event.target === overlay) closeModal(overlay);
         });
-        const sort = page?.querySelector('[data-role="sort"]');
-        if (sort) sort.value = 'relevance';
 
-        setStatus(`Ouverture de la catégorie « ${category.label} »…`);
-
-        try {
-          await prepareSearch();
-        } catch (error) {
-          if (generation !== searchGeneration) return;
-          setStatus(`Impossible de charger le répertoire : ${String(error?.message || error)}`, 'error');
-          return;
-        }
-
-        if (generation !== searchGeneration) return;
-
-        currentRows = buildRows(category.terms, category.label);
-        updateDashboard(category.label);
-
-        const owned = currentRows.filter((row) => row.owned).length;
-        const suffix = catalogueComplete ? '' : ' • répertoire détecté depuis la page';
-        setStatus(
-          `${currentRows.length.toLocaleString('fr-FR')} cartes • ${owned.toLocaleString('fr-FR')} possédées${suffix}`,
-          catalogueComplete ? 'success' : 'normal'
-        );
+        actions.append(cancel, preview, create);
+        modal.append(title, description, nameLabel, keywordLabel, status, actions);
+        overlay.append(modal);
+        document.body.append(overlay);
+        nameInput.focus();
       }
-
-      async function runSearch(rawQuery) {
-        const query = String(rawQuery || '').trim();
-        if (!query || !isThemePage()) return;
-
-        const generation = ++searchGeneration;
-        currentCategory = null;
-        currentFilter = 'all';
-        currentSort = 'relevance';
-
-        const page = document.getElementById(PAGE_ID);
-        page?.querySelectorAll('[data-category]').forEach((button) => button.classList.remove('is-active'));
-        page?.querySelectorAll('[data-filter]').forEach((button) => {
-          button.classList.toggle('is-active', button.dataset.filter === 'all');
-        });
-        const sort = page?.querySelector('[data-role="sort"]');
-        if (sort) sort.value = 'relevance';
-
-        setStatus(`Recherche de « ${query} »…`);
-
-        try {
-          await prepareSearch();
-        } catch (error) {
-          if (generation !== searchGeneration) return;
-          setStatus(`Impossible de charger le répertoire : ${String(error?.message || error)}`, 'error');
-          return;
-        }
-
-        if (generation !== searchGeneration) return;
-
-        currentRows = buildRows(termsForQuery(query), query);
-        updateDashboard(query);
-
-        const owned = currentRows.filter((row) => row.owned).length;
-        const suffix = catalogueComplete ? '' : ' • répertoire détecté depuis la page';
-        setStatus(
-          `${currentRows.length.toLocaleString('fr-FR')} cartes • ${owned.toLocaleString('fr-FR')} possédées${suffix}`,
-          catalogueComplete ? 'success' : 'normal'
-        );
-      }
-
-      window.addEventListener('wm-average-global-catalogue', (event) => {
-        mergeCatalogue(event.detail?.cards);
-      });
-
-      window.addEventListener('wm-average-theme-catalogue-progress', (event) => {
-        if (event.detail?.loaded) updateProgress(Number(event.detail.loaded));
-      });
 
       function render() {
         ensureNavLink();
         ensurePage();
       }
 
-      return { render, isThemePage, runSearch, runCategory };
+      return {
+        render,
+        isThemePage
+      };
     }
   };
 })();
