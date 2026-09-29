@@ -725,34 +725,19 @@ LIMIT ${MAX_SEMANTIC_TITLES}
             addCandidate(token);
           }
 
-          const phrases = [];
           for (const tokens of [titleTokens, categoryTokens]) {
             for (let index = 0; index < tokens.length - 1; index += 1) {
-              phrases.push(`${tokens[index]} ${tokens[index + 1]}`);
+              addCandidate(`${tokens[index]} ${tokens[index + 1]}`);
             }
           }
-
-          for (const phrase of phrases) addCandidate(phrase);
         }
 
-        // Supprime les termes qui ne couvrent pratiquement rien.
         for (const [keyword, ids] of [...coverage]) {
           if (!ids.size) coverage.delete(keyword);
         }
 
         const selected = [];
         const covered = new Set();
-        const normalizedFamilyKeyword = normalize(familyKeyword);
-
-        const addSelected = (keyword) => {
-          if (!keyword || selected.includes(keyword)) return;
-          selected.push(keyword);
-          for (const id of coverage.get(keyword) || []) covered.add(id);
-        };
-
-        if (coverage.has(normalizedFamilyKeyword)) {
-          addSelected(normalizedFamilyKeyword);
-        }
 
         while (
           selected.length < MAX_OWNERSHIP_KEYWORDS &&
@@ -767,25 +752,34 @@ LIMIT ${MAX_SEMANTIC_TITLES}
             for (const id of ids) {
               if (!covered.has(id)) gain += 1;
             }
-
             if (!gain) continue;
 
-            const score =
-              gain * 100 +
-              Math.min(ids.size, 30) +
-              Math.min(keyword.length, 24) / 100;
+            const words = keyword.split(' ').filter(Boolean).length;
+            const specificity =
+              (words >= 2 ? 1.28 : 1) *
+              (1 + Math.min(0.18, Math.max(0, keyword.length - 5) / 100));
 
-            if (!best || score > best.score) {
-              best = { keyword, gain, score, total: ids.size };
+            // On maximise la nouvelle couverture, avec un bonus aux expressions
+            // plus précises afin d'éviter les recherches trop larges.
+            const score = gain * specificity;
+
+            if (
+              !best ||
+              score > best.score ||
+              (score === best.score && keyword.length > best.keyword.length)
+            ) {
+              best = { keyword, gain, score };
             }
           }
 
           if (!best) break;
-          addSelected(best.keyword);
+          selected.push(best.keyword);
+          for (const id of coverage.get(best.keyword) || []) covered.add(id);
         }
 
         return {
           keywords: selected,
+          coverageByKeyword: coverage,
           coveredCards: covered.size,
           totalCards: familyIds.size,
           estimatedCoverage: familyIds.size
@@ -809,6 +803,7 @@ LIMIT ${MAX_SEMANTIC_TITLES}
       async function searchOwnedByKeyword(keyword, familyIds, report, keywordIndex, keywordTotal) {
         const found = new Map();
         let firstPageSize = 0;
+        let complete = false;
 
         for (let page = 0; page < MAX_OWNERSHIP_PAGES_PER_KEYWORD; page += 1) {
           const url = `/api/my-collection?sort=rarity&q=${encodeURIComponent(keyword)}&page=${page}&stats=0`;
@@ -844,17 +839,27 @@ LIMIT ${MAX_SEMANTIC_TITLES}
               ? json.searchHasMore
               : null;
 
-          if (!rows.length || hasMore === false) break;
-          if (hasMore == null && firstPageSize > 0 && rows.length < firstPageSize) break;
+          if (!rows.length || hasMore === false) {
+            complete = true;
+            break;
+          }
+
+          if (hasMore == null && firstPageSize > 0 && rows.length < firstPageSize) {
+            complete = true;
+            break;
+          }
 
           await wait(45);
         }
 
-        return [...found.values()].map((item) => ({
-          id: item.id,
-          count: Math.max(item.count, item.ownedCardIds.size || 1),
-          ownedCardIds: [...item.ownedCardIds]
-        }));
+        return {
+          cards: [...found.values()].map((item) => ({
+            id: item.id,
+            count: Math.max(item.count, item.ownedCardIds.size || 1),
+            ownedCardIds: [...item.ownedCardIds]
+          })),
+          complete
+        };
       }
 
       async function loadOwnedCardsForFamily(cards, familyKeyword, report) {
@@ -867,17 +872,19 @@ LIMIT ${MAX_SEMANTIC_TITLES}
           stage: 'ownership',
           percent: 84,
           title: 'Ta collection',
-          detail: `${keywords.length} mot(s)-clé(s) retenu(s) • couverture estimée ${Math.round(plan.estimatedCoverage * 100)} %`
+          detail: `${keywords.length} mot(s)-clé(s) retenu(s) • couverture visée ${Math.round(plan.estimatedCoverage * 100)} %`
         });
 
         const familyIds = new Set(cards.map((card) => card.id).filter(Boolean));
         const merged = new Map();
+        const verifiedIds = new Set();
+        const failedKeywords = [];
 
         for (let index = 0; index < keywords.length; index += 1) {
-          let results = [];
+          let result = null;
 
           try {
-            results = await searchOwnedByKeyword(
+            result = await searchOwnedByKeyword(
               keywords[index],
               familyIds,
               report,
@@ -886,6 +893,7 @@ LIMIT ${MAX_SEMANTIC_TITLES}
             );
           } catch (error) {
             console.debug('[WM Average] recherche possession ignorée après retries', keywords[index], error);
+            failedKeywords.push(keywords[index]);
             report({
               stage: 'ownership',
               percent: 84 + Math.round(((index + 1) / Math.max(1, keywords.length)) * 10),
@@ -895,7 +903,7 @@ LIMIT ${MAX_SEMANTIC_TITLES}
             continue;
           }
 
-          for (const item of results) {
+          for (const item of result.cards) {
             const previous = merged.get(item.id) || {
               id: item.id,
               count: 0,
@@ -908,13 +916,25 @@ LIMIT ${MAX_SEMANTIC_TITLES}
             }
             merged.set(item.id, previous);
           }
+
+          // Une carte non retournée ne peut être déclarée manquante que si la
+          // recherche correspondante a été parcourue jusqu'au bout.
+          if (result.complete) {
+            for (const id of plan.coverageByKeyword.get(keywords[index]) || []) {
+              verifiedIds.add(id);
+            }
+          }
         }
+
+        const verifiedCoverage = familyIds.size
+          ? verifiedIds.size / familyIds.size
+          : 0;
 
         report({
           stage: 'ownership',
           percent: 94,
           title: 'Ta collection',
-          detail: `${merged.size.toLocaleString('fr-FR')} carte(s) possédée(s) retrouvée(s) avec ${keywords.length} recherche(s)`
+          detail: `${merged.size.toLocaleString('fr-FR')} possédée(s) • ${Math.round(verifiedCoverage * 100)} % de la famille vérifiée`
         });
 
         return {
@@ -923,13 +943,17 @@ LIMIT ${MAX_SEMANTIC_TITLES}
             count: Math.max(item.count, item.ownedCardIds.size || 1),
             ownedCardIds: [...item.ownedCardIds]
           })),
+          verifiedIds: [...verifiedIds],
           keywords,
-          estimatedCoverage: plan.estimatedCoverage
+          failedKeywords,
+          estimatedCoverage: plan.estimatedCoverage,
+          verifiedCoverage
         };
       }
 
-      function applyOwnership(cards, ownedCards) {
+      function applyOwnership(cards, ownedCards, verifiedIds = []) {
         const owned = new Map();
+        const verified = new Set(verifiedIds);
 
         for (const card of ownedCards || []) {
           if (!card?.id) continue;
@@ -943,7 +967,11 @@ LIMIT ${MAX_SEMANTIC_TITLES}
 
         return cards.map((card) => ({
           ...card,
-          owned: owned.has(card.id),
+          owned: owned.has(card.id)
+            ? true
+            : verified.has(card.id)
+              ? false
+              : null,
           ownedCount: owned.get(card.id) || 0
         }));
       }
