@@ -34,6 +34,27 @@
         }).format(n);
       }
 
+      function formatCacheAge(fetchedAt, now = Date.now()) {
+        const timestamp = Number(fetchedAt);
+        if (!Number.isFinite(timestamp) || timestamp <= 0) return null;
+
+        const minutes = Math.floor(Math.max(0, now - timestamp) / 60000);
+        if (minutes < 1) return 'à l’instant';
+        if (minutes < 60) return `il y a ${minutes} min`;
+        const hours = Math.floor(minutes / 60);
+        if (hours < 24) return `il y a ${hours} h`;
+        return `il y a ${Math.floor(hours / 24)} j`;
+      }
+
+      function formatCacheDate(fetchedAt) {
+        const timestamp = Number(fetchedAt);
+        if (!Number.isFinite(timestamp) || timestamp <= 0) return null;
+        return new Intl.DateTimeFormat('fr-FR', {
+          dateStyle: 'medium',
+          timeStyle: 'short'
+        }).format(new Date(timestamp));
+      }
+
       function findCardByTitle(title) {
         if (!isCollectionPage()) return null;
 
@@ -89,17 +110,89 @@
         badge.append(spinner, label);
       }
 
+      function isAverageValue(value) {
+        return (
+          typeof value === 'number' ||
+          (typeof value === 'string' && value.trim() !== '')
+        ) && Number.isFinite(Number(value));
+      }
+
       function chooseAverage(cacheEntry, cardEl, explicitRarity = null) {
         const rarity = explicitRarity || getRarityFromCard(cardEl);
         const averages = cacheEntry?.averages || {};
-        if (rarity && Number.isFinite(Number(averages[rarity]))) {
+        if (rarity && isAverageValue(averages[rarity])) {
           return Number(averages[rarity]);
         }
+        if (rarity) return null;
 
         const values = Object.values(averages)
-          .map(Number)
-          .filter(Number.isFinite);
+          .filter(isAverageValue)
+          .map(Number);
         return values.length === 1 ? values[0] : null;
+      }
+
+      function getPricePresentation(cacheEntry, rarity, cardEl = null) {
+        if (!cacheEntry) {
+          return { kind: 'loading', label: 'Chargement du prix…' };
+        }
+
+        const date = formatCacheDate(cacheEntry.fetchedAt);
+        if (cacheEntry.ok === false) {
+          return {
+            kind: 'error',
+            label: 'Erreur de prix',
+            detail: date ? `Dernière tentative le ${date}` : 'Chargement du prix impossible'
+          };
+        }
+
+        const age = formatCacheAge(cacheEntry.fetchedAt);
+        const average = chooseAverage(cacheEntry, cardEl, rarity);
+        const hasOtherPrices = Object.values(cacheEntry.averages || {})
+          .some(isAverageValue);
+
+        if (average == null) {
+          const unknownRarity = !rarity && hasOtherPrices;
+          const label = unknownRarity ? 'Rareté inconnue' : 'Aucune vente';
+          const context = unknownRarity
+            ? 'Rareté de la carte inconnue'
+            : (rarity ? `Aucune vente connue pour la rareté ${rarity}` : 'Aucune vente connue');
+
+          return {
+            kind: 'empty',
+            label,
+            age,
+            detail: date ? `${context} · données vérifiées le ${date}` : context
+          };
+        }
+
+        const value = `${formatAverage(average)} W`;
+        return {
+          kind: 'priced',
+          label: `Moy. ${value}`,
+          value,
+          age,
+          detail: date ? `Prix moyen des ventes · données vérifiées le ${date}` : 'Prix moyen des ventes'
+        };
+      }
+
+      function renderBadgePresentation(badge, presentation) {
+        if (presentation.kind === 'loading') {
+          renderLoadingBadge(badge);
+          return;
+        }
+
+        const className = `wm-average-badge${presentation.kind === 'empty' ? ' wm-average-empty' : ''}` +
+          `${presentation.kind === 'error' ? ' wm-average-error' : ''}`;
+        const compactAge = presentation.age === 'à l’instant'
+          ? '< 1 min'
+          : presentation.age?.replace('il y a ', '');
+        const text = compactAge
+          ? `${presentation.label} · ${compactAge}`
+          : presentation.label;
+
+        if (badge.className !== className) badge.className = className;
+        if (badge.textContent !== text) badge.textContent = text;
+        if (badge.title !== presentation.detail) badge.title = presentation.detail || '';
       }
 
       function renderCollectionCard(id, card, { force = false } = {}) {
@@ -109,36 +202,8 @@
         }
         const badge = getOrCreateBadge(card);
         const cacheEntry = cacheMemory.get(id);
-
-        if (!cacheEntry) {
-          renderLoadingBadge(badge);
-          return;
-        }
-
-        if (cacheEntry.ok === false) {
-          if (badge.className !== 'wm-average-badge wm-average-empty') {
-            badge.className = 'wm-average-badge wm-average-empty';
-          }
-          badge.title = 'Erreur temporaire lors du chargement du prix';
-          if (badge.textContent !== 'Prix indispo.') badge.textContent = 'Prix indispo.';
-          return;
-        }
-
-        badge.title = 'Prix moyen des ventes (cache 24 h)';
-        const average = chooseAverage(cacheEntry, card, cardMetaById.get(id)?.rarity || null);
-
-        if (average == null) {
-          if (badge.className !== 'wm-average-badge wm-average-empty') {
-            badge.className = 'wm-average-badge wm-average-empty';
-          }
-          if (badge.textContent !== 'Moy. —') badge.textContent = 'Moy. —';
-        } else {
-          if (badge.className !== 'wm-average-badge') {
-            badge.className = 'wm-average-badge';
-          }
-          const text = `Moy. ${formatAverage(average)} W`;
-          if (badge.textContent !== text) badge.textContent = text;
-        }
+        const rarity = cardMetaById.get(id)?.rarity || getRarityFromCard(card);
+        renderBadgePresentation(badge, getPricePresentation(cacheEntry, rarity, card));
       }
 
       function ensureCollectionPriceObserver() {
@@ -296,6 +361,11 @@
           value.className = 'wm-marketplace-average-value';
           value.dataset.role = 'value';
 
+          const freshness = document.createElement('span');
+          freshness.className = 'wm-marketplace-average-freshness';
+          freshness.dataset.role = 'freshness';
+
+          labelWrap.append(freshness);
           priceCard.append(labelWrap, value);
           wrap.append(priceCard, createSponsorNote());
           titleBlock.insertAdjacentElement('afterend', wrap);
@@ -309,9 +379,22 @@
         const valueEl = wrap.querySelector('[data-role="value"]');
         if (!valueEl) return;
 
+        const freshnessEl = wrap.querySelector('[data-role="freshness"]');
+
         const cacheEntry = cacheMemory.get(id);
-        if (!cacheEntry) {
+        const presentation = getPricePresentation(cacheEntry, meta.rarity || null);
+        if (freshnessEl) {
+          const freshness = presentation.age
+            ? `Données vérifiées ${presentation.age}`
+            : (presentation.kind === 'error' ? presentation.detail : '');
+          if (freshnessEl.textContent !== freshness) freshnessEl.textContent = freshness;
+          freshnessEl.title = presentation.detail || '';
+        }
+
+        if (presentation.kind === 'loading') {
           valueEl.className = 'wm-marketplace-average-value wm-marketplace-average-loading';
+          valueEl.title = '';
+          if (valueEl.textContent === 'Chargement…') return;
           valueEl.replaceChildren();
 
           const spinner = document.createElement('span');
@@ -325,9 +408,11 @@
           return;
         }
 
-        const average = chooseAverage(cacheEntry, null, meta.rarity || null);
-        valueEl.className = 'wm-marketplace-average-value';
-        valueEl.textContent = average == null ? '—' : `${formatAverage(average)} W`;
+        valueEl.className = `wm-marketplace-average-value${presentation.kind === 'empty' ? ' wm-marketplace-average-empty' : ''}` +
+          `${presentation.kind === 'error' ? ' wm-marketplace-average-error' : ''}`;
+        const valueText = presentation.value || presentation.label;
+        if (valueEl.textContent !== valueText) valueEl.textContent = valueText;
+        valueEl.title = presentation.detail || '';
       }
 
       function renderKnownCard(id) {
@@ -507,8 +592,29 @@
         }));
       }
 
+      function refreshVisiblePriceAges() {
+        if (document.visibilityState === 'hidden') return;
+
+        if (isCollectionPage() && runtime.settings.isEnabled('collectionPrices')) {
+          for (const card of document.querySelectorAll('[data-wm-card-id]')) {
+            if (card.dataset.wmCardId) renderCollectionCard(card.dataset.wmCardId, card);
+          }
+        }
+
+        if (isMarketplaceDetailPage() && marketplaceCardId) {
+          renderMarketplaceAverage(marketplaceCardId);
+        }
+
+        if (isGlobalCollectionPage() && globalCollectionCardId) {
+          renderGlobalCollectionInspectedCard();
+        }
+      }
+
+      window.setInterval(refreshVisiblePriceAges, 60 * 1000);
+      document.addEventListener('visibilitychange', refreshVisiblePriceAges);
+
       return {
-        getRarityFromCard, formatAverage, chooseAverage, renderCollectionCard,
+        getRarityFromCard, formatAverage, chooseAverage, getPricePresentation, renderCollectionCard,
         hydrateCacheForCards, renderVisibleCollectionCards, renderMarketplaceAverage,
         renderMarketplaceCurrent, renderKnownCard, renderGlobalCollectionInspectedCard,
         ensureGlobalCollectionInspectedCard

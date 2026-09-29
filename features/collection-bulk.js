@@ -37,19 +37,19 @@
 
         const definitions = [
           {
-            badge: 'Moy. 12 W',
+            badge: 'Moy. 12 W · 2 h',
             className: 'wm-price-legend-badge',
-            text: 'prix moyen des ventes'
+            text: 'prix moyen et âge des données'
           },
           {
-            badge: 'Moy. —',
+            badge: 'Aucune vente · 2 h',
             className: 'wm-price-legend-badge is-empty',
-            text: 'aucune moyenne disponible'
+            text: 'aucune vente pour cette rareté'
           },
           {
-            badge: 'Prix indispo.',
+            badge: 'Erreur de prix',
             className: 'wm-price-legend-badge is-error',
-            text: 'erreur temporaire, nouvel essai automatique'
+            text: 'requête échouée, nouvel essai possible'
           },
           {
             badge: 'Prix…',

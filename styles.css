@@ -6,7 +6,7 @@
   align-items: center;
   max-width: 100%;
   flex: 0 0 auto;
-  pointer-events: none;
+  pointer-events: auto;
   margin-top: 2px;
   padding: 2px 5px;
   border-radius: 6px;
@@ -24,6 +24,11 @@
 .wm-average-badge.wm-average-empty {
   color: #d1d5db;
   border-color: rgba(209, 213, 219, 0.35);
+}
+
+.wm-average-badge.wm-average-error {
+  color: #fecaca;
+  border-color: rgba(248, 113, 113, 0.6);
 }
 
 .wm-average-badge.wm-average-loading {
@@ -401,6 +406,12 @@
   font-size: 10px;
 }
 
+.wm-marketplace-average-freshness {
+  color: #cbd5e1;
+  font-size: 11px;
+  line-height: 1.3;
+}
+
 .wm-marketplace-average-value {
   color: #bf94ff;
   font-size: 22px;
@@ -416,6 +427,20 @@
   color: rgba(226, 232, 240, 0.72);
   font-size: 12px;
   font-weight: 700;
+}
+
+.wm-marketplace-average-empty,
+.wm-marketplace-average-error {
+  font-size: 14px;
+  line-height: 1.2;
+}
+
+.wm-marketplace-average-empty {
+  color: #cbd5e1;
+}
+
+.wm-marketplace-average-error {
+  color: #fecaca;
 }
 
 #wm-marketplace-average .wm-sponsor-note {
@@ -2054,6 +2079,19 @@ body.wm-compact-mode main div[class*="glow-"]:has(h3) {
   white-space: nowrap;
 }
 
+.wm-premium-card .wm-average-badge.wm-average-empty,
+.wm-premium-card .wm-average-badge.wm-average-loading {
+  color: #e5e7eb !important;
+  border-color: rgba(209, 213, 219, 0.5) !important;
+  background: rgba(20, 25, 31, 0.94) !important;
+}
+
+.wm-premium-card .wm-average-badge.wm-average-error {
+  color: #fecaca !important;
+  border-color: rgba(248, 113, 113, 0.7) !important;
+  background: rgba(48, 18, 22, 0.94) !important;
+}
+
 /* Badge rareté métallique. */
 .wm-premium-card > div[class*="top-2"][class*="left-2"] {
   top: 7px !important;
@@ -3002,4 +3040,3 @@ html.wm-hide-card-stats div[class*="fixed"][class*="inset-0"] div.grid:has(> .ca
     font-size: 7.5px;
   }
 }
-
