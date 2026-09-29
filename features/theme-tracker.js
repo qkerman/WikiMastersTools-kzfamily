@@ -1298,8 +1298,75 @@ LIMIT ${MAX_SEMANTIC_TITLES}
         });
       }
 
+      async function syncFamilyOwnership(family) {
+        const progress = openProgressModal(`Synchronisation de « ${family.name} »`);
+
+        const report = (state) => {
+          const sourcePercent = Number(state?.percent) || 84;
+          const mappedPercent = 8 + Math.max(0, Math.min(86, (sourcePercent - 84) * 8.6));
+          progress.update({
+            ...state,
+            percent: mappedPercent,
+            title: state?.title || 'Ta collection'
+          });
+        };
+
+        try {
+          report({
+            percent: 84,
+            title: 'Ta collection',
+            detail: 'Choix des recherches les plus couvrantes…'
+          });
+
+          const ownership = await loadOwnedCardsForFamily(
+            family.cards || [],
+            family.keyword,
+            report
+          );
+
+          progress.update({
+            percent: 96,
+            title: 'Enregistrement',
+            detail: 'Mise à jour des statuts possédée / manquante…'
+          });
+
+          const cards = applyOwnership(
+            family.cards || [],
+            ownership.ownedCards,
+            ownership.verifiedIds
+          ).sort((a, b) => a.title.localeCompare(b.title, 'fr'));
+
+          const updated = {
+            ...family,
+            cards,
+            ownershipUpdatedAt: Date.now(),
+            discovery: {
+              ...(family.discovery || {}),
+              semanticVersion: Math.max(3, Number(family.discovery?.semanticVersion) || 0),
+              ownershipKeywords: ownership.keywords,
+              ownershipCoverage: ownership.estimatedCoverage,
+              ownershipVerifiedCoverage: ownership.verifiedCoverage,
+              ownershipFailedKeywords: ownership.failedKeywords
+            }
+          };
+
+          saveFamily(updated);
+          progress.update({
+            percent: 100,
+            title: 'Terminé',
+            detail: `${cards.filter((card) => card.owned === true).length.toLocaleString('fr-FR')} carte(s) possédée(s) retrouvée(s).`
+          });
+
+          await wait(350);
+          progress.close();
+          renderPageContent();
+        } catch (error) {
+          progress.fail(String(error?.message || error));
+        }
+      }
+
       async function rebuildFamily(family) {
-        const progress = openProgressModal(`Actualisation de « ${family.name} »`);
+        const progress = openProgressModal(`Reconstruction de « ${family.name} »`);
 
         try {
           const updated = await buildFamily({
@@ -1337,11 +1404,19 @@ LIMIT ${MAX_SEMANTIC_TITLES}
         const actions = document.createElement('div');
         actions.className = 'wm-family-actions';
 
-        const refresh = document.createElement('button');
-        refresh.type = 'button';
-        refresh.className = 'wm-family-secondary';
-        refresh.textContent = 'Actualiser';
-        refresh.addEventListener('click', () => rebuildFamily(family));
+        const sync = document.createElement('button');
+        sync.type = 'button';
+        sync.className = 'wm-family-secondary';
+        sync.textContent = 'Synchroniser';
+        sync.title = 'Met uniquement à jour les cartes que tu possèdes';
+        sync.addEventListener('click', () => syncFamilyOwnership(family));
+
+        const rebuild = document.createElement('button');
+        rebuild.type = 'button';
+        rebuild.className = 'wm-family-secondary';
+        rebuild.textContent = 'Reconstruire';
+        rebuild.title = 'Relance Wikidata, Wikipédia et la résolution des cartes WikiMasters';
+        rebuild.addEventListener('click', () => rebuildFamily(family));
 
         const remove = document.createElement('button');
         remove.type = 'button';
@@ -1354,7 +1429,7 @@ LIMIT ${MAX_SEMANTIC_TITLES}
           renderPageContent();
         });
 
-        actions.append(refresh, remove);
+        actions.append(sync, rebuild, remove);
         top.append(back, actions);
 
         const heading = document.createElement('div');
@@ -1366,9 +1441,11 @@ LIMIT ${MAX_SEMANTIC_TITLES}
 
         const discovery = family.discovery;
         const info = document.createElement('p');
+        const familyDate = formatDate(family.updatedAt);
+        const ownershipDate = formatDate(family.ownershipUpdatedAt || family.updatedAt);
         info.textContent = discovery?.candidateTitles
-          ? `${discovery.candidateTitles.toLocaleString('fr-FR')} pages liées → ${stats.total.toLocaleString('fr-FR')} cartes WikiMasters • actualisée le ${formatDate(family.updatedAt)}`
-          : `Thème : “${family.keyword}” • actualisée le ${formatDate(family.updatedAt)}`;
+          ? `${discovery.candidateTitles.toLocaleString('fr-FR')} pages liées → ${stats.total.toLocaleString('fr-FR')} cartes WikiMasters • famille ${familyDate} • possessions ${ownershipDate}`
+          : `Thème : “${family.keyword}” • possessions ${ownershipDate}`;
 
         copy.append(title, info);
 
