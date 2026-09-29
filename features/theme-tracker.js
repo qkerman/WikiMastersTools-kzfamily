@@ -185,8 +185,7 @@
           json?.pagination?.total,
           json?.pagination?.total_count,
           json?.meta?.total,
-          json?.meta?.total_count,
-          json?.count
+          json?.meta?.total_count
         ];
 
         const valid = values
