@@ -40,7 +40,6 @@
           title: row.wikipedia_title,
           rarity: row.rarity || null,
           category: row.category || null,
-          summary: row.summary || null,
           imageUrl: row.image_url || null,
           wikipediaUrl: row.wikipedia_url || null,
           atk: Number.isFinite(Number(row.atk)) ? Number(row.atk) : null,
@@ -52,7 +51,7 @@
         const url = new URL(`https://${SUPABASE_HOST}/rest/v1/cards`);
         url.searchParams.set(
           'select',
-          'id,wikipedia_title,rarity,category,summary,image_url,wikipedia_url,atk,def'
+          'id,wikipedia_title,rarity,category,image_url,wikipedia_url,atk,def'
         );
         url.searchParams.set(
           'wikipedia_title',
