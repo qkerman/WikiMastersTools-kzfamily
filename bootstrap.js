@@ -8,8 +8,9 @@ function getExtensionRuntime() {
 
 if (typeof window !== 'undefined' && typeof document !== 'undefined') {
   (() => {
-    // Pont page -> contexte extension : le PNG est déjà généré depuis les
-    // données de la carte. Ici on fait uniquement l'écriture presse-papiers.
+    // Pont page -> contexte extension.
+    // - presse-papiers : écriture PNG
+    // - données sémantiques : requêtes Wikidata/Wikipédia hors CSP du site
     window.addEventListener('message', async (event) => {
       if (event.source !== window) return;
 
@@ -17,8 +18,59 @@ if (typeof window !== 'undefined' && typeof document !== 'undefined') {
       if (
         !message ||
         message.source !== 'wm-average-page' ||
+        typeof message.requestId !== 'string'
+      ) {
+        return;
+      }
+
+      if (message.type === 'semantic-fetch' && typeof message.url === 'string') {
+        const reply = (ok, data = null, error = null) => {
+          window.postMessage({
+            source: 'wm-average-extension',
+            type: 'semantic-fetch-result',
+            requestId: message.requestId,
+            ok,
+            data,
+            error
+          }, '*');
+        };
+
+        try {
+          const parsed = new URL(message.url);
+          const allowedHosts = new Set([
+            'www.wikidata.org',
+            'query.wikidata.org',
+            'fr.wikipedia.org'
+          ]);
+
+          if (!allowedHosts.has(parsed.hostname)) {
+            throw new Error('Hôte externe non autorisé');
+          }
+
+          const response = await fetch(parsed.toString(), {
+            method: 'GET',
+            credentials: 'omit',
+            referrerPolicy: 'no-referrer',
+            headers: {
+              accept: typeof message.accept === 'string'
+                ? message.accept
+                : 'application/json'
+            }
+          });
+
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+          }
+
+          reply(true, await response.json());
+        } catch (error) {
+          reply(false, null, String(error?.message || error));
+        }
+        return;
+      }
+
+      if (
         message.type !== 'copy-card-image' ||
-        typeof message.requestId !== 'string' ||
         typeof message.dataUrl !== 'string'
       ) {
         return;
