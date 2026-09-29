@@ -139,8 +139,57 @@
         else link.removeAttribute('aria-current');
       }
 
+      function extensionFetchJson(url, accept = 'application/json') {
+        return new Promise((resolve, reject) => {
+          const requestId = `semantic:${Date.now()}:${Math.random().toString(36).slice(2)}`;
+          let timer = null;
+
+          const handler = (event) => {
+            if (event.source !== window) return;
+            const message = event.data;
+            if (
+              !message ||
+              message.source !== 'wm-average-extension' ||
+              message.type !== 'semantic-fetch-result' ||
+              message.requestId !== requestId
+            ) {
+              return;
+            }
+
+            clearTimeout(timer);
+            window.removeEventListener('message', handler);
+
+            if (message.ok) resolve(message.data);
+            else reject(new Error(message.error || 'Requête externe impossible'));
+          };
+
+          window.addEventListener('message', handler);
+          timer = setTimeout(() => {
+            window.removeEventListener('message', handler);
+            reject(new Error('Délai dépassé pour la source externe'));
+          }, 30000);
+
+          window.postMessage({
+            source: 'wm-average-page',
+            type: 'semantic-fetch',
+            requestId,
+            url,
+            accept
+          }, '*');
+        });
+      }
+
       async function fetchJson(url, init = {}) {
-        const response = await fetch(url, {
+        const parsed = new URL(url, location.origin);
+
+        if (parsed.origin !== location.origin) {
+          return extensionFetchJson(
+            parsed.toString(),
+            init.headers?.accept || 'application/json'
+          );
+        }
+
+        const response = await fetch(parsed.toString(), {
           method: 'GET',
           credentials: init.credentials ?? 'omit',
           referrerPolicy: 'no-referrer',
@@ -540,7 +589,11 @@ LIMIT ${MAX_SEMANTIC_TITLES}
       async function loadOwnedCards(report) {
         const cached = storageGet(ALL_COLLECTION_KEY)[ALL_COLLECTION_KEY];
 
-        if (cached?.complete === true && Array.isArray(cached.cards)) {
+        if (
+          cached?.complete === true &&
+          Array.isArray(cached.cards) &&
+          Date.now() - (Number(cached.fetchedAt) || 0) < 5 * 60 * 1000
+        ) {
           report({
             stage: 'ownership',
             percent: 94,
@@ -1110,7 +1163,7 @@ LIMIT ${MAX_SEMANTIC_TITLES}
 
         const note = document.createElement('div');
         note.className = 'wm-family-progress-note';
-        note.textContent = 'Tu peux laisser cette fenêtre ouverte pendant la création.';
+        note.textContent = 'Ne ferme pas cet onglet pendant la création.';
 
         const closeButton = document.createElement('button');
         closeButton.type = 'button';
