@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "WikiMasters - Prix moyen collection",
-  "version": "4.18.1",
+  "version": "4.19.0",
   "description": "Outils WikiMasters configurables : familles de cartes, prix moyens, collection, échanges, paquets, cartes full-art et Wikipédia.",
   "permissions": [
     "clipboardWrite"
@@ -43,6 +43,7 @@
         "bridge/intercept.js",
         "bridge/marketplace.js",
         "bridge/prices.js",
+        "bridge/families.js",
         "page-bridge.js",
         "features/core.js",
         "features/settings.js",
