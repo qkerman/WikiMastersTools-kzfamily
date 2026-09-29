@@ -257,7 +257,7 @@
           rows.push(...pageRows);
 
           for (const [id, count] of pageOwnedCounts) {
-            ownedCounts.set(id, (ownedCounts.get(id) || 0) + count);
+            ownedCounts.set(id, Math.max(ownedCounts.get(id) || 0, count));
           }
 
           const effectiveTotal =
