@@ -178,21 +178,27 @@
         };
       }
 
-      function readTotal(json) {
+      function readTotal(json, currentRowCount = 0) {
         const values = [
           json?.total,
-          json?.count,
           json?.total_count,
           json?.pagination?.total,
-          json?.meta?.total
+          json?.pagination?.total_count,
+          json?.meta?.total,
+          json?.meta?.total_count,
+          json?.count
         ];
 
-        for (const value of values) {
-          const number = Number(value);
-          if (Number.isFinite(number) && number >= 0) return number;
-        }
+        const valid = values
+          .map(Number)
+          .filter((number) =>
+            Number.isFinite(number) &&
+            number >= 0 &&
+            number >= currentRowCount
+          );
 
-        return null;
+        if (!valid.length) return null;
+        return Math.max(...valid);
       }
 
       async function fetchJson(url) {
@@ -220,7 +226,7 @@
       async function previewKeyword(keyword) {
         const json = await fetchJson(endpointUrl('global', keyword, 0));
         const rows = extractRows(json, false);
-        const total = readTotal(json);
+        const total = readTotal(json, rows.length);
 
         return {
           total: total == null ? rows.length : total,
@@ -240,7 +246,7 @@
           const pageRows = extractRows(json, owned);
 
           if (page === 0) {
-            total = readTotal(json);
+            total = readTotal(json, pageRows.length);
             firstPageSize = pageRows.length || PAGE_SIZE_FALLBACK;
 
             if (total != null && total > MAX_RESULTS) {
@@ -766,13 +772,13 @@
         nameLabel.textContent = 'Nom';
         const nameInput = document.createElement('input');
         nameInput.type = 'text';
-        nameInput.placeholder = 'Ex. Muscles';
+        nameInput.placeholder = 'Ex. K-pop';
 
         const keywordLabel = document.createElement('label');
         keywordLabel.textContent = 'Mot-clé';
         const keywordInput = document.createElement('input');
         keywordInput.type = 'text';
-        keywordInput.placeholder = 'Ex. musc';
+        keywordInput.placeholder = 'Ex. kpop';
 
         nameLabel.append(nameInput);
         keywordLabel.append(keywordInput);
