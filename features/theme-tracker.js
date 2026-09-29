@@ -183,24 +183,49 @@
         const parsed = new URL(url, location.origin);
 
         if (parsed.origin !== location.origin) {
+          // Le contexte extension effectue déjà jusqu'à 4 essais.
           return extensionFetchJson(
             parsed.toString(),
             init.headers?.accept || 'application/json'
           );
         }
 
-        const response = await fetch(parsed.toString(), {
-          method: 'GET',
-          credentials: init.credentials ?? 'omit',
-          referrerPolicy: 'no-referrer',
-          headers: { accept: 'application/json', ...(init.headers || {}) }
-        });
+        const maxAttempts = 4;
+        let lastError = null;
 
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}`);
+        for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+          try {
+            const response = await fetch(parsed.toString(), {
+              method: 'GET',
+              credentials: init.credentials ?? 'omit',
+              referrerPolicy: 'no-referrer',
+              headers: { accept: 'application/json', ...(init.headers || {}) }
+            });
+
+            if (!response.ok) {
+              const error = new Error(`HTTP ${response.status}`);
+              error.status = response.status;
+              throw error;
+            }
+
+            return response.json();
+          } catch (error) {
+            lastError = error;
+            const status = Number(error?.status);
+            const retryable =
+              !Number.isFinite(status) ||
+              status === 408 ||
+              status === 425 ||
+              status === 429 ||
+              status >= 500;
+
+            if (!retryable || attempt >= maxAttempts) break;
+
+            await wait(Math.min(4000, 500 * (2 ** (attempt - 1))));
+          }
         }
 
-        return response.json();
+        throw lastError || new Error('Requête WikiMasters impossible');
       }
 
       function titleFromWikipediaUrl(url) {
@@ -561,12 +586,38 @@ LIMIT ${MAX_SEMANTIC_TITLES}
               const ratio = progress.batches
                 ? progress.batch / progress.batches
                 : 0;
+              const percent = 52 + Math.round(ratio * 30);
+
+              if (progress.retryAttempt) {
+                const seconds = Math.max(1, Math.round((Number(progress.retryDelayMs) || 0) / 1000));
+                report({
+                  stage: 'resolve',
+                  percent,
+                  title: 'WikiMasters — nouvel essai',
+                  detail: `Lot ${progress.batch}/${progress.batches} en erreur • essai ${progress.retryAttempt}/${progress.retryMax} dans ~${seconds}s`
+                });
+                return;
+              }
+
+              if (progress.phase === 'recovery') {
+                report({
+                  stage: 'resolve',
+                  percent: Math.max(percent, 78),
+                  title: 'WikiMasters — récupération',
+                  detail: `Nouveau passage sur les lots échoués : ${progress.recoveryIndex}/${progress.recoveryTotal} • ${(progress.matchedCards || 0).toLocaleString('fr-FR')} cartes récupérées`
+                });
+                return;
+              }
+
+              const failedCopy = progress.failedBatches
+                ? ` • ${progress.failedBatches} lot(s) à réessayer`
+                : '';
 
               report({
                 stage: 'resolve',
-                percent: 52 + Math.round(ratio * 30),
+                percent,
                 title: 'WikiMasters',
-                detail: `Lot ${progress.batch}/${progress.batches} • ${progress.matchedCards.toLocaleString('fr-FR')} cartes trouvées`
+                detail: `Lot ${progress.batch}/${progress.batches} • ${(progress.matchedCards || 0).toLocaleString('fr-FR')} cartes trouvées${failedCopy}`
               });
             }
           }
@@ -574,6 +625,15 @@ LIMIT ${MAX_SEMANTIC_TITLES}
 
         if (!result.ok) {
           throw new Error(result.error || 'Impossible de faire correspondre les cartes WikiMasters.');
+        }
+
+        if (result.partial) {
+          report({
+            stage: 'resolve',
+            percent: 82,
+            title: 'WikiMasters',
+            detail: `${(result.cards?.length || 0).toLocaleString('fr-FR')} cartes récupérées • ${result.failedBatches} lot(s) toujours indisponible(s), création poursuivie.`
+          });
         }
 
         const merged = new Map();
@@ -709,7 +769,19 @@ LIMIT ${MAX_SEMANTIC_TITLES}
           });
         }
 
-        const directCards = await discoverDirectWikiMasters(cleanKeyword, titles, report);
+        let directCards = [];
+
+        try {
+          directCards = await discoverDirectWikiMasters(cleanKeyword, titles, report);
+        } catch (error) {
+          console.debug('[WM Average] recherche WikiMasters directe ignorée après retries', error);
+          report({
+            stage: 'wikimasters-search',
+            percent: 50,
+            title: 'WikiMasters',
+            detail: 'Recherche directe momentanément indisponible après plusieurs essais. Poursuite avec les pages sémantiques.'
+          });
+        }
 
         if (!titles.size) {
           throw new Error('Aucune page liée à ce thème n’a été trouvée.');
