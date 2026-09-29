@@ -1144,7 +1144,9 @@ LIMIT ${MAX_SEMANTIC_TITLES}
 
         const numbers = document.createElement('span');
         numbers.className = 'wm-family-card-numbers';
-        numbers.textContent = `${stats.owned.toLocaleString('fr-FR')} / ${stats.total.toLocaleString('fr-FR')} possédées`;
+        numbers.textContent = stats.unchecked
+          ? `${stats.owned.toLocaleString('fr-FR')} / ${stats.total.toLocaleString('fr-FR')} possédées • ${stats.unchecked.toLocaleString('fr-FR')} à vérifier`
+          : `${stats.owned.toLocaleString('fr-FR')} / ${stats.total.toLocaleString('fr-FR')} possédées`;
 
         const progress = document.createElement('span');
         progress.className = 'wm-family-progress';
@@ -1229,15 +1231,16 @@ LIMIT ${MAX_SEMANTIC_TITLES}
       function filteredCards(family) {
         let cards = [...family.cards];
 
-        if (currentFilter === 'owned') cards = cards.filter((card) => card.owned);
-        if (currentFilter === 'missing') cards = cards.filter((card) => !card.owned);
+        if (currentFilter === 'owned') cards = cards.filter((card) => card.owned === true);
+        if (currentFilter === 'missing') cards = cards.filter((card) => card.owned === false);
+        if (currentFilter === 'unchecked') cards = cards.filter((card) => card.owned == null);
 
         return cards.sort((a, b) => a.title.localeCompare(b.title, 'fr'));
       }
 
       function createRealCard(card) {
         const element = runtime.cardExtras.createCardElement(card, {
-          owned: Boolean(card.owned),
+          owned: card.owned,
           ownedCount: card.ownedCount || 0
         });
 
@@ -1380,6 +1383,7 @@ LIMIT ${MAX_SEMANTIC_TITLES}
           <button type="button" data-filter="all">Toutes <strong>${stats.total.toLocaleString('fr-FR')}</strong></button>
           <button type="button" data-filter="owned">Possédées <strong>${stats.owned.toLocaleString('fr-FR')}</strong></button>
           <button type="button" data-filter="missing">Manquantes <strong>${stats.missing.toLocaleString('fr-FR')}</strong></button>
+          ${stats.unchecked ? `<button type="button" data-filter="unchecked">À vérifier <strong>${stats.unchecked.toLocaleString('fr-FR')}</strong></button>` : ''}
         `;
 
         filters.querySelectorAll('[data-filter]').forEach((button) => {
