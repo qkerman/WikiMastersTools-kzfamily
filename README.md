@@ -52,6 +52,7 @@ Puis cliquer sur **Recharger** dans `chrome://extensions/` et faire un F5 sur Wi
 
 *Heure de Paris*
 
+- **29/09/2026** — Ajout de la page « Collections thématiques » : recherche par thème, progression, cartes possédées/manquantes et suivi des annonces du marché.
 - **28/09/2026** — Nouveaux outils pour les cartes, les échanges et les notifications, avec davantage de réglages pour les paquets.
 - **27/09/2026** — Mise à jour du style et des performances des cartes.
 - **25/09/2026** — Ajout des paramètres et amélioration des cartes sans image.
