@@ -47,22 +47,48 @@ if (typeof window !== 'undefined' && typeof document !== 'undefined') {
             throw new Error('Hôte externe non autorisé');
           }
 
-          const response = await fetch(parsed.toString(), {
-            method: 'GET',
-            credentials: 'omit',
-            referrerPolicy: 'no-referrer',
-            headers: {
-              accept: typeof message.accept === 'string'
-                ? message.accept
-                : 'application/json'
-            }
-          });
+          const maxAttempts = 4;
+          let lastError = null;
 
-          if (!response.ok) {
-            throw new Error(`HTTP ${response.status}`);
+          for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+            try {
+              const response = await fetch(parsed.toString(), {
+                method: 'GET',
+                credentials: 'omit',
+                referrerPolicy: 'no-referrer',
+                headers: {
+                  accept: typeof message.accept === 'string'
+                    ? message.accept
+                    : 'application/json'
+                }
+              });
+
+              if (!response.ok) {
+                const error = new Error(`HTTP ${response.status}`);
+                error.status = response.status;
+                throw error;
+              }
+
+              reply(true, await response.json());
+              return;
+            } catch (error) {
+              lastError = error;
+              const status = Number(error?.status);
+              const retryable =
+                !Number.isFinite(status) ||
+                status === 408 ||
+                status === 425 ||
+                status === 429 ||
+                status >= 500;
+
+              if (!retryable || attempt >= maxAttempts) break;
+
+              const delayMs = Math.min(5000, 600 * (2 ** (attempt - 1)));
+              await new Promise((resolve) => setTimeout(resolve, delayMs));
+            }
           }
 
-          reply(true, await response.json());
+          throw lastError || new Error('Requête externe impossible');
         } catch (error) {
           reply(false, null, String(error?.message || error));
         }
