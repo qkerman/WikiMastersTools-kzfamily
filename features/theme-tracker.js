@@ -141,7 +141,7 @@
         return [];
       }
 
-      function mapGlobalRow(row) {
+      function mapGlobalRow(row, ownedCount = 0) {
         const card = row?.card || row;
         const id = row?.card_id || card?.id;
         const title = card?.wikipedia_title || card?.title;
@@ -155,27 +155,20 @@
           category: card?.category || row?.category || null,
           imageUrl: card?.image_url || row?.image_url || null,
           wikipediaUrl: card?.wikipedia_url || row?.wikipedia_url || null,
-          owned: false,
-          ownedCount: 0
+          owned: ownedCount > 0,
+          ownedCount
         };
       }
 
-      function mapOwnedRow(row) {
-        const card = row?.card || row;
-        const id = row?.card_id || card?.id;
-        const title = card?.wikipedia_title || card?.title;
+      function countOwnedIds(json) {
+        const counts = new Map();
 
-        if (!id || !title) return null;
+        for (const id of Array.isArray(json?.ownedCardIds) ? json.ownedCardIds : []) {
+          if (!id) continue;
+          counts.set(id, (counts.get(id) || 0) + 1);
+        }
 
-        return {
-          id,
-          title,
-          rarity: card?.rarity || row?.rarity || null,
-          category: card?.category || row?.category || null,
-          imageUrl: card?.image_url || row?.image_url || null,
-          wikipediaUrl: card?.wikipedia_url || row?.wikipedia_url || null,
-          count: Math.max(1, Number(row?.count) || 1)
-        };
+        return counts;
       }
 
       function readTotal(json, currentRowCount = 0) {
@@ -222,16 +215,13 @@
         return response.json();
       }
 
-      function endpointUrl(kind, keyword, page) {
+      function endpointUrl(keyword, page) {
         const q = encodeURIComponent(keyword);
-        if (kind === 'owned') {
-          return `/api/my-collection?sort=rarity&q=${q}&page=${encodeURIComponent(page)}&stats=0`;
-        }
         return `/api/cards?page=${encodeURIComponent(page)}&q=${q}&sort=rarity`;
       }
 
       async function previewKeyword(keyword) {
-        const json = await fetchJson(endpointUrl('global', keyword, 0));
+        const json = await fetchJson(endpointUrl(keyword, 0));
         const rows = extractRows(json, false);
         const total = readTotal(json, rows.length);
         const searchHasMore = readSearchHasMore(json);
@@ -245,20 +235,19 @@
         };
       }
 
-      async function fetchAll(kind, keyword, onProgress) {
-        const owned = kind === 'owned';
+      async function fetchAll(keyword, onProgress) {
         const rows = [];
+        const ownedCounts = new Map();
         let total = null;
-        let firstPageSize = null;
 
         for (let page = 0; page < MAX_PAGES; page += 1) {
-          const json = await fetchJson(endpointUrl(kind, keyword, page));
-          const pageRows = extractRows(json, owned);
+          const json = await fetchJson(endpointUrl(keyword, page));
+          const pageRows = extractRows(json, false);
+          const pageOwnedCounts = countOwnedIds(json);
           const searchHasMore = readSearchHasMore(json);
 
           if (page === 0) {
             total = readTotal(json, pageRows.length);
-            firstPageSize = PAGE_SIZE_FALLBACK;
 
             if (total != null && total > MAX_RESULTS) {
               throw new Error(`Cette recherche contient ${total.toLocaleString('fr-FR')} résultats. Utilise un mot-clé plus précis (maximum ${MAX_RESULTS.toLocaleString('fr-FR')}).`);
@@ -266,6 +255,10 @@
           }
 
           rows.push(...pageRows);
+
+          for (const [id, count] of pageOwnedCounts) {
+            ownedCounts.set(id, (ownedCounts.get(id) || 0) + count);
+          }
 
           const effectiveTotal =
             total != null
@@ -275,77 +268,47 @@
                 : null;
 
           onProgress?.({
-            kind,
             page: page + 1,
             loaded: rows.length,
             total: effectiveTotal
           });
 
           const reachedTotal = total != null && rows.length >= total;
-          const shortPage = pageRows.length < (firstPageSize || PAGE_SIZE_FALLBACK);
+          const shortPage = pageRows.length < PAGE_SIZE_FALLBACK;
 
           if (!pageRows.length || reachedTotal || searchHasMore === false) break;
           if (searchHasMore == null && shortPage) break;
-          if (rows.length >= MAX_RESULTS) break;
+
+          if (rows.length >= MAX_RESULTS) {
+            throw new Error(`Cette recherche dépasse ${MAX_RESULTS.toLocaleString('fr-FR')} cartes. Utilise un mot-clé plus précis.`);
+          }
 
           await wait(REQUEST_DELAY_MS);
         }
 
-        return rows;
+        return { rows, ownedCounts };
       }
 
-      function mergeFamilyCards(globalRows, ownedRows) {
-        const globalById = new Map();
-        const ownedById = new Map();
+      function mergeFamilyCards(globalRows, ownedCounts) {
+        const cardsById = new Map();
 
         for (const raw of globalRows) {
-          const card = mapGlobalRow(raw);
+          const rawId = raw?.card_id || raw?.card?.id || raw?.id;
+          const card = mapGlobalRow(raw, ownedCounts.get(rawId) || 0);
           if (!card) continue;
 
-          const previous = globalById.get(card.id);
-          globalById.set(card.id, previous ? {
+          const previous = cardsById.get(card.id);
+          cardsById.set(card.id, previous ? {
             ...previous,
             ...card,
             imageUrl: card.imageUrl || previous.imageUrl || null,
-            category: card.category || previous.category || null
+            category: card.category || previous.category || null,
+            owned: previous.owned || card.owned,
+            ownedCount: Math.max(previous.ownedCount || 0, card.ownedCount || 0)
           } : card);
         }
 
-        for (const raw of ownedRows) {
-          const card = mapOwnedRow(raw);
-          if (!card) continue;
-
-          const previous = ownedById.get(card.id);
-          ownedById.set(card.id, previous ? {
-            ...previous,
-            ...card,
-            count: (Number(previous.count) || 0) + (Number(card.count) || 0),
-            imageUrl: card.imageUrl || previous.imageUrl || null
-          } : card);
-        }
-
-        for (const ownedCard of ownedById.values()) {
-          const globalCard = globalById.get(ownedCard.id);
-
-          if (globalCard) {
-            globalById.set(ownedCard.id, {
-              ...globalCard,
-              rarity: ownedCard.rarity || globalCard.rarity || null,
-              imageUrl: ownedCard.imageUrl || globalCard.imageUrl || null,
-              category: ownedCard.category || globalCard.category || null,
-              owned: true,
-              ownedCount: ownedCard.count
-            });
-          } else {
-            globalById.set(ownedCard.id, {
-              ...ownedCard,
-              owned: true,
-              ownedCount: ownedCard.count
-            });
-          }
-        }
-
-        const cards = [...globalById.values()]
+        const cards = [...cardsById.values()]
           .sort((a, b) => a.title.localeCompare(b.title, 'fr'));
 
         registerCards(cards.map((card) => ({
@@ -374,9 +337,8 @@
       }
 
       async function buildFamily({ id = null, name, keyword }, onProgress) {
-        const globalRows = await fetchAll('global', keyword, onProgress);
-        const ownedRows = await fetchAll('owned', keyword, onProgress);
-        const cards = mergeFamilyCards(globalRows, ownedRows);
+        const result = await fetchAll(keyword, onProgress);
+        const cards = mergeFamilyCards(result.rows, result.ownedCounts);
         const now = Date.now();
 
         return {
@@ -623,7 +585,7 @@
               const totalText = Number.isFinite(progress.total)
                 ? ` / ${progress.total.toLocaleString('fr-FR')}`
                 : '';
-              refresh.textContent = `${progress.kind === 'global' ? 'Cartes' : 'Possédées'} ${progress.loaded.toLocaleString('fr-FR')}${totalText}`;
+              refresh.textContent = `Cartes ${progress.loaded.toLocaleString('fr-FR')}${totalText}`;
             });
 
             saveFamily(updated);
@@ -900,12 +862,11 @@
 
           try {
             const family = await buildFamily({ name, keyword }, (progress) => {
-              const label = progress.kind === 'global' ? 'Cartes' : 'Possédées';
               const total = Number.isFinite(progress.total)
                 ? ` / ${progress.total.toLocaleString('fr-FR')}`
                 : '';
               status.dataset.mode = '';
-              status.textContent = `${label} : ${progress.loaded.toLocaleString('fr-FR')}${total}`;
+              status.textContent = `Cartes : ${progress.loaded.toLocaleString('fr-FR')}${total}`;
             });
 
             saveFamily(family);
