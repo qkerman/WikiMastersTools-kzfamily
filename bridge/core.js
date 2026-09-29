@@ -9,6 +9,7 @@
       const RARITY_ORDER = ['L', 'UR', 'SR', 'R', 'PC', 'C'];
       const MARKETPLACE_MINE_CACHE_TTL = 15 * 1000;
       let globalCardsRequestTemplate = null;
+      let supabaseRequestTemplate = null;
 
       function mapEntry(entry) {
         const card = entry && entry.card;
@@ -70,6 +71,16 @@
         }
       }
 
+      function isSupabaseRestApi(url) {
+        try {
+          const parsed = new URL(url, location.origin);
+          return parsed.hostname === 'cyrxjeppjqsxxjayfrur.supabase.co' &&
+            parsed.pathname.startsWith('/rest/v1/');
+        } catch (_) {
+          return false;
+        }
+      }
+
       function isGlobalCardsApi(url) {
         try {
           const parsed = new URL(url, location.origin);
@@ -89,6 +100,28 @@
           });
         } catch (_) {}
         return result;
+      }
+
+      function captureSupabaseRequest(input, init = {}) {
+        try {
+          const url = typeof input === 'string' ? input : input?.url;
+          if (!url || !isSupabaseRestApi(url)) return;
+
+          const headers = {
+            ...headersToObject(input?.headers),
+            ...headersToObject(init?.headers)
+          };
+
+          supabaseRequestTemplate = { url: String(url), headers };
+        } catch (_) {}
+      }
+
+      function getSupabaseRequestTemplate() {
+        if (!supabaseRequestTemplate) return null;
+        return {
+          url: supabaseRequestTemplate.url,
+          headers: { ...(supabaseRequestTemplate.headers || {}) }
+        };
       }
 
       function captureGlobalCardsRequest(input, init = {}) {
@@ -345,6 +378,7 @@
         originalFetch, MAX_COLLECTION_PAGES, MAX_BULK_PACKS, RARITY_ORDER,
         MARKETPLACE_MINE_CACHE_TTL, mapEntry, extractCards, emitCollection,
         isMarketplaceDetailApi, isPacksOpenApi, isTradesApi,
+        isSupabaseRestApi, captureSupabaseRequest, getSupabaseRequestTemplate,
         isGlobalCardsApi, captureGlobalCardsRequest, getGlobalCardsRequestTemplate,
         extractGlobalCards, emitGlobalCatalogue,
         getGlobalCollectionSummaryCardId, emitGlobalCollectionInspectedCard,
