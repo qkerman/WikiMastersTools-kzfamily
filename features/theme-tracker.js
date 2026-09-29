@@ -477,7 +477,6 @@ LIMIT ${MAX_SEMANTIC_TITLES}
               title: card.wikipedia_title,
               rarity: card.rarity || null,
               category: card.category || null,
-              summary: card.summary || null,
               imageUrl: card.image_url || null,
               wikipediaUrl: card.wikipedia_url || null,
               atk: Number.isFinite(Number(card.atk)) ? Number(card.atk) : null,
