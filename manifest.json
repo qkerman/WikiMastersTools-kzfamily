@@ -7,7 +7,10 @@
     "clipboardWrite"
   ],
   "host_permissions": [
-    "https://www.wiki-masters.com/*"
+    "https://www.wiki-masters.com/*",
+    "https://www.wikidata.org/*",
+    "https://query.wikidata.org/*",
+    "https://fr.wikipedia.org/*"
   ],
   "browser_specific_settings": {
     "gecko": {
