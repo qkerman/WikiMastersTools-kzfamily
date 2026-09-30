@@ -304,6 +304,28 @@
         });
       }
 
+      function clearMissingImageTitleFallback(card, placeholder = null) {
+        if (!card) return;
+
+        card.classList.remove('wm-missing-title-card');
+        card.querySelector(':scope > .wm-missing-title-art')?.remove();
+
+        card.style.removeProperty('--wm-art-url');
+        card.style.removeProperty('--wm-art-scale');
+        card.style.removeProperty('--wm-art-hover-scale');
+        card.style.removeProperty('--wm-image-top-rgb');
+        card.style.removeProperty('--wm-image-top-soft-rgb');
+        card.style.removeProperty('--wm-image-mid-rgb');
+        card.style.removeProperty('--wm-image-bottom-rgb');
+        card.style.removeProperty('--wm-image-bottom-soft-rgb');
+
+        const target = placeholder || findMissingImagePlaceholder(card);
+        target?.classList.remove('wm-missing-title-logo');
+        target?.parentElement?.classList.remove('wm-missing-title-frame');
+        target?.parentElement?.parentElement?.classList.remove('wm-missing-title-host');
+        target?.closest('div[class*="top-0"][class*="h-[45%]"]')?.classList.remove('wm-missing-title-layer');
+      }
+
       async function ensureMissingImageForCard(card) {
         if (!card?.isConnected) return;
         if (card.dataset.wmMissingImageLoading === '1') return;
@@ -323,9 +345,14 @@
           const entry = await imageResolver.resolveMissingImage(title);
     
           if (entry?.found) {
+            clearMissingImageTitleFallback(card, placeholder);
             applyResolvedMissingImage(card, placeholder, title, entry);
           } else {
-            applyMissingImageTitleFallback(card, placeholder, title);
+            if (isFeatureEnabled('premiumCards')) {
+              applyMissingImageTitleFallback(card, placeholder, title);
+            } else {
+              clearMissingImageTitleFallback(card, placeholder);
+            }
             card.dataset.wmMissingImageDone = '1';
           }
         } catch (error) {
@@ -856,10 +883,11 @@
               const missingTitle = normalizeTitle(card.querySelector('h3')?.textContent);
 
               if (card.dataset.wmMissingImageDone === '1') {
-                // Auto-réparation : une carte peut déjà avoir été marquée "sans image"
-                // avant l'ajout du fallback typographique. Tant que le logo WikiMasters
-                // est encore présent, on force le rendu texte.
-                applyMissingImageTitleFallback(card, missingPlaceholder, missingTitle);
+                if (premiumEnabled) {
+                  applyMissingImageTitleFallback(card, missingPlaceholder, missingTitle);
+                } else {
+                  clearMissingImageTitleFallback(card, missingPlaceholder);
+                }
               } else {
                 observer?.observe(card);
               }
