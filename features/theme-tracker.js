@@ -702,7 +702,7 @@
         if (!element) return null;
 
         const slot = document.createElement('div');
-        slot.className = 'wm-family-card-slot';
+        slot.className = 'wm-family-card-slot relative isolate group';
 
         const remove = document.createElement('button');
         remove.type = 'button';
