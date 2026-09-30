@@ -1561,6 +1561,166 @@
         }
       }
 
+      async function openExportModal(familyIdValue) {
+        if (document.querySelector('.wm-family-modal-overlay')) return;
+
+        const family = getFamily(familyIdValue);
+        if (!family) return;
+
+        const overlay = document.createElement('div');
+        overlay.className = 'wm-family-modal-overlay';
+
+        const modal = document.createElement('div');
+        modal.className = 'wm-family-modal wm-family-share-modal';
+
+        const title = document.createElement('h2');
+        title.textContent = `Exporter « ${family.name} »`;
+
+        const description = document.createElement('p');
+        description.textContent = 'Partage ce code pour transmettre la famille. Les possessions personnelles ne sont pas incluses.';
+
+        const status = document.createElement('div');
+        status.className = 'wm-family-modal-status';
+        status.textContent = 'Génération du code…';
+
+        const textarea = document.createElement('textarea');
+        textarea.className = 'wm-family-code-area';
+        textarea.readOnly = true;
+        textarea.spellcheck = false;
+        textarea.placeholder = 'Génération…';
+
+        const meta = document.createElement('div');
+        meta.className = 'wm-family-share-meta';
+
+        const actions = document.createElement('div');
+        actions.className = 'wm-family-modal-actions';
+
+        const close = document.createElement('button');
+        close.type = 'button';
+        close.className = 'wm-family-secondary';
+        close.textContent = 'Fermer';
+
+        const copy = document.createElement('button');
+        copy.type = 'button';
+        copy.className = 'wm-family-primary';
+        copy.textContent = 'Copier';
+        copy.disabled = true;
+
+        close.addEventListener('click', () => overlay.remove());
+        overlay.addEventListener('click', (event) => {
+          if (event.target === overlay) overlay.remove();
+        });
+
+        copy.addEventListener('click', async () => {
+          if (!textarea.value) return;
+          const copied = await copyText(textarea.value);
+          status.dataset.mode = copied ? 'success' : 'error';
+          status.textContent = copied
+            ? 'Code copié.'
+            : 'Impossible de copier automatiquement. Sélectionne le code manuellement.';
+          if (!copied) {
+            textarea.focus();
+            textarea.select();
+          }
+        });
+
+        actions.append(close, copy);
+        modal.append(title, description, textarea, meta, status, actions);
+        overlay.append(modal);
+        document.body.append(overlay);
+
+        try {
+          const code = await encodeFamilyCode(family);
+          if (!overlay.isConnected) return;
+
+          textarea.value = code;
+          meta.textContent = `${family.cards.length.toLocaleString('fr-FR')} carte${family.cards.length > 1 ? 's' : ''} • ${code.length.toLocaleString('fr-FR')} caractères`;
+          status.textContent = code.startsWith('F1.')
+            ? 'Code compressé prêt à partager.'
+            : 'Code prêt à partager.';
+          copy.disabled = false;
+          textarea.focus();
+          textarea.select();
+        } catch (error) {
+          status.dataset.mode = 'error';
+          status.textContent = `Erreur : ${String(error?.message || error)}`;
+        }
+      }
+
+      function openImportModal() {
+        if (document.querySelector('.wm-family-modal-overlay')) return;
+
+        const overlay = document.createElement('div');
+        overlay.className = 'wm-family-modal-overlay';
+
+        const modal = document.createElement('div');
+        modal.className = 'wm-family-modal wm-family-share-modal';
+
+        const title = document.createElement('h2');
+        title.textContent = 'Importer une famille';
+
+        const description = document.createElement('p');
+        description.textContent = 'Colle le code reçu. La famille sera ajoutée comme une nouvelle famille.';
+
+        const textarea = document.createElement('textarea');
+        textarea.className = 'wm-family-code-area';
+        textarea.spellcheck = false;
+        textarea.placeholder = 'F1.H4sI…';
+
+        const status = document.createElement('div');
+        status.className = 'wm-family-modal-status';
+        status.textContent = 'Les possessions seront à vérifier sur ton propre compte.';
+
+        const actions = document.createElement('div');
+        actions.className = 'wm-family-modal-actions';
+
+        const cancel = document.createElement('button');
+        cancel.type = 'button';
+        cancel.className = 'wm-family-secondary';
+        cancel.textContent = 'Annuler';
+
+        const importButton = document.createElement('button');
+        importButton.type = 'button';
+        importButton.className = 'wm-family-primary';
+        importButton.textContent = 'Importer';
+
+        cancel.addEventListener('click', () => overlay.remove());
+        overlay.addEventListener('click', (event) => {
+          if (event.target === overlay) overlay.remove();
+        });
+
+        importButton.addEventListener('click', async () => {
+          importButton.disabled = true;
+          status.dataset.mode = '';
+          status.textContent = 'Lecture du code…';
+
+          try {
+            const family = await decodeFamilyCode(textarea.value);
+            saveFamily(family);
+            registerFamilyCards(family);
+
+            activeFamilyId = family.id;
+            editingFamilyId = null;
+            currentFilter = 'all';
+            visibleCount = CARD_BATCH;
+            searchState = createEmptySearchState(family.id);
+
+            overlay.remove();
+            renderPageContent();
+          } catch (error) {
+            status.dataset.mode = 'error';
+            status.textContent = String(error?.message || error);
+            importButton.disabled = false;
+          }
+        });
+
+        actions.append(cancel, importButton);
+        modal.append(title, description, textarea, status, actions);
+        overlay.append(modal);
+        document.body.append(overlay);
+        textarea.focus();
+      }
+
       function openCreateModal() {
         if (document.querySelector('.wm-family-modal-overlay')) return;
 
