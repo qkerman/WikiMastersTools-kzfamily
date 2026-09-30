@@ -927,3 +927,38 @@ html.wm-theme-route main > :not(#wm-theme-tracker-page) {
     padding-inline: 7px;
   }
 }
+
+
+/* v4.22.1 — Familles réutilise les dimensions natives de /collection */
+.wm-family-results {
+  display: flex !important;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 12px !important;
+}
+
+.wm-family-card-slot {
+  width: clamp(8.4rem, 43vw, 10rem) !important;
+  flex: 0 0 auto;
+  min-width: 0;
+}
+
+.wm-family-native-card {
+  width: clamp(8.4rem, 43vw, 10rem) !important;
+  height: clamp(11.8rem, 60vw, 14rem) !important;
+  min-height: 0 !important;
+  aspect-ratio: auto !important;
+}
+
+@media (min-width: 640px) {
+  .wm-family-results {
+    gap: 22px !important;
+  }
+}
+
+@media (min-width: 768px) {
+  .wm-family-results {
+    gap: 26px !important;
+  }
+}
