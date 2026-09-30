@@ -75,3 +75,5 @@ Puis cliquer sur **Recharger** dans `chrome://extensions/` et faire un F5 sur Wi
 - **30/09/2026** — « Familles » : recherche Marché plus tolérante sur les titres Wikipédia (ex. « Runaway (chanson de Kanye West) » → « Runaway »), avec validation finale stricte par card_id.
 
 - **30/09/2026** — « Familles » : l’ajout de cartes utilise désormais une pagination classique avec pages numérotées, précédent/suivant et skeleton de chargement à chaque changement de page.
+
+- **30/09/2026** — « Familles » : le mode Marché affiche le logo WikiMasters pour les cartes sans image et « Rechercher toutes les manquantes » réessaie jusqu’à 3 fois à 5 secondes d’intervalle avant de passer à la suite.
