@@ -1050,6 +1050,8 @@
         button.addEventListener('click', () => {
           activeFamilyId = family.id;
           editingFamilyId = null;
+          marketFamilyId = null;
+          marketState = createEmptyMarketState(family.id);
           currentFilter = 'all';
           visibleCount = CARD_BATCH;
           if (searchState.familyId !== family.id) {
@@ -1078,6 +1080,11 @@
         heading.className = 'wm-family-page-head';
 
         const copy = document.createElement('div');
+
+        const devNote = document.createElement('p');
+        devNote.className = 'wm-family-dev-note';
+        devNote.textContent = 'Si les devs veulent que je travaille pour eux, j’ai un Master 2 en conception logicielle et je suis très gentil.';
+
         const title = document.createElement('h1');
         title.textContent = 'Familles';
 
@@ -1085,13 +1092,13 @@
         intro.className = 'wm-family-intro';
 
         const introMain = document.createElement('p');
-        introMain.textContent = 'Crée tes propres familles de cartes, ajoute ou retire les cartes que tu veux, puis charge ta collection pour voir immédiatement celles que tu possèdes et celles qui te manquent.';
+        introMain.textContent = 'Crée tes propres familles, choisis les cartes qui en font partie et charge ta collection pour voir celles que tu possèdes. Quand des cartes te manquent, le mode Marché peut chercher directement les annonces correspondantes.';
 
         const introShare = document.createElement('p');
         introShare.textContent = 'Tu peux aussi importer ou exporter une famille pour la partager. Dans le futur, j’ajouterai sûrement des familles préfaites si des gens m’en envoient.';
 
         intro.append(introMain, introShare);
-        copy.append(title, intro);
+        copy.append(devNote, title, intro);
 
         const homeActions = document.createElement('div');
         homeActions.className = 'wm-family-home-actions';
