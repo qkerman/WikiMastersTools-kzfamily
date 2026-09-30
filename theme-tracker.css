@@ -1,16 +1,27 @@
-/* Familles — extension WikiMastersTools */
+/* WikiMastersTools — Familles */
+
+.wm-family-page,
+.wm-family-modal-overlay {
+  --wm-family-accent: #8b5cf6;
+  --wm-family-accent-soft: rgba(139, 92, 246, 0.12);
+  --wm-family-accent-border: rgba(168, 85, 247, 0.36);
+  --wm-family-muted: color-mix(in srgb, var(--color-foreground) 52%, transparent);
+  --wm-family-faint: color-mix(in srgb, var(--color-foreground) 38%, transparent);
+}
+
+/* Navigation */
 
 .wm-family-nav {
-  border: 1px solid rgba(168, 85, 247, 0.30) !important;
-  background: rgba(124, 58, 237, 0.10) !important;
+  border: 1px solid rgba(168, 85, 247, 0.24) !important;
+  background: rgba(124, 58, 237, 0.07) !important;
   color: rgb(196, 181, 253) !important;
   text-decoration: none !important;
 }
 
 .wm-family-nav:hover,
 .wm-family-nav.is-active {
-  border-color: rgba(192, 132, 252, 0.55) !important;
-  background: rgba(124, 58, 237, 0.18) !important;
+  border-color: rgba(192, 132, 252, 0.48) !important;
+  background: rgba(124, 58, 237, 0.14) !important;
   color: #fff !important;
 }
 
@@ -25,6 +36,8 @@ html.wm-theme-route main > :not(#wm-theme-tracker-page) {
   display: none !important;
 }
 
+/* Page */
+
 .wm-family-page {
   width: 100%;
   min-width: 0;
@@ -32,9 +45,9 @@ html.wm-theme-route main > :not(#wm-theme-tracker-page) {
 }
 
 .wm-family-shell {
-  width: min(1320px, 100%);
+  width: min(1240px, 100%);
   margin: 0 auto;
-  padding: 30px clamp(18px, 3vw, 38px) 56px;
+  padding: 34px clamp(18px, 3vw, 36px) 64px;
 }
 
 .wm-family-page-head,
@@ -42,135 +55,221 @@ html.wm-theme-route main > :not(#wm-theme-tracker-page) {
 .wm-family-detail-head,
 .wm-family-toolbar,
 .wm-family-actions,
-.wm-family-modal-actions {
+.wm-family-modal-actions,
+.wm-family-home-actions,
+.wm-family-empty-actions {
   display: flex;
   align-items: center;
 }
 
 .wm-family-page-head {
   justify-content: space-between;
-  gap: 18px;
-  margin-bottom: 22px;
+  gap: 28px;
+  margin-bottom: 28px;
+}
+
+.wm-family-page-head > div:first-child {
+  min-width: 0;
 }
 
 .wm-family-page-head h1,
 .wm-family-detail-head h1 {
   margin: 0;
   font-family: var(--font-heading);
-  font-size: 28px;
-  line-height: 1.1;
+  font-size: clamp(26px, 3vw, 31px);
+  font-weight: 700;
+  line-height: 1.08;
+  letter-spacing: -0.02em;
 }
 
-.wm-family-page-head p,
-.wm-family-detail-head p {
-  margin: 6px 0 0;
-  color: color-mix(in srgb, var(--color-foreground) 52%, transparent);
-  font-size: 13px;
+.wm-family-intro {
+  max-width: 720px;
+  margin-top: 9px;
 }
+
+.wm-family-intro p,
+.wm-family-detail-head p {
+  margin: 0;
+  color: var(--wm-family-muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.wm-family-intro p + p {
+  margin-top: 3px;
+  color: var(--wm-family-faint);
+  font-size: 11px;
+}
+
+/* Buttons */
 
 .wm-family-primary,
 .wm-family-secondary,
 .wm-family-danger,
-.wm-family-link-button {
-  border-radius: 10px;
+.wm-family-link-button,
+.wm-family-picker-add,
+.wm-family-picker-remove,
+.wm-family-cover-button,
+.wm-family-card-remove {
   font: inherit;
-  font-size: 12px;
-  font-weight: 800;
   cursor: pointer;
-  transition: 140ms ease;
+  transition:
+    border-color 140ms ease,
+    background 140ms ease,
+    color 140ms ease,
+    opacity 140ms ease,
+    box-shadow 140ms ease;
+}
+
+.wm-family-primary,
+.wm-family-secondary,
+.wm-family-danger {
+  min-height: 38px;
+  padding: 8px 13px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 800;
+  white-space: nowrap;
 }
 
 .wm-family-primary {
-  padding: 10px 13px;
-  border: 1px solid rgba(192, 132, 252, 0.44);
+  border: 1px solid rgba(192, 132, 252, 0.46);
   background: #7c3aed;
   color: #fff;
+  box-shadow: 0 4px 16px rgba(76, 29, 149, 0.14);
 }
 
 .wm-family-primary:hover:not(:disabled) {
+  border-color: rgba(216, 180, 254, 0.64);
   background: #8b5cf6;
 }
 
-.wm-family-primary:disabled,
-.wm-family-secondary:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-
 .wm-family-secondary {
-  padding: 9px 12px;
   border: 1px solid var(--color-border);
-  background: var(--color-surface);
-  color: var(--color-foreground);
+  background: color-mix(in srgb, var(--color-surface) 96%, transparent);
+  color: color-mix(in srgb, var(--color-foreground) 86%, transparent);
 }
 
 .wm-family-secondary:hover:not(:disabled) {
-  border-color: rgba(168, 85, 247, 0.45);
+  border-color: rgba(168, 85, 247, 0.42);
+  background: var(--wm-family-accent-soft);
+  color: var(--color-foreground);
 }
 
 .wm-family-danger {
-  padding: 9px 12px;
-  border: 1px solid rgba(248, 113, 113, 0.30);
-  background: rgba(127, 29, 29, 0.10);
+  border: 1px solid rgba(248, 113, 113, 0.25);
+  background: rgba(127, 29, 29, 0.08);
   color: #fca5a5;
 }
 
-.wm-family-danger:hover {
-  background: rgba(127, 29, 29, 0.18);
+.wm-family-danger:hover:not(:disabled) {
+  border-color: rgba(248, 113, 113, 0.46);
+  background: rgba(127, 29, 29, 0.15);
+}
+
+.wm-family-primary:disabled,
+.wm-family-secondary:disabled,
+.wm-family-danger:disabled {
+  opacity: 0.46;
+  cursor: default;
+  box-shadow: none;
 }
 
 .wm-family-link-button {
-  padding: 0;
+  padding: 3px 0;
   border: 0;
   background: transparent;
-  color: color-mix(in srgb, var(--color-foreground) 64%, transparent);
+  color: var(--wm-family-muted);
+  font-size: 11px;
+  font-weight: 750;
 }
 
 .wm-family-link-button:hover {
   color: rgb(196, 181, 253);
 }
 
+.wm-family-primary:focus-visible,
+.wm-family-secondary:focus-visible,
+.wm-family-danger:focus-visible,
+.wm-family-link-button:focus-visible,
+.wm-family-card:focus-visible,
+.wm-family-add-card:focus-visible,
+.wm-family-filters button:focus-visible,
+.wm-family-picker-add:focus-visible,
+.wm-family-picker-remove:focus-visible,
+.wm-family-cover-button:focus-visible,
+.wm-family-card-remove:focus-visible,
+.wm-family-modal input:focus-visible,
+.wm-family-picker-search input:focus-visible,
+.wm-family-code-area:focus-visible {
+  outline: 2px solid rgba(192, 132, 252, 0.72);
+  outline-offset: 2px;
+}
+
+/* Home */
+
+.wm-family-home-actions,
+.wm-family-empty-actions,
+.wm-family-actions,
+.wm-family-modal-actions {
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .wm-family-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 290px), 1fr));
   gap: 12px;
 }
 
 .wm-family-card,
 .wm-family-add-card {
-  min-height: 132px;
+  min-height: 126px;
   border: 1px solid var(--color-border);
-  border-radius: 15px;
-  background: var(--color-surface);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--color-surface) 98%, transparent);
   color: var(--color-foreground);
   font: inherit;
+  overflow: hidden;
   cursor: pointer;
-  transition: 140ms ease;
+  transition:
+    border-color 150ms ease,
+    background 150ms ease,
+    box-shadow 150ms ease;
 }
 
 .wm-family-card {
   display: flex;
   align-items: stretch;
-  overflow: hidden;
   padding: 0;
   text-align: left;
 }
 
 .wm-family-card:hover,
 .wm-family-add-card:hover {
-  border-color: rgba(168, 85, 247, 0.45);
-  transform: translateY(-1px);
+  border-color: rgba(168, 85, 247, 0.42);
+  background: color-mix(in srgb, var(--color-surface) 92%, rgba(124, 58, 237, 0.08));
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.12);
 }
 
 .wm-family-card-thumb {
+  position: relative;
   display: grid;
-  width: 112px;
-  flex: 0 0 112px;
+  width: 108px;
+  flex: 0 0 108px;
   place-items: center;
   overflow: hidden;
   background: rgba(124, 58, 237, 0.08);
-  color: rgb(192, 132, 252);
-  font-size: 30px;
+  color: rgb(167, 139, 250);
+  font-size: 25px;
+}
+
+.wm-family-card-thumb::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent 64%, rgba(0, 0, 0, 0.12));
+  pointer-events: none;
 }
 
 .wm-family-card-thumb img {
@@ -185,31 +284,30 @@ html.wm-theme-route main > :not(#wm-theme-tracker-page) {
   flex: 1;
   flex-direction: column;
   justify-content: center;
-  gap: 5px;
-  padding: 15px;
+  gap: 7px;
+  padding: 15px 16px;
 }
 
 .wm-family-card-body > strong {
   overflow: hidden;
-  font-size: 15px;
+  font-size: 14px;
+  line-height: 1.25;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.wm-family-card-keyword {
-  color: rgb(167, 139, 250);
-  font-size: 11px;
-}
-
 .wm-family-card-numbers {
-  color: color-mix(in srgb, var(--color-foreground) 58%, transparent);
-  font-size: 11px;
+  overflow: hidden;
+  color: var(--wm-family-muted);
+  font-size: 10.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .wm-family-progress {
   display: block;
   width: 100%;
-  height: 5px;
+  height: 4px;
   overflow: hidden;
   border-radius: 999px;
   background: color-mix(in srgb, var(--color-foreground) 8%, transparent);
@@ -219,12 +317,8 @@ html.wm-theme-route main > :not(#wm-theme-tracker-page) {
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: #8b5cf6;
-}
-
-.wm-family-progress.is-large {
-  height: 7px;
-  margin: 12px 0 16px;
+  background: linear-gradient(90deg, #7c3aed, #a78bfa);
+  transition: width 180ms ease;
 }
 
 .wm-family-add-card {
@@ -233,501 +327,210 @@ html.wm-theme-route main > :not(#wm-theme-tracker-page) {
   justify-content: center;
   gap: 9px;
   border-style: dashed;
+  background: transparent;
+  color: color-mix(in srgb, var(--color-foreground) 72%, transparent);
 }
 
 .wm-family-add-card > span {
   color: rgb(167, 139, 250);
   font-size: 22px;
+  font-weight: 400;
 }
 
 .wm-family-add-card > strong {
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .wm-family-empty {
   grid-column: 1 / -1;
   display: flex;
-  min-height: 220px;
+  min-height: 210px;
   align-items: center;
   justify-content: center;
   flex-direction: column;
-  gap: 8px;
-  border: 1px dashed var(--color-border);
-  border-radius: 15px;
-  color: color-mix(in srgb, var(--color-foreground) 55%, transparent);
+  gap: 7px;
+  padding: 24px;
+  border: 1px dashed color-mix(in srgb, var(--color-border) 88%, transparent);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--color-surface) 58%, transparent);
+  color: var(--wm-family-muted);
   text-align: center;
 }
 
 .wm-family-empty strong {
   color: var(--color-foreground);
-  font-size: 15px;
+  font-size: 14px;
 }
 
-.wm-family-empty span {
-  font-size: 12px;
+.wm-family-empty > span {
+  font-size: 11px;
 }
 
-.wm-family-empty .wm-family-primary {
-  margin-top: 8px;
+.wm-family-empty-actions {
+  justify-content: center;
+  margin-top: 7px;
 }
+
+/* Detail */
 
 .wm-family-detail-top {
   justify-content: space-between;
-  gap: 16px;
+  gap: 18px;
   margin-bottom: 22px;
 }
 
 .wm-family-actions {
+  justify-content: flex-end;
+}
+
+.wm-family-edit-banner {
+  display: flex;
+  align-items: center;
   gap: 8px;
+  width: fit-content;
+  max-width: 100%;
+  margin: -8px 0 18px;
+  padding: 6px 9px;
+  border: 1px solid rgba(168, 85, 247, 0.22);
+  border-radius: 9px;
+  background: rgba(124, 58, 237, 0.07);
+  color: var(--wm-family-muted);
+  font-size: 10px;
+}
+
+.wm-family-edit-banner[hidden] {
+  display: none;
+}
+
+.wm-family-edit-banner strong {
+  color: rgb(196, 181, 253);
+  font-size: 10px;
 }
 
 .wm-family-detail-head {
   justify-content: space-between;
-  gap: 20px;
+  gap: 24px;
+}
+
+.wm-family-detail-head > div {
+  min-width: 0;
+}
+
+.wm-family-detail-head p {
+  margin-top: 7px;
 }
 
 .wm-family-detail-head > strong {
+  flex: 0 0 auto;
   color: rgb(196, 181, 253);
-  font-size: 20px;
+  font-size: 18px;
+  font-weight: 850;
+}
+
+.wm-family-progress.is-large {
+  height: 6px;
+  margin: 13px 0 18px;
 }
 
 .wm-family-filters {
-  display: flex;
-  gap: 8px;
+  display: inline-flex;
+  max-width: 100%;
+  gap: 3px;
   margin: 0 0 18px;
+  padding: 3px;
+  overflow-x: auto;
+  border: 1px solid var(--color-border);
+  border-radius: 11px;
+  background: color-mix(in srgb, var(--color-surface) 90%, transparent);
 }
 
 .wm-family-filters button {
-  padding: 9px 12px;
-  border: 1px solid var(--color-border);
-  border-radius: 10px;
-  background: var(--color-surface);
-  color: color-mix(in srgb, var(--color-foreground) 62%, transparent);
+  min-height: 30px;
+  padding: 6px 9px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--wm-family-muted);
   font: inherit;
-  font-size: 11px;
+  font-size: 10px;
+  white-space: nowrap;
   cursor: pointer;
+  transition: 120ms ease;
+}
+
+.wm-family-filters button:hover {
+  color: var(--color-foreground);
 }
 
 .wm-family-filters button.is-active {
-  border-color: rgba(168, 85, 247, 0.46);
-  background: rgba(124, 58, 237, 0.10);
-  color: rgb(196, 181, 253);
+  border-color: rgba(168, 85, 247, 0.28);
+  background: rgba(124, 58, 237, 0.11);
+  color: rgb(216, 180, 254);
 }
 
 .wm-family-filters strong {
-  margin-left: 5px;
+  margin-left: 4px;
   color: var(--color-foreground);
+  font-size: 9.5px;
 }
 
 .wm-family-toolbar {
   justify-content: space-between;
-  min-height: 24px;
-  margin-bottom: 10px;
-  color: color-mix(in srgb, var(--color-foreground) 52%, transparent);
-  font-size: 11px;
+  min-height: 20px;
+  margin-bottom: 11px;
+  color: var(--wm-family-faint);
+  font-size: 10px;
 }
 
 .wm-family-results {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-  gap: 12px;
-}
-
-.wm-family-result {
-  overflow: hidden;
-  border: 1px solid var(--color-border);
-  border-radius: 14px;
-  background: var(--color-surface);
-}
-
-.wm-family-result.is-owned {
-  border-color: rgba(52, 211, 153, 0.30);
-}
-
-.wm-family-result-image {
-  position: relative;
-  display: grid;
-  aspect-ratio: 4 / 3;
-  place-items: center;
-  overflow: hidden;
-  background: rgba(124, 58, 237, 0.06);
-  color: rgb(167, 139, 250);
-  font-size: 24px;
-}
-
-.wm-family-result-image img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.wm-family-owned-badge {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  padding: 4px 7px;
-  border-radius: 999px;
-  background: rgba(15, 23, 42, 0.82);
-  color: #cbd5e1;
-  font-size: 9px;
-  font-weight: 850;
-  backdrop-filter: blur(5px);
-}
-
-.wm-family-owned-badge.is-owned {
-  background: rgba(6, 78, 59, 0.88);
-  color: #a7f3d0;
-}
-
-.wm-family-result-body {
-  padding: 11px;
-}
-
-.wm-family-result-body h3 {
-  display: -webkit-box;
-  min-height: 36px;
-  margin: 0;
-  overflow: hidden;
-  font-size: 12px;
-  line-height: 1.35;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-}
-
-.wm-family-result-meta {
-  display: flex;
-  min-height: 18px;
-  gap: 6px;
-  margin-top: 7px;
-  overflow: hidden;
-  color: color-mix(in srgb, var(--color-foreground) 46%, transparent);
-  font-size: 9px;
-  white-space: nowrap;
-}
-
-.wm-family-result-meta span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.wm-family-more {
-  display: block;
-  margin: 18px auto 0;
-}
-
-.wm-family-modal-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 2147483647;
-  display: grid;
-  place-items: center;
-  padding: 18px;
-  background: rgba(0, 0, 0, 0.64);
-}
-
-.wm-family-modal {
-  width: min(420px, 100%);
-  padding: 20px;
-  border: 1px solid var(--color-border);
-  border-radius: 16px;
-  background: var(--color-surface);
-  color: var(--color-foreground);
-  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.36);
-}
-
-.wm-family-modal h2 {
-  margin: 0;
-  font-family: var(--font-heading);
-  font-size: 19px;
-}
-
-.wm-family-modal > p {
-  margin: 7px 0 18px;
-  color: color-mix(in srgb, var(--color-foreground) 52%, transparent);
-  font-size: 11px;
-}
-
-.wm-family-modal label {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin-top: 12px;
-  font-size: 11px;
-  font-weight: 750;
-}
-
-.wm-family-modal input {
-  height: 39px;
-  padding: 0 11px;
-  border: 1px solid var(--color-border);
-  border-radius: 9px;
-  outline: 0;
-  background: color-mix(in srgb, var(--color-surface) 88%, black 12%);
-  color: var(--color-foreground);
-  font: inherit;
-  font-size: 12px;
-}
-
-.wm-family-modal input:focus {
-  border-color: rgba(168, 85, 247, 0.55);
-}
-
-.wm-family-modal-status {
-  min-height: 34px;
-  margin-top: 13px;
-  color: color-mix(in srgb, var(--color-foreground) 50%, transparent);
-  font-size: 10.5px;
-  line-height: 1.4;
-}
-
-.wm-family-modal-status[data-mode="success"] {
-  color: #6ee7b7;
-}
-
-.wm-family-modal-status[data-mode="error"] {
-  color: #fca5a5;
-}
-
-.wm-family-modal-actions {
-  justify-content: flex-end;
-  gap: 8px;
-  margin-top: 12px;
-}
-
-@media (max-width: 700px) {
-  .wm-family-shell {
-    padding: 22px 14px 40px;
-  }
-
-  .wm-family-page-head,
-  .wm-family-detail-top,
-  .wm-family-detail-head {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-
-  .wm-family-actions {
-    width: 100%;
-  }
-
-  .wm-family-actions button {
-    flex: 1;
-  }
-
-  .wm-family-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .wm-family-results {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 9px;
-  }
-
-  .wm-family-filters {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-  }
-
-  .wm-family-filters button {
-    padding: 8px 5px;
-  }
-}
-
-
-/* v4.19 — familles sémantiques + vraies cartes full-art */
-.wm-family-results {
-  grid-template-columns: repeat(auto-fill, minmax(235px, 1fr));
-  gap: 18px;
-  align-items: start;
+  display: flex !important;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  align-items: flex-start;
+  gap: 24px !important;
 }
 
 .wm-family-card-slot {
+  width: clamp(8.4rem, 43vw, 10rem) !important;
+  flex: 0 0 auto;
   min-width: 0;
-  width: 100%;
 }
 
 .wm-family-native-card {
   position: relative !important;
-  width: 100% !important;
-  aspect-ratio: 288 / 420;
+  width: clamp(8.4rem, 43vw, 10rem) !important;
+  height: clamp(11.8rem, 60vw, 14rem) !important;
   min-height: 0 !important;
+  aspect-ratio: auto !important;
 }
 
-.wm-family-native-card > div[class*="top-0"][class*="h-[45%]"] {
-  position: absolute;
+.wm-family-card-slot.is-missing .wm-family-native-card {
+  filter: grayscale(1) saturate(0) brightness(0.68);
+  opacity: 0.58;
 }
 
-.wm-family-native-card > div[class*="top-[45%]"] {
-  position: absolute;
+.wm-family-card-slot.is-missing .wm-family-native-card:hover {
+  filter: grayscale(1) saturate(0) brightness(0.74);
+  opacity: 0.68;
 }
 
-.wm-family-native-card > div[class*="top-2"][class*="left-2"] {
-  position: absolute;
-}
-
-.wm-family-possession-badge {
-  position: absolute;
-  top: 7px;
-  right: 7px;
-  z-index: 45;
-  display: inline-flex;
-  align-items: center;
-  min-height: 25px;
-  padding: 0 8px;
-  border: 1px solid rgba(110, 231, 183, 0.72);
-  border-radius: 8px;
-  background: rgba(6, 78, 59, 0.91);
-  color: #a7f3d0;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.42);
-  font-size: 8.5px;
-  font-weight: 900;
-  line-height: 1;
-  pointer-events: none;
-}
-
-.wm-family-possession-badge.is-missing {
-  border-color: rgba(148, 163, 184, 0.42);
-  background: rgba(8, 10, 14, 0.82);
-  color: #cbd5e1;
-}
-
-.wm-family-progress-overlay {
-  cursor: wait;
-}
-
-.wm-family-progress-modal {
-  width: min(460px, 100%);
-}
-
-.wm-family-progress-modal[data-mode="error"] {
-  cursor: default;
-}
-
-.wm-family-progress-stage {
+.wm-family-more {
   display: block;
-  margin-top: 20px;
-  color: var(--color-foreground);
-  font-size: 13px;
-}
-
-.wm-family-progress-detail {
-  min-height: 34px;
-  margin: 6px 0 12px !important;
-  color: color-mix(in srgb, var(--color-foreground) 58%, transparent) !important;
-  font-size: 11px !important;
-  line-height: 1.45;
-}
-
-.wm-family-build-progress {
-  width: 100%;
-  height: 8px;
-  overflow: hidden;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--color-foreground) 9%, transparent);
-}
-
-.wm-family-build-progress > span {
-  display: block;
-  width: 0;
-  height: 100%;
-  border-radius: inherit;
-  background: #8b5cf6;
-  transition: width 180ms ease;
-}
-
-.wm-family-build-percent {
-  display: block;
-  margin-top: 7px;
-  color: rgb(196, 181, 253);
-  font-size: 11px;
-  font-weight: 850;
-  text-align: right;
-}
-
-.wm-family-progress-note {
-  margin-top: 14px;
-  padding: 9px 10px;
-  border: 1px solid var(--color-border);
-  border-radius: 9px;
-  color: color-mix(in srgb, var(--color-foreground) 48%, transparent);
-  font-size: 10px;
-  line-height: 1.4;
-}
-
-.wm-family-progress-modal[data-mode="error"] .wm-family-build-progress > span {
-  background: #ef4444;
-}
-
-.wm-family-progress-modal[data-mode="error"] .wm-family-build-percent {
-  color: #fca5a5;
-}
-
-.wm-family-progress-modal .wm-family-secondary {
-  margin: 14px 0 0 auto;
-}
-
-@media (max-width: 700px) {
-  .wm-family-results {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 10px;
-  }
-
-  .wm-family-possession-badge {
-    top: 5px;
-    right: 5px;
-    padding: 0 6px;
-    font-size: 7.5px;
-  }
-}
-
-
-/* v4.21 — états de possession vérifiés */
-.wm-family-possession-badge.is-unchecked {
-  border-color: rgba(250, 204, 21, 0.42);
-  background: rgba(113, 63, 18, 0.84);
-  color: #fde68a;
-}
-
-@media (max-width: 700px) {
-  .wm-family-filters {
-    grid-template-columns: repeat(auto-fit, minmax(82px, 1fr));
-  }
-}
-
-
-/* v4.22 — éditeur manuel des Familles */
-.wm-family-card-remove {
-  display: block;
-  width: 100%;
-  margin-top: 7px;
-  padding: 7px 9px;
-  border: 1px solid rgba(248, 113, 113, 0.22);
-  border-radius: 8px;
-  background: rgba(127, 29, 29, 0.08);
-  color: #fca5a5;
-  font: inherit;
-  font-size: 10px;
-  font-weight: 800;
-  cursor: pointer;
-  transition: 140ms ease;
-}
-
-.wm-family-card-remove:hover {
-  border-color: rgba(248, 113, 113, 0.42);
-  background: rgba(127, 29, 29, 0.16);
+  margin: 22px auto 0;
 }
 
 .wm-family-detail-empty {
   display: flex;
-  min-height: 150px;
+  min-height: 160px;
   align-items: center;
   justify-content: center;
   flex-direction: column;
   gap: 5px;
-  margin-bottom: 12px;
+  margin-bottom: 14px;
+  padding: 22px;
   border: 1px dashed var(--color-border);
-  border-radius: 14px;
-  color: color-mix(in srgb, var(--color-foreground) 48%, transparent);
+  border-radius: 13px;
+  color: var(--wm-family-muted);
   text-align: center;
 }
 
@@ -741,24 +544,183 @@ html.wm-theme-route main > :not(#wm-theme-tracker-page) {
 }
 
 .wm-family-detail-empty span {
+  font-size: 10.5px;
+}
+
+/* Edit controls */
+
+.wm-family-edit-controls {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  gap: 5px;
+  margin-top: 7px;
+}
+
+.wm-family-cover-button,
+.wm-family-card-remove {
+  width: 100%;
+  min-height: 30px;
+  margin: 0;
+  padding: 6px 7px;
+  border-radius: 8px;
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.wm-family-cover-button {
+  border: 1px solid rgba(168, 85, 247, 0.25);
+  background: rgba(124, 58, 237, 0.06);
+  color: rgb(196, 181, 253);
+}
+
+.wm-family-cover-button:hover:not(:disabled) {
+  border-color: rgba(192, 132, 252, 0.46);
+  background: rgba(124, 58, 237, 0.13);
+}
+
+.wm-family-cover-button.is-selected {
+  border-color: rgba(250, 204, 21, 0.30);
+  background: rgba(113, 63, 18, 0.09);
+  color: #fde68a;
+  cursor: default;
+}
+
+.wm-family-card-remove {
+  border: 1px solid rgba(248, 113, 113, 0.20);
+  background: rgba(127, 29, 29, 0.06);
+  color: #fca5a5;
+}
+
+.wm-family-card-remove:hover {
+  border-color: rgba(248, 113, 113, 0.40);
+  background: rgba(127, 29, 29, 0.13);
+}
+
+.wm-family-card-slot.is-cover-card .wm-family-native-card {
+  box-shadow:
+    0 0 0 1px rgba(250, 204, 21, 0.30),
+    0 0 16px rgba(250, 204, 21, 0.08);
+}
+
+/* First load */
+
+@keyframes wm-family-load-attention {
+  0%, 100% {
+    box-shadow: 0 4px 16px rgba(76, 29, 149, 0.14);
+  }
+  50% {
+    box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.12), 0 4px 22px rgba(124, 58, 237, 0.28);
+  }
+}
+
+.wm-family-load-attention:not(:disabled) {
+  animation: wm-family-load-attention 1.5s ease-in-out infinite;
+}
+
+/* Modal base */
+
+.wm-family-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483647;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  background: rgba(0, 0, 0, 0.66);
+  backdrop-filter: blur(2px);
+}
+
+.wm-family-modal {
+  width: min(420px, 100%);
+  padding: 20px;
+  border: 1px solid var(--color-border);
+  border-radius: 15px;
+  background: var(--color-surface);
+  color: var(--color-foreground);
+  box-shadow: 0 24px 72px rgba(0, 0, 0, 0.38);
+}
+
+.wm-family-modal h2 {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-size: 18px;
+  letter-spacing: -0.01em;
+}
+
+.wm-family-modal > p {
+  margin: 7px 0 17px;
+  color: var(--wm-family-muted);
+  font-size: 10.5px;
+  line-height: 1.5;
+}
+
+.wm-family-modal label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 12px;
+  font-size: 10.5px;
+  font-weight: 800;
+}
+
+.wm-family-modal input,
+.wm-family-picker-search input,
+.wm-family-code-area {
+  border: 1px solid var(--color-border);
+  outline: 0;
+  background: color-mix(in srgb, var(--color-surface) 90%, black 10%);
+  color: var(--color-foreground);
+}
+
+.wm-family-modal input {
+  height: 40px;
+  padding: 0 11px;
+  border-radius: 9px;
+  font: inherit;
   font-size: 11px;
 }
 
-.wm-family-picker-overlay {
-  align-items: center;
+.wm-family-modal input:focus,
+.wm-family-picker-search input:focus,
+.wm-family-code-area:focus {
+  border-color: rgba(168, 85, 247, 0.54);
 }
+
+.wm-family-modal-status {
+  min-height: 30px;
+  margin-top: 12px;
+  color: var(--wm-family-muted);
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.wm-family-modal-status[data-mode="success"] {
+  color: #6ee7b7;
+}
+
+.wm-family-modal-status[data-mode="error"] {
+  color: #fca5a5;
+}
+
+.wm-family-modal-actions {
+  justify-content: flex-end;
+  margin-top: 10px;
+}
+
+/* Card picker */
 
 .wm-family-picker-modal {
   display: flex;
-  width: min(820px, 100%);
-  max-height: min(760px, calc(100vh - 36px));
+  width: min(800px, 100%);
+  max-height: min(740px, calc(100vh - 36px));
   flex-direction: column;
   overflow: hidden;
   border: 1px solid var(--color-border);
-  border-radius: 16px;
+  border-radius: 15px;
   background: var(--color-surface);
   color: var(--color-foreground);
-  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.38);
+  box-shadow: 0 24px 72px rgba(0, 0, 0, 0.40);
 }
 
 .wm-family-picker-head {
@@ -772,14 +734,14 @@ html.wm-theme-route main > :not(#wm-theme-tracker-page) {
 .wm-family-picker-head h2 {
   margin: 0;
   font-family: var(--font-heading);
-  font-size: 19px;
+  font-size: 18px;
 }
 
 .wm-family-picker-head > div > span {
   display: block;
   margin-top: 4px;
-  color: color-mix(in srgb, var(--color-foreground) 48%, transparent);
-  font-size: 10.5px;
+  color: var(--wm-family-faint);
+  font-size: 10px;
 }
 
 .wm-family-picker-search {
@@ -792,25 +754,17 @@ html.wm-theme-route main > :not(#wm-theme-tracker-page) {
   min-width: 0;
   height: 40px;
   flex: 1;
-  padding: 0 12px;
-  border: 1px solid var(--color-border);
-  border-radius: 10px;
-  outline: 0;
-  background: color-mix(in srgb, var(--color-surface) 90%, black 10%);
-  color: var(--color-foreground);
+  padding: 0 11px;
+  border-radius: 9px;
   font: inherit;
-  font-size: 12px;
-}
-
-.wm-family-picker-search input:focus {
-  border-color: rgba(168, 85, 247, 0.55);
+  font-size: 11px;
 }
 
 .wm-family-picker-status {
-  min-height: 28px;
-  padding: 0 18px 10px;
-  color: color-mix(in srgb, var(--color-foreground) 48%, transparent);
-  font-size: 10.5px;
+  min-height: 27px;
+  padding: 0 18px 9px;
+  color: var(--wm-family-muted);
+  font-size: 10px;
 }
 
 .wm-family-picker-status[data-mode="loading"] {
@@ -832,21 +786,26 @@ html.wm-theme-route main > :not(#wm-theme-tracker-page) {
 
 .wm-family-picker-result {
   display: grid;
-  grid-template-columns: 54px minmax(0, 1fr) auto;
+  grid-template-columns: 48px minmax(0, 1fr) auto;
   align-items: center;
   gap: 11px;
-  min-height: 68px;
+  min-height: 64px;
   padding: 7px 18px;
-  border-bottom: 1px solid color-mix(in srgb, var(--color-border) 70%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--color-border) 72%, transparent);
+  transition: background 120ms ease;
+}
+
+.wm-family-picker-result:hover {
+  background: rgba(124, 58, 237, 0.035);
 }
 
 .wm-family-picker-thumb {
   display: grid;
-  width: 50px;
-  height: 50px;
+  width: 46px;
+  height: 46px;
   place-items: center;
   overflow: hidden;
-  border-radius: 9px;
+  border-radius: 8px;
   background: rgba(124, 58, 237, 0.07);
   color: rgb(167, 139, 250);
 }
@@ -866,14 +825,14 @@ html.wm-theme-route main > :not(#wm-theme-tracker-page) {
 
 .wm-family-picker-copy strong {
   overflow: hidden;
-  font-size: 12px;
+  font-size: 11.5px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .wm-family-picker-copy span {
   overflow: hidden;
-  color: color-mix(in srgb, var(--color-foreground) 45%, transparent);
+  color: var(--wm-family-faint);
   font-size: 9.5px;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -881,255 +840,232 @@ html.wm-theme-route main > :not(#wm-theme-tracker-page) {
 
 .wm-family-picker-add,
 .wm-family-picker-remove {
-  min-width: 78px;
-  padding: 8px 9px;
-  border-radius: 9px;
-  font: inherit;
-  font-size: 10px;
+  min-width: 72px;
+  min-height: 32px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  font-size: 9.5px;
   font-weight: 850;
-  cursor: pointer;
 }
 
 .wm-family-picker-add {
-  border: 1px solid rgba(168, 85, 247, 0.38);
-  background: rgba(124, 58, 237, 0.12);
+  border: 1px solid rgba(168, 85, 247, 0.32);
+  background: rgba(124, 58, 237, 0.09);
   color: rgb(216, 180, 254);
 }
 
+.wm-family-picker-add:hover {
+  border-color: rgba(192, 132, 252, 0.52);
+  background: rgba(124, 58, 237, 0.15);
+}
+
 .wm-family-picker-remove {
-  border: 1px solid rgba(248, 113, 113, 0.24);
-  background: rgba(127, 29, 29, 0.09);
+  border: 1px solid rgba(248, 113, 113, 0.21);
+  background: rgba(127, 29, 29, 0.07);
   color: #fca5a5;
 }
 
+.wm-family-picker-remove:hover {
+  border-color: rgba(248, 113, 113, 0.39);
+  background: rgba(127, 29, 29, 0.13);
+}
+
 .wm-family-picker-more {
-  margin: 12px auto 16px;
+  margin: 11px auto 15px;
 }
 
-@media (max-width: 700px) {
-  .wm-family-picker-modal {
-    max-height: calc(100vh - 20px);
-  }
+/* Loading / progress */
 
-  .wm-family-picker-result {
-    grid-template-columns: 46px minmax(0, 1fr) auto;
-    padding-inline: 12px;
-  }
-
-  .wm-family-picker-thumb {
-    width: 42px;
-    height: 42px;
-  }
-
-  .wm-family-picker-add,
-  .wm-family-picker-remove {
-    min-width: 66px;
-    padding-inline: 7px;
-  }
+.wm-family-progress-overlay {
+  cursor: wait;
 }
 
-
-/* v4.22.1 — Familles réutilise les dimensions natives de /collection */
-.wm-family-results {
-  display: flex !important;
-  flex-wrap: wrap;
-  justify-content: center;
-  align-items: flex-start;
-  gap: 12px !important;
+.wm-family-progress-modal {
+  width: min(450px, 100%);
 }
 
-.wm-family-card-slot {
-  width: clamp(8.4rem, 43vw, 10rem) !important;
-  flex: 0 0 auto;
-  min-width: 0;
-}
-
-.wm-family-native-card {
-  width: clamp(8.4rem, 43vw, 10rem) !important;
-  height: clamp(11.8rem, 60vw, 14rem) !important;
-  min-height: 0 !important;
-  aspect-ratio: auto !important;
-}
-
-@media (min-width: 640px) {
-  .wm-family-results {
-    gap: 22px !important;
-  }
-}
-
-@media (min-width: 768px) {
-  .wm-family-results {
-    gap: 26px !important;
-  }
-}
-
-
-/* v4.23 — vue propre + mode édition des Familles */
-.wm-family-card-slot.is-missing .wm-family-native-card {
-  filter: grayscale(1) saturate(0) brightness(0.62);
-  opacity: 0.58;
-}
-
-.wm-family-card-slot.is-missing .wm-family-native-card:hover {
-  filter: grayscale(1) saturate(0) brightness(0.70);
-  opacity: 0.68;
-}
-
-.wm-family-edit-controls {
-  display: flex;
-  width: 100%;
-  flex-direction: column;
-  gap: 6px;
-  margin-top: 7px;
-}
-
-.wm-family-cover-button,
-.wm-family-card-remove {
-  width: 100%;
-  min-height: 31px;
-  margin: 0;
-  padding: 6px 8px;
-  border-radius: 8px;
-  font: inherit;
-  font-size: 9.5px;
-  font-weight: 800;
-  cursor: pointer;
-  transition: 140ms ease;
-}
-
-.wm-family-cover-button {
-  border: 1px solid rgba(168, 85, 247, 0.28);
-  background: rgba(124, 58, 237, 0.08);
-  color: rgb(196, 181, 253);
-}
-
-.wm-family-cover-button:hover:not(:disabled) {
-  border-color: rgba(192, 132, 252, 0.5);
-  background: rgba(124, 58, 237, 0.16);
-}
-
-.wm-family-cover-button.is-selected {
-  border-color: rgba(250, 204, 21, 0.34);
-  background: rgba(113, 63, 18, 0.12);
-  color: #fde68a;
+.wm-family-progress-modal[data-mode="error"] {
   cursor: default;
 }
 
-.wm-family-card-slot.is-cover-card .wm-family-native-card {
-  box-shadow:
-    0 0 0 1px rgba(250, 204, 21, 0.34),
-    0 0 18px rgba(250, 204, 21, 0.10);
+.wm-family-progress-stage {
+  display: block;
+  margin-top: 18px;
+  color: var(--color-foreground);
+  font-size: 12px;
 }
 
-
-
-/* v4.24 — import / export des Familles */
-.wm-family-home-actions,
-.wm-family-empty-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
+.wm-family-progress-detail {
+  min-height: 32px;
+  margin: 6px 0 11px !important;
+  color: var(--wm-family-muted) !important;
+  font-size: 10.5px !important;
+  line-height: 1.45;
 }
+
+.wm-family-build-progress {
+  width: 100%;
+  height: 7px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-foreground) 9%, transparent);
+}
+
+.wm-family-build-progress > span {
+  display: block;
+  width: 0;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #7c3aed, #a78bfa);
+  transition: width 180ms ease;
+}
+
+.wm-family-build-percent {
+  display: block;
+  margin-top: 6px;
+  color: rgb(196, 181, 253);
+  font-size: 10px;
+  font-weight: 850;
+  text-align: right;
+}
+
+.wm-family-progress-modal[data-mode="error"] .wm-family-build-progress > span {
+  background: #ef4444;
+}
+
+.wm-family-progress-modal[data-mode="error"] .wm-family-build-percent {
+  color: #fca5a5;
+}
+
+.wm-family-progress-modal .wm-family-secondary {
+  display: block;
+  margin: 13px 0 0 auto;
+}
+
+/* Import / export */
 
 .wm-family-share-modal {
-  width: min(560px, 100%);
+  width: min(540px, 100%);
 }
 
 .wm-family-code-area {
   width: 100%;
-  min-height: 150px;
+  min-height: 145px;
   resize: vertical;
-  padding: 11px 12px;
-  border: 1px solid var(--color-border);
-  border-radius: 10px;
-  outline: 0;
-  background: color-mix(in srgb, var(--color-surface) 88%, black 12%);
-  color: var(--color-foreground);
-  font: 500 11px/1.45 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  padding: 10px 11px;
+  border-radius: 9px;
+  font: 500 10.5px/1.45 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   overflow-wrap: anywhere;
 }
 
-.wm-family-code-area:focus {
-  border-color: rgba(168, 85, 247, 0.55);
-}
-
 .wm-family-share-meta {
-  min-height: 18px;
-  margin-top: 7px;
-  color: color-mix(in srgb, var(--color-foreground) 45%, transparent);
-  font-size: 10px;
+  min-height: 17px;
+  margin-top: 6px;
+  color: var(--wm-family-faint);
+  font-size: 9.5px;
   text-align: right;
 }
 
-@media (max-width: 700px) {
+/* Responsive */
+
+@media (max-width: 760px) {
+  .wm-family-shell {
+    padding: 22px 14px 42px;
+  }
+
+  .wm-family-page-head,
+  .wm-family-detail-top,
+  .wm-family-detail-head {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .wm-family-page-head {
+    gap: 15px;
+    margin-bottom: 20px;
+  }
+
   .wm-family-home-actions {
     width: 100%;
   }
 
   .wm-family-home-actions button {
-    flex: 1;
+    width: 100%;
   }
 
-  .wm-family-empty-actions {
+  .wm-family-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .wm-family-actions button {
+    flex: 1 1 auto;
+  }
+
+  .wm-family-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .wm-family-card-thumb {
+    width: 96px;
+    flex-basis: 96px;
+  }
+
+  .wm-family-filters {
+    width: 100%;
+  }
+
+  .wm-family-results {
     justify-content: center;
+    gap: 18px 12px !important;
   }
-}
 
-
-/* v4.24.1 — accueil Familles + premier chargement */
-.wm-family-intro {
-  max-width: 760px;
-  margin-top: 7px;
-}
-
-.wm-family-intro p {
-  margin: 0;
-  color: color-mix(in srgb, var(--color-foreground) 52%, transparent);
-  font-size: 12px;
-  line-height: 1.55;
-}
-
-.wm-family-intro p + p {
-  margin-top: 4px;
-}
-
-@keyframes wm-family-load-attention {
-  0%, 100% {
-    border-color: var(--color-border);
-    box-shadow: 0 0 0 rgba(124, 58, 237, 0);
-    transform: translateY(0);
+  .wm-family-picker-modal {
+    max-height: calc(100vh - 20px);
   }
-  50% {
-    border-color: rgba(192, 132, 252, 0.78);
-    box-shadow: 0 0 16px rgba(124, 58, 237, 0.28);
-    transform: translateY(-1px);
-  }
-}
 
-.wm-family-load-attention:not(:disabled) {
-  border-color: rgba(168, 85, 247, 0.52);
-  color: rgb(216, 180, 254);
-  animation: wm-family-load-attention 1.45s ease-in-out infinite;
+  .wm-family-picker-head {
+    padding-inline: 14px;
+  }
+
+  .wm-family-picker-search {
+    padding-inline: 14px;
+  }
+
+  .wm-family-picker-status {
+    padding-inline: 14px;
+  }
+
+  .wm-family-picker-result {
+    grid-template-columns: 42px minmax(0, 1fr) auto;
+    padding-inline: 12px;
+  }
+
+  .wm-family-picker-thumb {
+    width: 40px;
+    height: 40px;
+  }
+
+  .wm-family-picker-add,
+  .wm-family-picker-remove {
+    min-width: 64px;
+    padding-inline: 6px;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .wm-family-load-attention:not(:disabled) {
     animation: none;
-    box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.18);
-  }
-}
-
-@media (max-width: 700px) {
-  .wm-family-page-head {
-    align-items: stretch;
+    box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.18);
   }
 
-  .wm-family-home-actions {
-    width: auto;
-  }
-
-  .wm-family-home-actions button {
-    flex: 0 0 auto;
+  .wm-family-primary,
+  .wm-family-secondary,
+  .wm-family-danger,
+  .wm-family-card,
+  .wm-family-add-card,
+  .wm-family-progress > span,
+  .wm-family-build-progress > span {
+    transition: none;
   }
 }
