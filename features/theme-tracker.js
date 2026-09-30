@@ -45,6 +45,8 @@
           page: 0,
           results: [],
           hasMore: false,
+          lastPage: null,
+          highestKnownPage: 0,
           loading: false,
           error: '',
           requestToken: 0
@@ -1888,20 +1890,129 @@
         return row;
       }
 
+      function createPickerLoadingRows() {
+        const fragment = document.createDocumentFragment();
+
+        for (let index = 0; index < 6; index += 1) {
+          const row = document.createElement('div');
+          row.className = 'wm-family-picker-loading-row';
+          row.innerHTML = `
+            <span class="wm-family-picker-loading-thumb"></span>
+            <span class="wm-family-picker-loading-copy">
+              <span></span>
+              <span></span>
+            </span>
+            <span class="wm-family-picker-loading-action"></span>
+          `;
+          fragment.append(row);
+        }
+
+        return fragment;
+      }
+
+      function pickerPageNumbers() {
+        const current = searchState.page;
+        const pages = new Set([0]);
+
+        if (current > 0) pages.add(current - 1);
+        pages.add(current);
+
+        if (searchState.hasMore) {
+          pages.add(current + 1);
+        } else if (searchState.lastPage != null) {
+          pages.add(searchState.lastPage);
+        }
+
+        if (current > 1) pages.add(1);
+
+        return [...pages]
+          .filter((page) => page >= 0)
+          .sort((a, b) => a - b);
+      }
+
+      function renderPickerPagination(familyIdValue, overlay) {
+        const pagination = overlay.querySelector('[data-role="picker-pagination"]');
+        if (!pagination) return;
+
+        pagination.replaceChildren();
+
+        if (!searchState.query || searchState.error) {
+          pagination.hidden = true;
+          return;
+        }
+
+        pagination.hidden = false;
+
+        const previous = document.createElement('button');
+        previous.type = 'button';
+        previous.className = 'wm-family-picker-page-nav';
+        previous.textContent = 'Précédent';
+        previous.disabled = searchState.loading || searchState.page <= 0;
+        previous.addEventListener('click', () => {
+          runCardSearch(
+            familyIdValue,
+            overlay,
+            searchState.query,
+            Math.max(0, searchState.page - 1)
+          );
+        });
+        pagination.append(previous);
+
+        const pages = pickerPageNumbers();
+        let previousPage = null;
+
+        for (const page of pages) {
+          if (previousPage != null && page - previousPage > 1) {
+            const ellipsis = document.createElement('span');
+            ellipsis.className = 'wm-family-picker-page-ellipsis';
+            ellipsis.textContent = '…';
+            pagination.append(ellipsis);
+          }
+
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.className = 'wm-family-picker-page-number';
+          button.textContent = String(page + 1);
+          button.disabled = searchState.loading || page === searchState.page;
+          button.classList.toggle('is-active', page === searchState.page);
+          button.setAttribute('aria-current', page === searchState.page ? 'page' : 'false');
+          button.addEventListener('click', () => {
+            runCardSearch(familyIdValue, overlay, searchState.query, page);
+          });
+
+          pagination.append(button);
+          previousPage = page;
+        }
+
+        const next = document.createElement('button');
+        next.type = 'button';
+        next.className = 'wm-family-picker-page-nav';
+        next.textContent = 'Suivant';
+        next.disabled = searchState.loading || !searchState.hasMore;
+        next.addEventListener('click', () => {
+          runCardSearch(
+            familyIdValue,
+            overlay,
+            searchState.query,
+            searchState.page + 1
+          );
+        });
+        pagination.append(next);
+      }
+
       function renderCardManagerResults(familyIdValue, overlay) {
         const family = getFamily(familyIdValue);
         if (!family || !overlay?.isConnected) return;
 
         const status = overlay.querySelector('[data-role="picker-status"]');
         const results = overlay.querySelector('[data-role="picker-results"]');
-        const more = overlay.querySelector('[data-role="picker-more"]');
         const selected = overlay.querySelector('[data-role="picker-selected"]');
-        if (!status || !results || !more || !selected) return;
+        if (!status || !results || !selected) return;
 
         selected.textContent = `${family.cards.length.toLocaleString('fr-FR')} carte${family.cards.length > 1 ? 's' : ''} dans la famille`;
 
         if (searchState.loading) {
-          status.textContent = 'Recherche…';
+          status.textContent = `Chargement de la page ${searchState.page + 1}…`;
           status.dataset.mode = 'loading';
         } else if (searchState.error) {
           status.textContent = searchState.error;
@@ -1910,28 +2021,41 @@
           status.textContent = 'Recherche une carte par son nom, sa catégorie ou sa description.';
           status.dataset.mode = '';
         } else {
-          status.textContent = `${searchState.results.length.toLocaleString('fr-FR')} résultat${searchState.results.length > 1 ? 's' : ''} chargé${searchState.results.length > 1 ? 's' : ''}`;
+          status.textContent = `Page ${searchState.page + 1} • ${searchState.results.length.toLocaleString('fr-FR')} résultat${searchState.results.length > 1 ? 's' : ''}`;
           status.dataset.mode = '';
         }
 
         results.replaceChildren();
-        const fragment = document.createDocumentFragment();
 
-        for (const card of searchState.results) {
-          fragment.append(createSearchResultRow(
-            family,
-            card,
-            () => renderCardManagerResults(familyIdValue, overlay)
-          ));
+        if (searchState.loading) {
+          results.classList.add('is-loading');
+          results.append(createPickerLoadingRows());
+        } else {
+          results.classList.remove('is-loading');
+          const fragment = document.createDocumentFragment();
+
+          for (const card of searchState.results) {
+            fragment.append(createSearchResultRow(
+              family,
+              card,
+              () => renderCardManagerResults(familyIdValue, overlay)
+            ));
+          }
+
+          results.append(fragment);
+
+          if (searchState.query && !searchState.error && !searchState.results.length) {
+            const empty = document.createElement('div');
+            empty.className = 'wm-family-picker-empty';
+            empty.textContent = 'Aucune carte sur cette page.';
+            results.append(empty);
+          }
         }
 
-        results.append(fragment);
-
-        more.hidden = !searchState.hasMore || searchState.loading;
-        more.disabled = searchState.loading;
+        renderPickerPagination(familyIdValue, overlay);
       }
 
-      async function runCardSearch(familyIdValue, overlay, query, append = false) {
+      async function runCardSearch(familyIdValue, overlay, query, targetPage = 0) {
         const clean = String(query || '').trim();
 
         if (clean.length < SEARCH_MIN_LENGTH) {
@@ -1946,17 +2070,23 @@
 
         const token = searchState.requestToken + 1;
         const previousPage = searchState.page;
-        const page = append ? previousPage + 1 : 0;
+        const page = Math.max(0, Number(targetPage) || 0);
+        const sameQuery = normalize(searchState.query) === normalize(clean);
 
         searchState = {
           ...searchState,
           familyId: familyIdValue,
           query: clean,
           page,
+          results: [],
+          hasMore: sameQuery ? searchState.hasMore : false,
+          lastPage: sameQuery ? searchState.lastPage : null,
+          highestKnownPage: sameQuery
+            ? Math.max(searchState.highestKnownPage || 0, page)
+            : page,
           loading: true,
           error: '',
-          requestToken: token,
-          results: append ? searchState.results : []
+          requestToken: token
         };
         renderCardManagerResults(familyIdValue, overlay);
 
@@ -1964,16 +2094,15 @@
           const result = await searchGlobalCards(clean, page);
           if (searchState.requestToken !== token) return;
 
-          const merged = new Map(
-            (append ? searchState.results : []).map((card) => [card.id, card])
-          );
-          for (const card of result.cards) merged.set(card.id, card);
-
           searchState = {
             ...searchState,
             page,
-            results: [...merged.values()],
+            results: result.cards,
             hasMore: result.hasMore,
+            lastPage: result.hasMore
+              ? searchState.lastPage
+              : page,
+            highestKnownPage: Math.max(searchState.highestKnownPage || 0, page + (result.hasMore ? 1 : 0)),
             loading: false,
             error: ''
           };
@@ -2045,13 +2174,12 @@
         results.className = 'wm-family-picker-results';
         results.dataset.role = 'picker-results';
 
-        const more = document.createElement('button');
-        more.type = 'button';
-        more.className = 'wm-family-secondary wm-family-picker-more';
-        more.dataset.role = 'picker-more';
-        more.textContent = 'Charger plus';
+        const pagination = document.createElement('nav');
+        pagination.className = 'wm-family-picker-pagination';
+        pagination.dataset.role = 'picker-pagination';
+        pagination.setAttribute('aria-label', 'Pagination des résultats');
 
-        modal.append(head, form, status, results, more);
+        modal.append(head, form, status, results, pagination);
         overlay.append(modal);
         document.body.append(overlay);
 
@@ -2067,11 +2195,7 @@
 
         form.addEventListener('submit', (event) => {
           event.preventDefault();
-          runCardSearch(familyIdValue, overlay, input.value, false);
-        });
-
-        more.addEventListener('click', () => {
-          runCardSearch(familyIdValue, overlay, searchState.query, true);
+          runCardSearch(familyIdValue, overlay, input.value, 0);
         });
 
         renderCardManagerResults(familyIdValue, overlay);
