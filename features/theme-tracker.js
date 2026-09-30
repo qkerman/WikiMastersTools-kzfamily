@@ -213,7 +213,8 @@
           atk: Number.isFinite(Number(card?.atk ?? raw?.atk)) ? Number(card?.atk ?? raw?.atk) : null,
           def: Number.isFinite(Number(card?.def ?? raw?.def)) ? Number(card?.def ?? raw?.def) : null,
           owned: ownedCount > 0,
-          ownedCount
+          ownedCount,
+          ownershipCheckedAt: Date.now()
         };
       }
 
@@ -525,15 +526,23 @@
             return {
               ...card,
               owned: true,
-              ownedCount: Math.max(ownedInfo.count, ownedInfo.ownedCardIds.size || 1)
+              ownedCount: Math.max(ownedInfo.count, ownedInfo.ownedCardIds.size || 1),
+              ownershipCheckedAt: Date.now()
             };
           }
 
           if (verifiedIds.has(card.id)) {
-            return { ...card, owned: false, ownedCount: 0 };
+            return {
+              ...card,
+              owned: false,
+              ownedCount: 0,
+              ownershipCheckedAt: Date.now()
+            };
           }
 
-          return { ...card, owned: null, ownedCount: 0 };
+          // Une recherche ciblée incomplète ne doit pas effacer un statut
+          // exact connu lors de l'ajout manuel de la carte.
+          return { ...card };
         });
 
         const updated = {
@@ -970,7 +979,8 @@
         }
 
         const token = searchState.requestToken + 1;
-        const page = append ? searchState.page + 1 : 0;
+        const previousPage = searchState.page;
+        const page = append ? previousPage + 1 : 0;
 
         searchState = {
           ...searchState,
@@ -1005,6 +1015,7 @@
           if (searchState.requestToken !== token) return;
           searchState = {
             ...searchState,
+            page: previousPage,
             loading: false,
             error: `Erreur de recherche : ${String(error?.message || error)}`
           };
