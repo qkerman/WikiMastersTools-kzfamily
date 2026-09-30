@@ -827,25 +827,6 @@
           card.append(shimmer);
         }
 
-        if (options.owned === true) {
-          const owned = document.createElement('span');
-          owned.className = 'wm-family-possession-badge';
-          owned.textContent = Number(options.ownedCount) > 1
-            ? `✓ Possédée ×${Number(options.ownedCount)}`
-            : '✓ Possédée';
-          card.append(owned);
-        } else if (options.owned === false) {
-          const missing = document.createElement('span');
-          missing.className = 'wm-family-possession-badge is-missing';
-          missing.textContent = 'Manquante';
-          card.append(missing);
-        } else {
-          const unchecked = document.createElement('span');
-          unchecked.className = 'wm-family-possession-badge is-unchecked';
-          unchecked.textContent = 'À vérifier';
-          card.append(unchecked);
-        }
-
         return card;
       }
 
