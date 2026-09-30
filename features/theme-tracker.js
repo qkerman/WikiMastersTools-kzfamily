@@ -1451,6 +1451,8 @@
         back.addEventListener('click', () => {
           activeFamilyId = null;
           editingFamilyId = null;
+          marketFamilyId = null;
+          marketState = createEmptyMarketState();
           renderPageContent();
         });
 
@@ -1458,7 +1460,9 @@
         actions.className = 'wm-family-actions';
 
         const editing = editingFamilyId === family.id;
+        const marketMode = !editing && marketFamilyId === family.id;
         wrap.classList.toggle('is-editing', editing);
+        wrap.classList.toggle('is-market-mode', marketMode);
 
         if (editing) {
           const manage = document.createElement('button');
@@ -1515,11 +1519,38 @@
           edit.className = neverLoaded ? 'wm-family-secondary' : 'wm-family-primary';
           edit.textContent = 'Modifier';
           edit.addEventListener('click', () => {
+            marketFamilyId = null;
+            marketState = createEmptyMarketState(family.id);
             editingFamilyId = family.id;
             renderPageContent();
           });
 
-          actions.append(complete, exportButton, edit);
+          if (family.ownershipUpdatedAt && stats.missing > 0) {
+            const market = document.createElement('button');
+            market.type = 'button';
+            market.className = marketMode
+              ? 'wm-family-primary wm-family-market-toggle'
+              : 'wm-family-secondary wm-family-market-toggle';
+            market.textContent = marketMode
+              ? 'Retour aux cartes'
+              : `Marché des manquantes (${stats.missing})`;
+            market.title = marketMode
+              ? 'Quitter le mode Marché'
+              : 'Chercher les cartes manquantes actuellement en vente';
+
+            market.addEventListener('click', () => {
+              if (marketMode) {
+                marketFamilyId = null;
+                renderPageContent();
+              } else {
+                openMissingMarketplace(family);
+              }
+            });
+
+            actions.append(complete, market, exportButton, edit);
+          } else {
+            actions.append(complete, exportButton, edit);
+          }
         }
 
         top.append(back, actions);
@@ -1599,6 +1630,12 @@
           visibleCount += CARD_BATCH;
           renderDetailGrid(family, wrap, { append: true });
         });
+
+        if (marketMode) {
+          const marketPanel = buildMarketplacePanel(family);
+          wrap.append(top, editBanner, heading, progress, marketPanel);
+          return wrap;
+        }
 
         wrap.append(top, editBanner, heading, progress, filters, toolbar, empty, grid, more);
         requestAnimationFrame(() => renderDetailGrid(family, wrap));
