@@ -19,6 +19,7 @@
       const OWNERSHIP_COVERAGE_TARGET = 0.95;
 
       let activeFamilyId = null;
+      let editingFamilyId = null;
       let currentFilter = 'all';
       let visibleCount = CARD_BATCH;
       let searchState = createEmptySearchState();
@@ -290,6 +291,17 @@
         if (next.length === family.cards.length) return false;
 
         family.cards = next;
+        if (family.coverCardId === cardId) family.coverCardId = null;
+        family.updatedAt = Date.now();
+        saveFamily(family);
+        return true;
+      }
+
+      function setFamilyCoverCard(familyIdValue, cardId) {
+        const family = getFamily(familyIdValue);
+        if (!family || !family.cards.some((card) => card.id === cardId)) return false;
+
+        family.coverCardId = cardId;
         family.updatedAt = Date.now();
         saveFamily(family);
         return true;
@@ -569,7 +581,12 @@
         button.type = 'button';
         button.className = 'wm-family-card';
 
-        const imageUrl = family.cards.find((card) => card.imageUrl)?.imageUrl || null;
+        const representative =
+          family.cards.find((card) => card.id === family.coverCardId) ||
+          family.cards.find((card) => card.imageUrl) ||
+          family.cards[0] ||
+          null;
+        const imageUrl = representative?.imageUrl || null;
 
         const thumb = document.createElement('span');
         thumb.className = 'wm-family-card-thumb';
@@ -612,6 +629,7 @@
 
         button.addEventListener('click', () => {
           activeFamilyId = family.id;
+          editingFamilyId = null;
           currentFilter = 'all';
           visibleCount = CARD_BATCH;
           if (searchState.familyId !== family.id) {
@@ -693,7 +711,7 @@
         return cards.sort((a, b) => a.title.localeCompare(b.title, 'fr'));
       }
 
-      function createRealCard(family, card) {
+      function createRealCard(family, card, editing) {
         const element = runtime.cardExtras.createCardElement(card, {
           owned: card.owned,
           ownedCount: card.ownedCount || 0
@@ -703,18 +721,45 @@
 
         const slot = document.createElement('div');
         slot.className = 'wm-family-card-slot relative isolate group';
+        if (card.owned === false) slot.classList.add('is-missing');
+        if (family.coverCardId === card.id) slot.classList.add('is-cover-card');
 
-        const remove = document.createElement('button');
-        remove.type = 'button';
-        remove.className = 'wm-family-card-remove';
-        remove.textContent = 'Retirer';
-        remove.addEventListener('click', () => {
-          if (!removeCardFromFamily(family.id, card.id)) return;
-          visibleCount = CARD_BATCH;
-          renderPageContent();
-        });
+        slot.append(element);
 
-        slot.append(element, remove);
+        if (editing) {
+          const controls = document.createElement('div');
+          controls.className = 'wm-family-edit-controls';
+
+          const cover = document.createElement('button');
+          cover.type = 'button';
+          cover.className = 'wm-family-cover-button';
+
+          if (family.coverCardId === card.id) {
+            cover.classList.add('is-selected');
+            cover.textContent = '★ Image actuelle';
+            cover.disabled = true;
+          } else {
+            cover.textContent = '☆ Utiliser comme image';
+            cover.addEventListener('click', () => {
+              if (!setFamilyCoverCard(family.id, card.id)) return;
+              renderPageContent();
+            });
+          }
+
+          const remove = document.createElement('button');
+          remove.type = 'button';
+          remove.className = 'wm-family-card-remove';
+          remove.textContent = 'Retirer';
+          remove.addEventListener('click', () => {
+            if (!removeCardFromFamily(family.id, card.id)) return;
+            visibleCount = CARD_BATCH;
+            renderPageContent();
+          });
+
+          controls.append(cover, remove);
+          slot.append(controls);
+        }
+
         return slot;
       }
 
@@ -736,8 +781,10 @@
         if (!append) grid.replaceChildren();
 
         const fragment = document.createDocumentFragment();
+        const editing = editingFamilyId === family.id;
+
         for (const card of cards.slice(previousVisible, nextVisible)) {
-          const element = createRealCard(family, card);
+          const element = createRealCard(family, card, editing);
           if (element) fragment.append(element);
         }
 
@@ -769,37 +816,64 @@
         back.textContent = '← Familles';
         back.addEventListener('click', () => {
           activeFamilyId = null;
+          editingFamilyId = null;
           renderPageContent();
         });
 
         const actions = document.createElement('div');
         actions.className = 'wm-family-actions';
 
-        const manage = document.createElement('button');
-        manage.type = 'button';
-        manage.className = 'wm-family-primary';
-        manage.textContent = '+ Gérer les cartes';
-        manage.addEventListener('click', () => openCardManager(family.id));
+        const editing = editingFamilyId === family.id;
 
-        const complete = document.createElement('button');
-        complete.type = 'button';
-        complete.className = 'wm-family-secondary';
-        complete.textContent = 'Compléter mes cartes possédées';
-        complete.disabled = family.cards.length === 0;
-        complete.addEventListener('click', () => syncOwnedFamily(family.id));
+        if (editing) {
+          const manage = document.createElement('button');
+          manage.type = 'button';
+          manage.className = 'wm-family-primary';
+          manage.textContent = '+ Ajouter des cartes';
+          manage.addEventListener('click', () => openCardManager(family.id));
 
-        const remove = document.createElement('button');
-        remove.type = 'button';
-        remove.className = 'wm-family-danger';
-        remove.textContent = 'Supprimer';
-        remove.addEventListener('click', () => {
-          if (!window.confirm(`Supprimer « ${family.name} » ?`)) return;
-          removeFamily(family.id);
-          activeFamilyId = null;
-          renderPageContent();
-        });
+          const done = document.createElement('button');
+          done.type = 'button';
+          done.className = 'wm-family-secondary';
+          done.textContent = 'Terminer';
+          done.addEventListener('click', () => {
+            editingFamilyId = null;
+            renderPageContent();
+          });
 
-        actions.append(manage, complete, remove);
+          const remove = document.createElement('button');
+          remove.type = 'button';
+          remove.className = 'wm-family-danger';
+          remove.textContent = 'Supprimer';
+          remove.addEventListener('click', () => {
+            if (!window.confirm(`Supprimer « ${family.name} » ?`)) return;
+            removeFamily(family.id);
+            activeFamilyId = null;
+            editingFamilyId = null;
+            renderPageContent();
+          });
+
+          actions.append(manage, done, remove);
+        } else {
+          const complete = document.createElement('button');
+          complete.type = 'button';
+          complete.className = 'wm-family-secondary';
+          complete.textContent = 'Compléter mes cartes possédées';
+          complete.disabled = family.cards.length === 0;
+          complete.addEventListener('click', () => syncOwnedFamily(family.id));
+
+          const edit = document.createElement('button');
+          edit.type = 'button';
+          edit.className = 'wm-family-primary';
+          edit.textContent = 'Modifier';
+          edit.addEventListener('click', () => {
+            editingFamilyId = family.id;
+            renderPageContent();
+          });
+
+          actions.append(complete, edit);
+        }
+
         top.append(back, actions);
 
         const heading = document.createElement('div');
@@ -860,7 +934,9 @@
         const empty = document.createElement('div');
         empty.className = 'wm-family-detail-empty';
         empty.hidden = family.cards.length > 0;
-        empty.innerHTML = '<strong>Cette famille est vide.</strong><span>Utilise « Gérer les cartes » pour en ajouter.</span>';
+        empty.innerHTML = editing
+          ? '<strong>Cette famille est vide.</strong><span>Utilise « Ajouter des cartes » pour commencer.</span>'
+          : '<strong>Cette famille est vide.</strong><span>Passe en mode édition pour ajouter des cartes.</span>';
 
         const more = document.createElement('button');
         more.type = 'button';
@@ -1311,6 +1387,7 @@
           }
 
           activeFamilyId = family.id;
+          editingFamilyId = family.id;
           currentFilter = 'all';
           visibleCount = CARD_BATCH;
           searchState = createEmptySearchState(family.id);
