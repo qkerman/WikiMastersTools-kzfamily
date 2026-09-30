@@ -256,8 +256,8 @@
           const rarity = ['L', 'UR', 'SR', 'R', 'PC', 'C'].includes(row[2])
             ? row[2]
             : 'C';
-          const atk = Number(row[5]);
-          const def = Number(row[6]);
+          const atk = row[5] === '' || row[5] == null ? null : Number(row[5]);
+          const def = row[6] === '' || row[6] == null ? null : Number(row[6]);
 
           cards.push({
             id,
@@ -266,8 +266,8 @@
             category: String(row[3] || '').trim() || null,
             imageUrl: String(row[4] || '').trim() || null,
             wikipediaUrl: wikipediaUrlForTitle(title),
-            atk: Number.isFinite(atk) ? atk : null,
-            def: Number.isFinite(def) ? def : null,
+            atk: atk != null && Number.isFinite(atk) ? atk : null,
+            def: def != null && Number.isFinite(def) ? def : null,
             owned: null,
             ownedCount: 0
           });
@@ -884,7 +884,7 @@
         const add = document.createElement('button');
         add.type = 'button';
         add.className = 'wm-family-primary';
-        add.textContent = '+ Créer une famille';
+        add.textContent = 'Créer une famille';
         add.addEventListener('click', openCreateModal);
 
         const homeActions = document.createElement('div');
