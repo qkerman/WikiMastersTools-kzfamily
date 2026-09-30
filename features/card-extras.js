@@ -694,7 +694,7 @@
         const rarityBackground = document.createElement('img');
         rarityBackground.alt = '';
         rarityBackground.decoding = 'async';
-        rarityBackground.className = 'object-cover scale-[1.8]';
+        rarityBackground.className = 'object-cover scale-[1.8] wm-family-card-rarity-bg';
         rarityBackground.src = rarityBackgrounds[rarity] || rarityBackgrounds.C;
         rarityBackground.style.position = 'absolute';
         rarityBackground.style.height = '100%';
@@ -707,7 +707,7 @@
 
         // Couche image : même structure que les cartes de /collection.
         const artLayer = document.createElement('div');
-        artLayer.className = 'absolute top-0 left-0 right-0 h-[45%] z-20 bg-black/20';
+        artLayer.className = 'absolute top-0 left-0 right-0 h-[45%] z-20 bg-black/20 wm-family-card-art-layer';
 
         const artInner = document.createElement('div');
 
@@ -754,7 +754,7 @@
         artLayer.append(artInner);
 
         const rarityBadge = document.createElement('div');
-        rarityBadge.className = 'absolute top-2 left-2 px-2 py-0.5 rounded-md text-xs font-bold z-30';
+        rarityBadge.className = 'absolute top-2 left-2 px-2 py-0.5 rounded-md text-xs font-bold z-30 wm-family-card-rarity-badge';
         rarityBadge.style.backgroundColor = `var(--color-rarity-${rarity.toLowerCase()})`;
         rarityBadge.style.color = 'rgb(13, 17, 23)';
         rarityBadge.style.boxShadow = `0 0 10px var(--color-rarity-${rarity.toLowerCase()})99`;
@@ -762,7 +762,7 @@
 
         // Zone texte native.
         const textLayer = document.createElement('div');
-        textLayer.className = 'absolute top-[45%] left-0 right-0 bottom-0 flex min-h-0 flex-col p-3 z-20';
+        textLayer.className = 'absolute top-[45%] left-0 right-0 bottom-0 flex min-h-0 flex-col p-3 z-20 wm-family-card-text-layer';
 
         const title = document.createElement('h3');
         title.className = 'text-xs shrink-0 font-bold leading-tight line-clamp-2 text-black drop-shadow-none';
