@@ -19,6 +19,8 @@
       const OWNERSHIP_COVERAGE_TARGET = 0.95;
       const MAX_MARKET_PAGES_PER_CARD = 3;
       const MARKET_PAGE_SIZE = 50;
+      const MARKET_BATCH_RETRIES = 3;
+      const MARKET_BATCH_RETRY_DELAY = 5000;
 
       let activeFamilyId = null;
       let editingFamilyId = null;
@@ -762,6 +764,25 @@
         return [...listingsById.values()];
       }
 
+      async function searchMarketplaceQueryWithRetry(query, missingIds, onRetry) {
+        let lastError = null;
+
+        for (let attempt = 0; attempt <= MARKET_BATCH_RETRIES; attempt += 1) {
+          if (attempt > 0) {
+            onRetry?.(attempt, MARKET_BATCH_RETRIES, MARKET_BATCH_RETRY_DELAY);
+            await wait(MARKET_BATCH_RETRY_DELAY);
+          }
+
+          try {
+            return await searchMarketplaceQuery(query, missingIds);
+          } catch (error) {
+            lastError = error;
+          }
+        }
+
+        throw lastError || new Error('Recherche Marketplace impossible');
+      }
+
       async function searchAllMissingMarketplace(family) {
         const missingCards = (family?.cards || []).filter((card) => card.owned === false);
         if (!missingCards.length) return;
@@ -811,9 +832,19 @@
           const keyword = keywords[index];
 
           try {
-            const listings = await searchMarketplaceQuery(
+            const listings = await searchMarketplaceQueryWithRetry(
               marketplaceQueryForCoverageKeyword(keyword),
-              missingIds
+              missingIds,
+              (retryAttempt, retryMax, retryDelayMs) => {
+                marketState = {
+                  ...marketState,
+                  batchLoading: true,
+                  batchProgress: `Recherche ${index + 1}/${keywords.length} • nouvel essai ${retryAttempt}/${retryMax} dans ${Math.round(retryDelayMs / 1000)} s…`,
+                  batchError: ''
+                };
+
+                if (marketFamilyId === family.id) renderPageContent();
+              }
             );
 
             for (const auction of listings) {
@@ -1546,9 +1577,16 @@
             image.src = card.imageUrl;
             image.alt = '';
             image.loading = 'lazy';
+            image.decoding = 'async';
             thumb.append(image);
           } else {
-            thumb.textContent = '✦';
+            const image = document.createElement('img');
+            image.src = '/logo.png';
+            image.alt = 'WikiMasters';
+            image.loading = 'lazy';
+            image.decoding = 'async';
+            image.className = 'wm-family-market-logo';
+            thumb.append(image);
           }
 
           const cardCopy = document.createElement('div');
