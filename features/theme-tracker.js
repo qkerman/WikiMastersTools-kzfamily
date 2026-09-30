@@ -1889,15 +1889,20 @@
 
         const image = document.createElement('div');
         image.className = 'wm-family-picker-thumb';
+        const img = document.createElement('img');
+        img.loading = 'lazy';
+        img.decoding = 'async';
+
         if (card.imageUrl) {
-          const img = document.createElement('img');
           img.src = card.imageUrl;
           img.alt = '';
-          img.loading = 'lazy';
-          image.append(img);
         } else {
-          image.textContent = '✦';
+          img.src = '/logo.png';
+          img.alt = 'WikiMasters';
+          img.className = 'wm-family-picker-logo';
         }
+
+        image.append(img);
 
         const copy = document.createElement('div');
         copy.className = 'wm-family-picker-copy';
