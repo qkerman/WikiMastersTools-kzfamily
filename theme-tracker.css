@@ -1075,3 +1075,61 @@ html.wm-theme-route main > :not(#wm-theme-tracker-page) {
     justify-content: center;
   }
 }
+
+
+/* v4.24.1 — accueil Familles + premier chargement */
+.wm-family-intro {
+  max-width: 760px;
+  margin-top: 7px;
+}
+
+.wm-family-intro p {
+  margin: 0;
+  color: color-mix(in srgb, var(--color-foreground) 52%, transparent);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.wm-family-intro p + p {
+  margin-top: 4px;
+}
+
+@keyframes wm-family-load-attention {
+  0%, 100% {
+    border-color: var(--color-border);
+    box-shadow: 0 0 0 rgba(124, 58, 237, 0);
+    transform: translateY(0);
+  }
+  50% {
+    border-color: rgba(192, 132, 252, 0.78);
+    box-shadow: 0 0 16px rgba(124, 58, 237, 0.28);
+    transform: translateY(-1px);
+  }
+}
+
+.wm-family-load-attention:not(:disabled) {
+  border-color: rgba(168, 85, 247, 0.52);
+  color: rgb(216, 180, 254);
+  animation: wm-family-load-attention 1.45s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wm-family-load-attention:not(:disabled) {
+    animation: none;
+    box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.18);
+  }
+}
+
+@media (max-width: 700px) {
+  .wm-family-page-head {
+    align-items: stretch;
+  }
+
+  .wm-family-home-actions {
+    width: auto;
+  }
+
+  .wm-family-home-actions button {
+    flex: 0 0 auto;
+  }
+}
