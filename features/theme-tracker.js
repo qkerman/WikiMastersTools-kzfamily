@@ -876,16 +876,17 @@
         const title = document.createElement('h1');
         title.textContent = 'Familles';
 
-        const subtitle = document.createElement('p');
-        subtitle.textContent = 'Crée tes familles et choisis toi-même les cartes qui en font partie.';
+        const intro = document.createElement('div');
+        intro.className = 'wm-family-intro';
 
-        copy.append(title, subtitle);
+        const introMain = document.createElement('p');
+        introMain.textContent = 'Crée tes propres familles de cartes, ajoute ou retire les cartes que tu veux, puis charge ta collection pour voir immédiatement celles que tu possèdes et celles qui te manquent.';
 
-        const add = document.createElement('button');
-        add.type = 'button';
-        add.className = 'wm-family-primary';
-        add.textContent = 'Créer une famille';
-        add.addEventListener('click', openCreateModal);
+        const introShare = document.createElement('p');
+        introShare.textContent = 'Tu peux aussi importer ou exporter une famille pour la partager. Dans le futur, j’ajouterai sûrement des familles préfaites si des gens m’en envoient.';
+
+        intro.append(introMain, introShare);
+        copy.append(title, intro);
 
         const homeActions = document.createElement('div');
         homeActions.className = 'wm-family-home-actions';
@@ -896,7 +897,7 @@
         importButton.textContent = 'Importer une famille';
         importButton.addEventListener('click', openImportModal);
 
-        homeActions.append(add, importButton);
+        homeActions.append(importButton);
         heading.append(copy, homeActions);
 
         const grid = document.createElement('div');
@@ -1093,8 +1094,14 @@
           const complete = document.createElement('button');
           complete.type = 'button';
           complete.className = 'wm-family-secondary';
-          complete.textContent = 'Compléter mes cartes possédées';
+          complete.textContent = 'Charger mes cartes';
           complete.disabled = family.cards.length === 0;
+
+          if (!family.ownershipUpdatedAt && family.cards.length > 0) {
+            complete.classList.add('wm-family-load-attention');
+            complete.title = 'Charge ta collection pour identifier les cartes que tu possèdes.';
+          }
+
           complete.addEventListener('click', () => syncOwnedFamily(family.id));
 
           const exportButton = document.createElement('button');
@@ -1496,7 +1503,7 @@
         const family = getFamily(familyIdValue);
         if (!family?.cards?.length) return;
 
-        const progress = openProgressModal('Compléter mes cartes possédées');
+        const progress = openProgressModal('Charger mes cartes');
 
         try {
           const updated = await completeOwnedCards(family, progress.update);
