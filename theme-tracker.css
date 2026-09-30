@@ -520,26 +520,63 @@ html.wm-theme-route main > :not(#wm-theme-tracker-page) {
 
 .wm-family-card-slot.is-missing {
   border-radius: 16px;
-  box-shadow: 0 0 0 1px rgba(148, 163, 184, 0.16);
+  box-shadow:
+    0 0 0 1px rgba(148, 163, 184, 0.22),
+    0 8px 20px rgba(0, 0, 0, 0.08);
 }
 
 .wm-family-card-slot.is-missing .wm-family-native-card {
-  filter: grayscale(0.94) saturate(0.12) brightness(0.92) contrast(0.96);
+  filter: none;
   opacity: 1;
-  transition:
-    filter 160ms ease,
-    box-shadow 160ms ease,
-    transform 160ms ease;
 }
 
-.wm-family-card-slot.is-missing .wm-family-native-card:hover {
-  filter: grayscale(0.88) saturate(0.18) brightness(1) contrast(0.98);
+.wm-family-card-slot.is-missing .wm-family-card-rarity-bg,
+.wm-family-card-slot.is-missing .wm-family-card-art-layer,
+.wm-family-card-slot.is-missing .wm-family-card-rarity-badge {
+  filter: grayscale(1) saturate(0) brightness(0.84);
 }
 
-.wm-family-card-slot.is-missing .wm-family-native-card h3,
-.wm-family-card-slot.is-missing .wm-family-native-card p,
-.wm-family-card-slot.is-missing .wm-family-native-card [class*="font-bold"] {
+.wm-family-card-slot.is-missing .wm-family-card-art-layer {
+  opacity: 0.72;
+}
+
+.wm-family-card-slot.is-missing
+  .wm-family-native-card:not(.wm-premium-card)
+  .wm-family-card-text-layer {
+  background:
+    linear-gradient(
+      180deg,
+      rgba(242, 242, 242, 0.84) 0%,
+      rgba(226, 226, 226, 0.96) 100%
+    );
+}
+
+.wm-family-card-slot.is-missing
+  .wm-family-native-card:not(.wm-premium-card)
+  .wm-family-card-text-layer h3,
+.wm-family-card-slot.is-missing
+  .wm-family-native-card:not(.wm-premium-card)
+  .wm-family-card-text-layer p,
+.wm-family-card-slot.is-missing
+  .wm-family-native-card:not(.wm-premium-card)
+  .wm-family-card-text-layer [class*="font-bold"] {
+  color: rgba(10, 10, 10, 0.96) !important;
   opacity: 1 !important;
+}
+
+.wm-family-card-slot.is-missing
+  .wm-family-native-card:not(.wm-premium-card)
+  .wm-family-card-text-layer [class*="border-black"] {
+  border-color: rgba(0, 0, 0, 0.18) !important;
+}
+
+.wm-family-card-slot.is-missing .wm-family-native-card:hover .wm-family-card-art-layer,
+.wm-family-card-slot.is-missing .wm-family-native-card:hover .wm-family-card-rarity-bg {
+  filter: grayscale(0.92) saturate(0.08) brightness(0.91);
+}
+
+.wm-family-card-slot.is-missing .wm-family-native-card:hover .wm-family-card-art-layer {
+  opacity: 0.82;
 }
 
 .wm-family-more {
