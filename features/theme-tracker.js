@@ -764,6 +764,19 @@
         const missingIds = new Set(missingCards.map((card) => card.id).filter(Boolean));
         const listingsByCard = new Map();
         const searchedCardIds = new Set();
+        const failedKeywords = [];
+
+        // Conserve les résultats d'une éventuelle recherche exacte déjà faite.
+        for (const card of missingCards) {
+          const previous = marketCardState(card.id);
+          if (!Array.isArray(previous.listings) || !previous.listings.length) continue;
+
+          const map = new Map();
+          for (const auction of previous.listings) {
+            if (auction?.id) map.set(auction.id, auction);
+          }
+          if (map.size) listingsByCard.set(card.id, map);
+        }
 
         marketState = {
           ...(marketState.familyId === family.id ? marketState : createEmptyMarketState(family.id)),
@@ -774,9 +787,10 @@
         };
         renderPageContent();
 
-        try {
-          for (let index = 0; index < keywords.length; index += 1) {
-            const keyword = keywords[index];
+        for (let index = 0; index < keywords.length; index += 1) {
+          const keyword = keywords[index];
+
+          try {
             const listings = await searchMarketplaceQuery(keyword, missingIds);
 
             for (const auction of listings) {
@@ -788,54 +802,52 @@
               listingsByCard.set(cardId, current);
             }
 
+            // Comme pour « Charger mes cartes », seules les cartes réellement
+            // couvertes par une recherche réussie sont considérées comme vérifiées.
             for (const cardId of plan.coverageByKeyword.get(keyword) || []) {
               searchedCardIds.add(cardId);
             }
-
-            const listingCount = [...listingsByCard.values()]
-              .reduce((sum, map) => sum + map.size, 0);
-
-            marketState = {
-              ...marketState,
-              batchLoading: true,
-              batchProgress: `Recherche ${index + 1}/${keywords.length} • ${listingCount} annonce${listingCount > 1 ? 's' : ''}`,
-              batchError: ''
-            };
-
-            if (marketFamilyId === family.id) renderPageContent();
+          } catch (error) {
+            failedKeywords.push(keyword);
           }
 
-          const now = Date.now();
-          const nextCards = { ...(marketState.cards || {}) };
+          const listingCount = [...listingsByCard.values()]
+            .reduce((sum, map) => sum + map.size, 0);
 
-          for (const card of missingCards) {
-            if (!searchedCardIds.has(card.id)) continue;
-
-            const found = listingsByCard.get(card.id);
-            nextCards[card.id] = {
-              loading: false,
-              error: '',
-              listings: found ? [...found.values()] : [],
-              searchedAt: now
-            };
-          }
-
-          marketState = {
-            familyId: family.id,
-            cards: nextCards,
-            batchLoading: false,
-            batchProgress: '',
-            batchError: ''
-          };
-        } catch (error) {
           marketState = {
             ...marketState,
-            familyId: family.id,
-            batchLoading: false,
-            batchProgress: '',
-            batchError: String(error?.message || error)
+            batchLoading: true,
+            batchProgress: `Recherche ${index + 1}/${keywords.length} • ${listingCount} annonce${listingCount > 1 ? 's' : ''}`,
+            batchError: ''
+          };
+
+          if (marketFamilyId === family.id) renderPageContent();
+        }
+
+        const now = Date.now();
+        const nextCards = { ...(marketState.cards || {}) };
+
+        for (const card of missingCards) {
+          if (!searchedCardIds.has(card.id)) continue;
+
+          const found = listingsByCard.get(card.id);
+          nextCards[card.id] = {
+            loading: false,
+            error: '',
+            listings: found ? [...found.values()] : [],
+            searchedAt: now
           };
         }
+
+        marketState = {
+          familyId: family.id,
+          cards: nextCards,
+          batchLoading: false,
+          batchProgress: '',
+          batchError: failedKeywords.length
+            ? `${failedKeywords.length} recherche${failedKeywords.length > 1 ? 's' : ''} n’ont pas pu être terminées.`
+            : ''
+        };
 
         if (marketFamilyId === family.id) renderPageContent();
       }
@@ -850,38 +862,16 @@
         });
         renderPageContent();
 
-        const listingsById = new Map();
-
         try {
-          for (let page = 1; page <= MAX_MARKET_PAGES_PER_CARD; page += 1) {
-            const json = await fetchJson(
-              `/api/marketplace?page=${page}&limit=${MARKET_PAGE_SIZE}&sort=recent&q=${encodeURIComponent(card.title)}`,
-              { credentials: 'include' }
-            );
-
-            const auctions = Array.isArray(json?.auctions) ? json.auctions : [];
-
-            for (const auction of auctions) {
-              const cardId = auction?.card_id || auction?.card?.id;
-              if (
-                !auction?.id ||
-                cardId !== card.id ||
-                (auction.status && auction.status !== 'active')
-              ) {
-                continue;
-              }
-
-              listingsById.set(auction.id, auction);
-            }
-
-            if (json?.hasMore === false || auctions.length < MARKET_PAGE_SIZE) break;
-            await wait(45);
-          }
+          const listings = await searchMarketplaceQuery(
+            card.title,
+            new Set([card.id])
+          );
 
           setMarketCardState(family.id, card.id, {
             loading: false,
             error: '',
-            listings: [...listingsById.values()],
+            listings,
             searchedAt: Date.now()
           });
         } catch (error) {
