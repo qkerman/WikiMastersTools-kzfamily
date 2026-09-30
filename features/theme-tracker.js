@@ -1557,14 +1557,20 @@
         for (const card of missingCards) {
           const state = marketCardState(card.id);
           const offers = [...(state.listings || [])].sort((a, b) => {
-            const priceA = marketplacePrice(a);
-            const priceB = marketplacePrice(b);
+            const endA = Date.parse(a?.end_at || '');
+            const endB = Date.parse(b?.end_at || '');
+            const validA = Number.isFinite(endA);
+            const validB = Number.isFinite(endB);
 
-            if (priceA != null && priceB != null && priceA !== priceB) {
-              return priceA - priceB;
+            if (validA && validB && endA !== endB) {
+              return endA - endB;
             }
 
-            return new Date(a?.end_at || 0) - new Date(b?.end_at || 0);
+            if (validA !== validB) {
+              return validA ? -1 : 1;
+            }
+
+            return 0;
           });
 
           const group = document.createElement('article');
