@@ -52,7 +52,7 @@ Puis cliquer sur **Recharger** dans `chrome://extensions/` et faire un F5 sur Wi
 
 *Heure de Paris*
 
-- **29/09/2026** — « Familles » : vérification ciblée des possessions, état « À vérifier » pour éviter les faux manquants, synchronisation séparée, découverte parallèle et résolution WikiMasters optimisée.
+- **30/09/2026** — « Familles » devient manuel : création d’une famille vide, recherche dans toutes les cartes WikiMasters, ajout/retrait carte par carte et bouton pour compléter automatiquement les cartes possédées.
 - **28/09/2026** — Nouveaux outils pour les cartes, les échanges et les notifications, avec davantage de réglages pour les paquets.
 - **27/09/2026** — Mise à jour du style et des performances des cartes.
 - **25/09/2026** — Ajout des paramètres et amélioration des cartes sans image.
