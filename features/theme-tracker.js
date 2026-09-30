@@ -1250,6 +1250,192 @@
         requestAnimationFrame(() => runtime.cardExtras.renderCardExtras());
       }
 
+      function createMarketplaceOffer(auction) {
+        const link = document.createElement('a');
+        link.className = 'wm-family-market-offer';
+        link.href = `/marketplace/${encodeURIComponent(auction.id)}`;
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+
+        const priceValue = marketplacePrice(auction);
+        const price = document.createElement('strong');
+        price.textContent = priceValue == null
+          ? 'Voir l’annonce'
+          : `${new Intl.NumberFormat('fr-FR').format(priceValue)} WikiBidous`;
+
+        const meta = document.createElement('span');
+        const seller = auction?.seller?.username
+          ? `par ${auction.seller.username}`
+          : '';
+        const end = formatMarketplaceEnd(auction?.end_at);
+        meta.textContent = [seller, end ? `fin ${end}` : ''].filter(Boolean).join(' • ');
+
+        const badges = document.createElement('span');
+        badges.className = 'wm-family-market-offer-badges';
+
+        if (auction?.is_shiny || auction?.card?.is_shiny) {
+          const shiny = document.createElement('em');
+          shiny.textContent = 'Shiny';
+          badges.append(shiny);
+        }
+
+        const arrow = document.createElement('span');
+        arrow.className = 'wm-family-market-arrow';
+        arrow.textContent = '↗';
+
+        const copy = document.createElement('span');
+        copy.className = 'wm-family-market-offer-copy';
+        copy.append(price, meta);
+
+        link.append(copy, badges, arrow);
+        return link;
+      }
+
+      function buildMarketplacePanel(family) {
+        const panel = document.createElement('section');
+        panel.className = 'wm-family-market-panel';
+
+        const header = document.createElement('div');
+        header.className = 'wm-family-market-head';
+
+        const copy = document.createElement('div');
+        const title = document.createElement('h2');
+        title.textContent = 'Marché des cartes manquantes';
+
+        const subtitle = document.createElement('p');
+        subtitle.textContent = 'Annonces trouvées uniquement pour les cartes marquées comme manquantes dans cette famille.';
+        copy.append(title, subtitle);
+
+        const refresh = document.createElement('button');
+        refresh.type = 'button';
+        refresh.className = 'wm-family-secondary';
+        refresh.textContent = marketState.loading ? 'Recherche…' : 'Actualiser';
+        refresh.disabled = marketState.loading;
+        refresh.addEventListener('click', () => loadMissingMarketplace(family));
+
+        header.append(copy, refresh);
+        panel.append(header);
+
+        const missingCards = (family.cards || []).filter((card) => card.owned === false);
+        const missingMap = new Map(missingCards.map((card) => [card.id, card]));
+        const listings = marketState.familyId === family.id
+          ? marketState.listings
+          : [];
+
+        const grouped = new Map();
+        for (const auction of listings) {
+          const cardId = auction?.card_id || auction?.card?.id;
+          if (!cardId || !missingMap.has(cardId)) continue;
+          const current = grouped.get(cardId) || [];
+          current.push(auction);
+          grouped.set(cardId, current);
+        }
+
+        const foundCardIds = [...grouped.keys()];
+        const summary = document.createElement('div');
+        summary.className = 'wm-family-market-summary';
+
+        if (marketState.loading) {
+          summary.dataset.mode = 'loading';
+          summary.textContent = marketState.progress || 'Recherche des annonces…';
+        } else if (marketState.error) {
+          summary.dataset.mode = 'error';
+          summary.textContent = `Recherche incomplète : ${marketState.error}`;
+        } else {
+          summary.textContent = `${foundCardIds.length.toLocaleString('fr-FR')} carte${foundCardIds.length > 1 ? 's' : ''} trouvée${foundCardIds.length > 1 ? 's' : ''} sur ${missingCards.length.toLocaleString('fr-FR')} manquante${missingCards.length > 1 ? 's' : ''} • ${listings.length.toLocaleString('fr-FR')} annonce${listings.length > 1 ? 's' : ''}`;
+        }
+
+        panel.append(summary);
+
+        if (!marketState.loading && !marketState.error && !listings.length) {
+          const empty = document.createElement('div');
+          empty.className = 'wm-family-market-empty';
+          empty.innerHTML = '<strong>Aucune annonce trouvée.</strong><span>Il n’y a peut-être rien en vente pour les cartes manquantes actuellement.</span>';
+          panel.append(empty);
+          return panel;
+        }
+
+        const groups = document.createElement('div');
+        groups.className = 'wm-family-market-groups';
+
+        for (const cardId of foundCardIds) {
+          const card = missingMap.get(cardId);
+          const offers = [...(grouped.get(cardId) || [])].sort((a, b) => {
+            const priceA = marketplacePrice(a);
+            const priceB = marketplacePrice(b);
+
+            if (priceA != null && priceB != null && priceA !== priceB) {
+              return priceA - priceB;
+            }
+
+            return new Date(a?.end_at || 0) - new Date(b?.end_at || 0);
+          });
+
+          const group = document.createElement('article');
+          group.className = 'wm-family-market-card';
+
+          const identity = document.createElement('div');
+          identity.className = 'wm-family-market-card-head';
+
+          const thumb = document.createElement('div');
+          thumb.className = 'wm-family-market-thumb';
+
+          const imageUrl = card?.imageUrl || offers[0]?.card?.image_url || null;
+          if (imageUrl) {
+            const image = document.createElement('img');
+            image.src = imageUrl;
+            image.alt = '';
+            image.loading = 'lazy';
+            thumb.append(image);
+          } else {
+            thumb.textContent = '✦';
+          }
+
+          const cardCopy = document.createElement('div');
+          const cardTitle = document.createElement('strong');
+          cardTitle.textContent = card?.title || offers[0]?.card?.wikipedia_title || 'Carte';
+
+          const cardMeta = document.createElement('span');
+          const rarity = card?.rarity || offers[0]?.card?.rarity || null;
+          cardMeta.textContent = [rarity, `${offers.length} annonce${offers.length > 1 ? 's' : ''}`]
+            .filter(Boolean)
+            .join(' • ');
+
+          cardCopy.append(cardTitle, cardMeta);
+          identity.append(thumb, cardCopy);
+
+          const offerList = document.createElement('div');
+          offerList.className = 'wm-family-market-offers';
+
+          const visibleOffers = offers.slice(0, 4);
+          for (const offer of visibleOffers) {
+            offerList.append(createMarketplaceOffer(offer));
+          }
+
+          if (offers.length > visibleOffers.length) {
+            const details = document.createElement('details');
+            details.className = 'wm-family-market-more';
+
+            const summaryMore = document.createElement('summary');
+            summaryMore.textContent = `Voir ${offers.length - visibleOffers.length} autre${offers.length - visibleOffers.length > 1 ? 's' : ''} annonce${offers.length - visibleOffers.length > 1 ? 's' : ''}`;
+
+            const extra = document.createElement('div');
+            for (const offer of offers.slice(visibleOffers.length)) {
+              extra.append(createMarketplaceOffer(offer));
+            }
+
+            details.append(summaryMore, extra);
+            offerList.append(details);
+          }
+
+          group.append(identity, offerList);
+          groups.append(group);
+        }
+
+        panel.append(groups);
+        return panel;
+      }
+
       function buildDetail(family) {
         const stats = familyStats(family);
         const wrap = document.createElement('div');
