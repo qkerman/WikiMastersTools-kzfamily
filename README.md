@@ -73,3 +73,5 @@ Puis cliquer sur **Recharger** dans `chrome://extensions/` et faire un F5 sur Wi
 - **30/09/2026** — « Familles » : le Marché passe en recherche à la demande, carte par carte par titre exact, avec un bouton de recherche intelligente pour toutes les manquantes utilisant la même couverture par mots-clés que « Charger mes cartes ».
 
 - **30/09/2026** — « Familles » : recherche Marché plus tolérante sur les titres Wikipédia (ex. « Runaway (chanson de Kanye West) » → « Runaway »), avec validation finale stricte par card_id.
+
+- **30/09/2026** — « Familles » : l’ajout de cartes utilise désormais une pagination classique avec pages numérotées, précédent/suivant et skeleton de chargement à chaque changement de page.
