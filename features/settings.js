@@ -52,7 +52,7 @@
             ['bulkPriceLoader', 'Chargement massif des prix', 'Ajoute « Charger les prix » avec sélection des raretés.'],
             ['ranking', 'Classement « Plus chères »', 'Ajoute le classement des cartes connues par prix moyen.'],
             ['rankingSales', 'Mise en vente depuis le classement', 'Affiche les contrôles pour mettre directement une carte en vente depuis le classement.'],
-            ['themeTracker', 'Familles', 'Ajoute la page Familles pour créer des groupes de cartes à partir d’un mot-clé.'],
+            ['themeTracker', 'Familles', 'Ajoute la page Familles pour créer manuellement des groupes de cartes et suivre celles que tu possèdes.'],
             ['compactMode', 'Mode compact', 'Ajoute le bouton Compact dans les vues collection.']
           ]
         },
