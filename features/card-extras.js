@@ -650,54 +650,155 @@
           ? meta.rarity
           : 'C';
 
+        const rarityBackgrounds = {
+          L: '/legendaire.png',
+          UR: '/ultra_rare.png',
+          SR: '/super_rare.png',
+          R: '/rare.png',
+          PC: '/peu_commune.png',
+          C: '/commune.png'
+        };
+
         const card = document.createElement('div');
-        card.className = `wm-family-native-card relative overflow-hidden glow-${rarity.toLowerCase()}`;
+        card.className = `wm-family-native-card w-[clamp(8.4rem,43vw,10rem)] h-[clamp(11.8rem,60vw,14rem)] glow-${rarity.toLowerCase()} relative rounded-2xl overflow-hidden cursor-pointer hover:z-10 transition-all duration-300 hover:scale-105 wm-collection-card`;
         card.dataset.wmCardId = meta.id;
 
+        // Fond de rareté natif WikiMasters.
+        const rarityBackground = document.createElement('img');
+        rarityBackground.alt = '';
+        rarityBackground.decoding = 'async';
+        rarityBackground.className = 'object-cover scale-[1.8]';
+        rarityBackground.src = rarityBackgrounds[rarity] || rarityBackgrounds.C;
+        rarityBackground.style.position = 'absolute';
+        rarityBackground.style.height = '100%';
+        rarityBackground.style.width = '100%';
+        rarityBackground.style.inset = '0';
+        rarityBackground.style.color = 'transparent';
+
+        const topShade = document.createElement('div');
+        topShade.className = 'absolute inset-0 bg-gradient-to-b from-black/10 via-transparent to-transparent pointer-events-none z-10';
+
+        // Couche image : même structure que les cartes de /collection.
         const artLayer = document.createElement('div');
-        artLayer.className = 'absolute top-0 left-0 right-0 h-[45%]';
+        artLayer.className = 'absolute top-0 left-0 right-0 h-[45%] z-20 bg-black/20';
 
         const artInner = document.createElement('div');
-        artInner.className = 'relative w-full h-full';
 
         const image = document.createElement('img');
-        image.alt = meta.imageUrl ? meta.title : 'WikiMasters';
         image.loading = 'lazy';
-        image.referrerPolicy = 'no-referrer';
+        image.decoding = 'async';
+
         if (meta.imageUrl) {
+          artInner.className = 'relative h-full w-full min-h-0';
+          image.alt = meta.title;
+          image.className = 'object-cover';
           image.src = meta.imageUrl;
           image.crossOrigin = 'anonymous';
+          image.referrerPolicy = 'no-referrer';
+          image.style.position = 'absolute';
+          image.style.height = '100%';
+          image.style.width = '100%';
+          image.style.inset = '0';
+          image.style.color = 'transparent';
+          image.style.objectPosition = 'center 28%';
+
+          const fade = document.createElement('div');
+          fade.className = 'absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-black/50 to-transparent';
+          artInner.append(image, fade);
         } else {
+          artInner.className = 'relative flex h-full w-full min-h-0 items-center justify-center p-1.5';
+
+          const logoFrame = document.createElement('div');
+          logoFrame.className = 'relative aspect-[4/3] w-[52%] min-w-[4rem] max-w-[9rem]';
+
+          image.alt = 'WikiMasters';
+          image.className = 'object-contain opacity-70';
           image.src = '/logo.png';
+          image.style.position = 'absolute';
+          image.style.height = '100%';
+          image.style.width = '100%';
+          image.style.inset = '0';
+          image.style.color = 'transparent';
+
+          logoFrame.append(image);
+          artInner.append(logoFrame);
         }
 
-        const oldFade = document.createElement('div');
-        oldFade.className = 'absolute bottom-0 left-0 right-0 h-1/2';
-
-        artInner.append(image, oldFade);
         artLayer.append(artInner);
 
+        const rarityBadge = document.createElement('div');
+        rarityBadge.className = 'absolute top-2 left-2 px-2 py-0.5 rounded-md text-xs font-bold z-30';
+        rarityBadge.style.backgroundColor = `var(--color-rarity-${rarity.toLowerCase()})`;
+        rarityBadge.style.color = 'rgb(13, 17, 23)';
+        rarityBadge.style.boxShadow = `0 0 10px var(--color-rarity-${rarity.toLowerCase()})99`;
+        rarityBadge.textContent = rarity;
+
+        // Zone texte native.
         const textLayer = document.createElement('div');
-        textLayer.className = 'absolute top-[45%] left-0 right-0 bottom-0 flex flex-col';
+        textLayer.className = 'absolute top-[45%] left-0 right-0 bottom-0 flex min-h-0 flex-col p-3 z-20';
 
         const title = document.createElement('h3');
+        title.className = 'text-xs shrink-0 font-bold leading-tight line-clamp-2 text-black drop-shadow-none';
+        title.style.fontFamily = 'var(--font-heading)';
         title.textContent = meta.title;
 
         const description = document.createElement('p');
+        description.className = 'min-h-0 leading-snug text-neutral-900/90 overflow-hidden line-clamp-3 text-[9px] shrink-0';
         description.textContent =
           String(meta.category || '').trim() ||
-          String(meta.summary || '').replace(/\s+/g, ' ').trim().slice(0, 120);
+          String(meta.summary || '').replace(/\s+/g, ' ').trim().slice(0, 140);
 
-        const stats = document.createElement('div');
-        stats.className = 'mt-auto';
+        const statsWrap = document.createElement('div');
+        statsWrap.className = 'mt-auto flex min-h-0 w-full flex-col items-start gap-0.5 pt-1';
+
+        const statsRow = document.createElement('div');
+        statsRow.className = 'flex w-full shrink-0 items-center justify-between border-t border-black/20 pt-1 py-1 justify-between';
+
+        const formatStat = (value) => {
+          const number = Number(value);
+          return Number.isFinite(number)
+            ? new Intl.NumberFormat('fr-FR').format(number)
+            : '—';
+        };
+
+        const attack = document.createElement('div');
+        attack.className = 'text-[10px] flex items-center justify-center gap-1';
+        attack.innerHTML = `
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-swords size-[1em] shrink-0 text-red-800" aria-hidden="true">
+            <polyline points="14.5 17.5 3 6 3 3 6 3 17.5 14.5"></polyline>
+            <line x1="13" x2="19" y1="19" y2="13"></line>
+            <line x1="16" x2="20" y1="16" y2="20"></line>
+            <line x1="19" x2="21" y1="21" y2="19"></line>
+            <polyline points="14.5 6.5 18 3 21 3 21 6 17.5 9.5"></polyline>
+            <line x1="5" x2="9" y1="14" y2="18"></line>
+            <line x1="7" x2="4" y1="17" y2="20"></line>
+            <line x1="3" x2="5" y1="19" y2="21"></line>
+          </svg>
+          <span class="font-bold text-black/90">${formatStat(meta.atk)}</span>`;
+
+        const defense = document.createElement('div');
+        defense.className = 'text-[10px] flex items-center gap-1';
+        defense.innerHTML = `
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-shield size-[1em] shrink-0 text-blue-800" aria-hidden="true">
+            <path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"></path>
+          </svg>
+          <span class="font-bold text-black/90">${formatStat(meta.def)}</span>`;
+
+        statsRow.append(attack, defense);
+        statsWrap.append(statsRow);
 
         textLayer.append(title);
         if (description.textContent) textLayer.append(description);
-        textLayer.append(stats);
+        textLayer.append(statsWrap);
 
-        const rarityBadge = document.createElement('div');
-        rarityBadge.className = 'absolute top-2 left-2';
-        rarityBadge.textContent = rarity;
+        card.append(rarityBackground, topShade, artLayer, rarityBadge, textLayer);
+
+        if (rarity === 'L') {
+          const shimmer = document.createElement('div');
+          shimmer.className = 'absolute inset-0 z-40 overflow-hidden pointer-events-none';
+          shimmer.innerHTML = '<div class="legendary-shimmer-sheen" aria-hidden="true"></div>';
+          card.append(shimmer);
+        }
 
         if (options.owned === true) {
           const owned = document.createElement('span');
@@ -718,7 +819,6 @@
           card.append(unchecked);
         }
 
-        card.append(artLayer, textLayer, rarityBadge);
         return card;
       }
 
@@ -727,7 +827,7 @@
         const wikipediaEnabled = isFeatureEnabled('wikipediaButtons');
         const missingImagesEnabled = isFeatureEnabled('missingImages');
         const observer = missingImagesEnabled ? ensureCardExtrasObserver() : null;
-        const collectionRoute = isCollectionRoute();
+        const collectionRoute = isCollectionRoute() || document.documentElement.classList.contains('wm-theme-route');
 
         for (const card of document.querySelectorAll('div[class*="glow-"]')) {
           if (!card.querySelector('h3')) continue;
