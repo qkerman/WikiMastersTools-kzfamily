@@ -899,7 +899,10 @@
         title.textContent = card.title;
 
         const meta = document.createElement('span');
-        meta.textContent = [card.rarity, card.category].filter(Boolean).join(' • ');
+        const ownedCopy = card.owned
+          ? `✓ Possédée${card.ownedCount > 1 ? ` ×${card.ownedCount}` : ''}`
+          : '';
+        meta.textContent = [card.rarity, card.category, ownedCopy].filter(Boolean).join(' • ');
 
         copy.append(title, meta);
 
