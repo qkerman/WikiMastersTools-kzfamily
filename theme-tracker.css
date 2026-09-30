@@ -1331,3 +1331,39 @@ html.wm-theme-route main > :not(#wm-theme-tracker-page) {
     padding-inline: 10px;
   }
 }
+
+
+/* v4.26.1 — recherche Marché carte par carte */
+.wm-family-market-card-head {
+  grid-template-columns: 54px minmax(0, 1fr) auto;
+}
+
+.wm-family-market-search {
+  align-self: center;
+  min-width: 132px;
+}
+
+.wm-family-market-card-status {
+  padding: 9px 12px;
+  border-top: 1px solid color-mix(in srgb, var(--color-border) 66%, transparent);
+  color: var(--wm-family-muted);
+  font-size: 9.5px;
+  line-height: 1.4;
+}
+
+.wm-family-market-card-status.is-error {
+  color: #fca5a5;
+  background: rgba(127, 29, 29, 0.05);
+}
+
+@media (max-width: 760px) {
+  .wm-family-market-card-head {
+    grid-template-columns: 46px minmax(0, 1fr);
+  }
+
+  .wm-family-market-search {
+    grid-column: 1 / -1;
+    width: 100%;
+    min-width: 0;
+  }
+}
