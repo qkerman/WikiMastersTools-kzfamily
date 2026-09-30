@@ -1021,3 +1021,57 @@ html.wm-theme-route main > :not(#wm-theme-tracker-page) {
     0 0 18px rgba(250, 204, 21, 0.10);
 }
 
+
+
+/* v4.24 — import / export des Familles */
+.wm-family-home-actions,
+.wm-family-empty-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.wm-family-share-modal {
+  width: min(560px, 100%);
+}
+
+.wm-family-code-area {
+  width: 100%;
+  min-height: 150px;
+  resize: vertical;
+  padding: 11px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  outline: 0;
+  background: color-mix(in srgb, var(--color-surface) 88%, black 12%);
+  color: var(--color-foreground);
+  font: 500 11px/1.45 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  overflow-wrap: anywhere;
+}
+
+.wm-family-code-area:focus {
+  border-color: rgba(168, 85, 247, 0.55);
+}
+
+.wm-family-share-meta {
+  min-height: 18px;
+  margin-top: 7px;
+  color: color-mix(in srgb, var(--color-foreground) 45%, transparent);
+  font-size: 10px;
+  text-align: right;
+}
+
+@media (max-width: 700px) {
+  .wm-family-home-actions {
+    width: 100%;
+  }
+
+  .wm-family-home-actions button {
+    flex: 1;
+  }
+
+  .wm-family-empty-actions {
+    justify-content: center;
+  }
+}
