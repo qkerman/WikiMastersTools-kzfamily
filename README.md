@@ -61,3 +61,5 @@ Puis cliquer sur **Recharger** dans `chrome://extensions/` et faire un F5 sur Wi
 - **23/09/2026** — Extension disponible sur Firefox, Brave et Opera.
 - **21/09/2026** — Ajout des outils de vente, de classement et d’estimation des échanges.
 - **18/09/2026** — Ajout des prix moyens dans la collection, les paquets et le Marketplace.
+
+- **30/09/2026** — « Familles » : import/export par code compact, avec compression automatique, carte de couverture conservée et possessions exclues du partage.
