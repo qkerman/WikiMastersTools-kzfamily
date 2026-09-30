@@ -1950,6 +1950,8 @@
         try {
           const updated = await completeOwnedCards(family, progress.update);
           registerFamilyCards(updated);
+          marketFamilyId = null;
+          marketState = createEmptyMarketState(familyIdValue);
           await wait(350);
           progress.close();
           renderPageContent();
