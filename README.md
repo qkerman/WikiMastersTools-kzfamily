@@ -69,3 +69,5 @@ Puis cliquer sur **Recharger** dans `chrome://extensions/` et faire un F5 sur Wi
 - **30/09/2026** — « Familles » : passe UI/UX complète, hiérarchie visuelle simplifiée, édition plus claire, responsive amélioré et option dédiée pour masquer totalement la page du menu.
 
 - **30/09/2026** — « Familles » : ajout d’un mode Marché qui recherche les annonces actives correspondant aux cartes manquantes et ouvre chaque enchère dans un nouvel onglet.
+
+- **30/09/2026** — « Familles » : le Marché passe en recherche à la demande, carte par carte par titre exact, avec un bouton de recherche intelligente pour toutes les manquantes utilisant la même couverture par mots-clés que « Charger mes cartes ».
