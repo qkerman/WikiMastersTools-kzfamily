@@ -885,6 +885,12 @@ html.wm-theme-route main > :not(#wm-theme-tracker-page) {
   object-fit: cover;
 }
 
+.wm-family-picker-thumb .wm-family-picker-logo {
+  padding: 6px;
+  object-fit: contain;
+  opacity: 0.7;
+}
+
 .wm-family-picker-copy {
   display: flex;
   min-width: 0;
