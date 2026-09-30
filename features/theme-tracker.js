@@ -698,6 +698,7 @@
           : {};
 
         marketState = {
+          ...(marketState.familyId === familyIdValue ? marketState : createEmptyMarketState(familyIdValue)),
           familyId: familyIdValue,
           cards: {
             ...currentCards,
@@ -1387,9 +1388,20 @@
         title.textContent = 'Marché des cartes manquantes';
 
         const subtitle = document.createElement('p');
-        subtitle.textContent = 'Aucune recherche n’est lancée automatiquement. Clique sur une carte pour chercher son nom exact sur le marché.';
+        subtitle.textContent = 'Cherche une carte par son nom exact, ou lance une recherche intelligente sur toutes les manquantes avec les mêmes mots-clés de couverture que « Charger mes cartes ».';
         copy.append(title, subtitle);
-        header.append(copy);
+
+        const searchAll = document.createElement('button');
+        searchAll.type = 'button';
+        searchAll.className = 'wm-family-primary wm-family-market-all';
+        setMarketplaceButtonContent(
+          searchAll,
+          marketState.batchLoading ? 'Recherche en cours…' : 'Rechercher toutes les manquantes'
+        );
+        searchAll.disabled = Boolean(marketState.batchLoading);
+        searchAll.addEventListener('click', () => searchAllMissingMarketplace(family));
+
+        header.append(copy, searchAll);
         panel.append(header);
 
         const missingCards = (family.cards || [])
@@ -1409,9 +1421,17 @@
           return Array.isArray(state.listings) && state.listings.length > 0;
         }).length;
 
-        summary.textContent = searchedCount
-          ? `${searchedCount} / ${missingCards.length} recherchée${searchedCount > 1 ? 's' : ''} • ${availableCount} avec annonce${availableCount > 1 ? 's' : ''}`
-          : `${missingCards.length} carte${missingCards.length > 1 ? 's' : ''} manquante${missingCards.length > 1 ? 's' : ''} • clique sur « Chercher sur le marché » pour vérifier une carte`;
+        if (marketState.batchLoading) {
+          summary.dataset.mode = 'loading';
+          summary.textContent = marketState.batchProgress || 'Recherche des cartes manquantes…';
+        } else if (marketState.batchError) {
+          summary.dataset.mode = 'error';
+          summary.textContent = `Recherche globale interrompue : ${marketState.batchError}`;
+        } else {
+          summary.textContent = searchedCount
+            ? `${searchedCount} / ${missingCards.length} recherchée${searchedCount > 1 ? 's' : ''} • ${availableCount} avec annonce${availableCount > 1 ? 's' : ''}`
+            : `${missingCards.length} carte${missingCards.length > 1 ? 's' : ''} manquante${missingCards.length > 1 ? 's' : ''} • aucune requête lancée pour le moment`;
+        }
 
         panel.append(summary);
 
@@ -1474,12 +1494,15 @@
           const search = document.createElement('button');
           search.type = 'button';
           search.className = 'wm-family-secondary wm-family-market-search';
-          search.textContent = state.loading
-            ? 'Recherche…'
-            : state.searchedAt
-              ? 'Rechercher à nouveau'
-              : 'Chercher sur le marché';
-          search.disabled = state.loading;
+          setMarketplaceButtonContent(
+            search,
+            state.loading
+              ? 'Recherche…'
+              : state.searchedAt
+                ? 'Rechercher à nouveau'
+                : 'Chercher sur le marché'
+          );
+          search.disabled = state.loading || Boolean(marketState.batchLoading);
           search.addEventListener('click', () => searchMarketplaceCard(family, card));
 
           identity.append(thumb, cardCopy, search);
@@ -1626,9 +1649,12 @@
             market.className = marketMode
               ? 'wm-family-primary wm-family-market-toggle'
               : 'wm-family-secondary wm-family-market-toggle';
-            market.textContent = marketMode
-              ? 'Retour aux cartes'
-              : `Marché des manquantes (${stats.missing})`;
+            setMarketplaceButtonContent(
+              market,
+              marketMode
+                ? 'Retour aux cartes'
+                : `Marché des manquantes (${stats.missing})`
+            );
             market.title = marketMode
               ? 'Quitter le mode Marché'
               : 'Chercher les cartes manquantes actuellement en vente';
