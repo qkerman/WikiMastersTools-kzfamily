@@ -1912,21 +1912,27 @@
 
       function pickerPageNumbers() {
         const current = searchState.page;
-        const pages = new Set([0]);
+        const maxKnown = searchState.lastPage != null
+          ? searchState.lastPage
+          : Math.max(
+              searchState.highestKnownPage || 0,
+              current + (searchState.hasMore ? 1 : 0)
+            );
 
-        if (current > 0) pages.add(current - 1);
-        pages.add(current);
+        const pages = new Set([0, current]);
+        const windowStart = Math.max(0, current - 2);
+        const windowEnd = Math.min(maxKnown, current + 2);
 
-        if (searchState.hasMore) {
-          pages.add(current + 1);
-        } else if (searchState.lastPage != null) {
+        for (let page = windowStart; page <= windowEnd; page += 1) {
+          pages.add(page);
+        }
+
+        if (searchState.lastPage != null) {
           pages.add(searchState.lastPage);
         }
 
-        if (current > 1) pages.add(1);
-
         return [...pages]
-          .filter((page) => page >= 0)
+          .filter((page) => page >= 0 && page <= maxKnown)
           .sort((a, b) => a - b);
       }
 
@@ -1936,7 +1942,7 @@
 
         pagination.replaceChildren();
 
-        if (!searchState.query || searchState.error) {
+        if (!searchState.query) {
           pagination.hidden = true;
           return;
         }
