@@ -1384,10 +1384,9 @@
         const searchAll = document.createElement('button');
         searchAll.type = 'button';
         searchAll.className = 'wm-family-primary wm-family-market-all';
-        setMarketplaceButtonContent(
-          searchAll,
-          marketState.batchLoading ? 'Recherche en cours…' : 'Rechercher toutes les manquantes'
-        );
+        searchAll.textContent = marketState.batchLoading
+          ? 'Recherche en cours…'
+          : 'Rechercher toutes les manquantes';
         searchAll.disabled = Boolean(marketState.batchLoading);
         searchAll.addEventListener('click', () => searchAllMissingMarketplace(family));
 
@@ -1484,14 +1483,11 @@
           const search = document.createElement('button');
           search.type = 'button';
           search.className = 'wm-family-secondary wm-family-market-search';
-          setMarketplaceButtonContent(
-            search,
-            state.loading
-              ? 'Recherche…'
-              : state.searchedAt
-                ? 'Rechercher à nouveau'
-                : 'Chercher sur le marché'
-          );
+          search.textContent = state.loading
+            ? 'Recherche…'
+            : state.searchedAt
+              ? 'Rechercher à nouveau'
+              : 'Chercher sur le marché';
           search.disabled = state.loading || Boolean(marketState.batchLoading);
           search.addEventListener('click', () => searchMarketplaceCard(family, card));
 
