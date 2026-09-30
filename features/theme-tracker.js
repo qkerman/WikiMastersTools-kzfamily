@@ -31,7 +31,10 @@
       function createEmptyMarketState(familyId = null) {
         return {
           familyId,
-          cards: {}
+          cards: {},
+          batchLoading: false,
+          batchProgress: '',
+          batchError: ''
         };
       }
 
@@ -632,6 +635,24 @@
         return { keywords: selected, coverageByKeyword: coverage };
       }
 
+      function createMarketplaceIcon() {
+        const span = document.createElement('span');
+        span.className = 'wm-family-market-icon';
+        span.innerHTML = `
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="m14 13-8.381 8.38a1 1 0 0 1-3.001-3l8.384-8.381"></path>
+            <path d="m16 16 6-6"></path>
+            <path d="m21.5 10.5-8-8"></path>
+            <path d="m8 8 6-6"></path>
+            <path d="m8.5 7.5 8 8"></path>
+          </svg>`;
+        return span;
+      }
+
+      function setMarketplaceButtonContent(button, label) {
+        button.replaceChildren(createMarketplaceIcon(), document.createTextNode(label));
+      }
+
       function marketplacePrice(auction) {
         const values = [
           auction?.effective_bid,
@@ -686,6 +707,136 @@
             }
           }
         };
+      }
+
+      async function searchMarketplaceQuery(query, missingIds) {
+        const listingsById = new Map();
+
+        for (let page = 1; page <= MAX_MARKET_PAGES_PER_CARD; page += 1) {
+          const json = await fetchJson(
+            `/api/marketplace?page=${page}&limit=${MARKET_PAGE_SIZE}&sort=recent&q=${encodeURIComponent(query)}`,
+            { credentials: 'include' }
+          );
+
+          const auctions = Array.isArray(json?.auctions) ? json.auctions : [];
+
+          for (const auction of auctions) {
+            const cardId = auction?.card_id || auction?.card?.id;
+            if (
+              !auction?.id ||
+              !cardId ||
+              !missingIds.has(cardId) ||
+              (auction.status && auction.status !== 'active')
+            ) {
+              continue;
+            }
+
+            listingsById.set(auction.id, auction);
+          }
+
+          if (json?.hasMore === false || auctions.length < MARKET_PAGE_SIZE) break;
+          await wait(45);
+        }
+
+        return [...listingsById.values()];
+      }
+
+      async function searchAllMissingMarketplace(family) {
+        const missingCards = (family?.cards || []).filter((card) => card.owned === false);
+        if (!missingCards.length) return;
+
+        const plan = buildOwnershipKeywords(missingCards);
+        const keywords = plan.keywords;
+
+        if (!keywords.length) {
+          marketState = {
+            ...(marketState.familyId === family.id ? marketState : createEmptyMarketState(family.id)),
+            familyId: family.id,
+            batchLoading: false,
+            batchProgress: '',
+            batchError: 'Impossible de trouver des mots-clés utiles pour cette famille.'
+          };
+          renderPageContent();
+          return;
+        }
+
+        const missingIds = new Set(missingCards.map((card) => card.id).filter(Boolean));
+        const listingsByCard = new Map();
+        const searchedCardIds = new Set();
+
+        marketState = {
+          ...(marketState.familyId === family.id ? marketState : createEmptyMarketState(family.id)),
+          familyId: family.id,
+          batchLoading: true,
+          batchProgress: `Recherche 0/${keywords.length}…`,
+          batchError: ''
+        };
+        renderPageContent();
+
+        try {
+          for (let index = 0; index < keywords.length; index += 1) {
+            const keyword = keywords[index];
+            const listings = await searchMarketplaceQuery(keyword, missingIds);
+
+            for (const auction of listings) {
+              const cardId = auction?.card_id || auction?.card?.id;
+              if (!cardId) continue;
+
+              const current = listingsByCard.get(cardId) || new Map();
+              current.set(auction.id, auction);
+              listingsByCard.set(cardId, current);
+            }
+
+            for (const cardId of plan.coverageByKeyword.get(keyword) || []) {
+              searchedCardIds.add(cardId);
+            }
+
+            const listingCount = [...listingsByCard.values()]
+              .reduce((sum, map) => sum + map.size, 0);
+
+            marketState = {
+              ...marketState,
+              batchLoading: true,
+              batchProgress: `Recherche ${index + 1}/${keywords.length} • ${listingCount} annonce${listingCount > 1 ? 's' : ''}`,
+              batchError: ''
+            };
+
+            if (marketFamilyId === family.id) renderPageContent();
+          }
+
+          const now = Date.now();
+          const nextCards = { ...(marketState.cards || {}) };
+
+          for (const card of missingCards) {
+            if (!searchedCardIds.has(card.id)) continue;
+
+            const found = listingsByCard.get(card.id);
+            nextCards[card.id] = {
+              loading: false,
+              error: '',
+              listings: found ? [...found.values()] : [],
+              searchedAt: now
+            };
+          }
+
+          marketState = {
+            familyId: family.id,
+            cards: nextCards,
+            batchLoading: false,
+            batchProgress: '',
+            batchError: ''
+          };
+        } catch (error) {
+          marketState = {
+            ...marketState,
+            familyId: family.id,
+            batchLoading: false,
+            batchProgress: '',
+            batchError: String(error?.message || error)
+          };
+        }
+
+        if (marketFamilyId === family.id) renderPageContent();
       }
 
       async function searchMarketplaceCard(family, card) {
