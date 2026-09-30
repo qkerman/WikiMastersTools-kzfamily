@@ -168,7 +168,6 @@ if (typeof window !== 'undefined' && typeof document !== 'undefined') {
       'bridge/intercept.js',
       'bridge/marketplace.js',
       'bridge/prices.js',
-      'bridge/families.js',
       'page-bridge.js',
       'features/core.js',
       'features/settings.js',
