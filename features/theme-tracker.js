@@ -2070,6 +2070,10 @@
 
         const token = searchState.requestToken + 1;
         const previousPage = searchState.page;
+        const previousResults = searchState.results;
+        const previousHasMore = searchState.hasMore;
+        const previousLastPage = searchState.lastPage;
+        const previousHighestKnownPage = searchState.highestKnownPage;
         const page = Math.max(0, Number(targetPage) || 0);
         const sameQuery = normalize(searchState.query) === normalize(clean);
 
@@ -2111,6 +2115,10 @@
           searchState = {
             ...searchState,
             page: previousPage,
+            results: previousResults,
+            hasMore: previousHasMore,
+            lastPage: previousLastPage,
+            highestKnownPage: previousHighestKnownPage,
             loading: false,
             error: `Erreur de recherche : ${String(error?.message || error)}`
           };
