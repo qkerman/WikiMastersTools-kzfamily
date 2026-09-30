@@ -722,7 +722,7 @@
         const slot = document.createElement('div');
         slot.className = 'wm-family-card-slot relative isolate group';
         if (card.owned === false) slot.classList.add('is-missing');
-        if (family.coverCardId === card.id) slot.classList.add('is-cover-card');
+        if (editing && family.coverCardId === card.id) slot.classList.add('is-cover-card');
 
         slot.append(element);
 
