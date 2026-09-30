@@ -518,14 +518,28 @@ html.wm-theme-route main > :not(#wm-theme-tracker-page) {
   aspect-ratio: auto !important;
 }
 
+.wm-family-card-slot.is-missing {
+  border-radius: 16px;
+  box-shadow: 0 0 0 1px rgba(148, 163, 184, 0.16);
+}
+
 .wm-family-card-slot.is-missing .wm-family-native-card {
-  filter: grayscale(1) saturate(0) brightness(0.68);
-  opacity: 0.58;
+  filter: grayscale(0.94) saturate(0.12) brightness(0.92) contrast(0.96);
+  opacity: 1;
+  transition:
+    filter 160ms ease,
+    box-shadow 160ms ease,
+    transform 160ms ease;
 }
 
 .wm-family-card-slot.is-missing .wm-family-native-card:hover {
-  filter: grayscale(1) saturate(0) brightness(0.74);
-  opacity: 0.68;
+  filter: grayscale(0.88) saturate(0.18) brightness(1) contrast(0.98);
+}
+
+.wm-family-card-slot.is-missing .wm-family-native-card h3,
+.wm-family-card-slot.is-missing .wm-family-native-card p,
+.wm-family-card-slot.is-missing .wm-family-native-card [class*="font-bold"] {
+  opacity: 1 !important;
 }
 
 .wm-family-more {
