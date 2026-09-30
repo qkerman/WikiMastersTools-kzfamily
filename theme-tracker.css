@@ -1073,3 +1073,261 @@ html.wm-theme-route main > :not(#wm-theme-tracker-page) {
     transition: none;
   }
 }
+
+
+/* v4.26 — marché des cartes manquantes */
+.wm-family-dev-note {
+  margin: 0 0 8px;
+  color: color-mix(in srgb, var(--color-foreground) 42%, transparent);
+  font-size: 10px;
+  line-height: 1.35;
+}
+
+.wm-family-market-toggle {
+  position: relative;
+}
+
+.wm-family-market-panel {
+  margin-top: 4px;
+}
+
+.wm-family-market-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.wm-family-market-head h2 {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-size: 16px;
+  letter-spacing: -0.01em;
+}
+
+.wm-family-market-head p {
+  max-width: 680px;
+  margin: 5px 0 0;
+  color: var(--wm-family-muted);
+  font-size: 10.5px;
+  line-height: 1.45;
+}
+
+.wm-family-market-summary {
+  min-height: 34px;
+  margin-bottom: 12px;
+  padding: 9px 11px;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--color-surface) 92%, transparent);
+  color: var(--wm-family-muted);
+  font-size: 10.5px;
+  line-height: 1.4;
+}
+
+.wm-family-market-summary[data-mode="loading"] {
+  border-color: rgba(168, 85, 247, 0.24);
+  background: rgba(124, 58, 237, 0.06);
+  color: rgb(196, 181, 253);
+}
+
+.wm-family-market-summary[data-mode="error"] {
+  border-color: rgba(248, 113, 113, 0.24);
+  background: rgba(127, 29, 29, 0.07);
+  color: #fca5a5;
+}
+
+.wm-family-market-groups {
+  display: grid;
+  gap: 10px;
+}
+
+.wm-family-market-card {
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--color-surface) 97%, transparent);
+}
+
+.wm-family-market-card-head {
+  display: grid;
+  grid-template-columns: 54px minmax(0, 1fr);
+  align-items: center;
+  gap: 11px;
+  padding: 10px 12px;
+  border-bottom: 1px solid color-mix(in srgb, var(--color-border) 76%, transparent);
+}
+
+.wm-family-market-thumb {
+  display: grid;
+  width: 50px;
+  height: 50px;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 9px;
+  background: rgba(124, 58, 237, 0.07);
+  color: rgb(167, 139, 250);
+}
+
+.wm-family-market-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.wm-family-market-card-head > div:last-child {
+  min-width: 0;
+}
+
+.wm-family-market-card-head strong,
+.wm-family-market-card-head span {
+  display: block;
+}
+
+.wm-family-market-card-head strong {
+  overflow: hidden;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wm-family-market-card-head span {
+  margin-top: 3px;
+  color: var(--wm-family-faint);
+  font-size: 9.5px;
+}
+
+.wm-family-market-offers {
+  display: grid;
+}
+
+.wm-family-market-offer {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto 18px;
+  align-items: center;
+  gap: 8px;
+  min-height: 52px;
+  padding: 8px 12px;
+  border-bottom: 1px solid color-mix(in srgb, var(--color-border) 66%, transparent);
+  color: inherit !important;
+  text-decoration: none !important;
+  transition: background 120ms ease;
+}
+
+.wm-family-market-offer:last-child {
+  border-bottom: 0;
+}
+
+.wm-family-market-offer:hover {
+  background: rgba(124, 58, 237, 0.055);
+}
+
+.wm-family-market-offer-copy {
+  min-width: 0;
+}
+
+.wm-family-market-offer-copy strong,
+.wm-family-market-offer-copy span {
+  display: block;
+}
+
+.wm-family-market-offer-copy strong {
+  font-size: 11px;
+  font-weight: 850;
+}
+
+.wm-family-market-offer-copy span {
+  margin-top: 2px;
+  overflow: hidden;
+  color: var(--wm-family-faint);
+  font-size: 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wm-family-market-offer-badges {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.wm-family-market-offer-badges em {
+  padding: 3px 5px;
+  border: 1px solid rgba(250, 204, 21, 0.26);
+  border-radius: 999px;
+  background: rgba(113, 63, 18, 0.08);
+  color: #fde68a;
+  font-size: 8px;
+  font-style: normal;
+  font-weight: 850;
+}
+
+.wm-family-market-arrow {
+  color: rgb(167, 139, 250);
+  font-size: 13px;
+  text-align: right;
+}
+
+.wm-family-market-more {
+  border-bottom: 1px solid color-mix(in srgb, var(--color-border) 66%, transparent);
+}
+
+.wm-family-market-more > summary {
+  padding: 8px 12px;
+  color: rgb(196, 181, 253);
+  font-size: 9.5px;
+  font-weight: 750;
+  cursor: pointer;
+  list-style-position: inside;
+}
+
+.wm-family-market-more > div {
+  border-top: 1px solid color-mix(in srgb, var(--color-border) 66%, transparent);
+}
+
+.wm-family-market-empty {
+  display: flex;
+  min-height: 145px;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 5px;
+  padding: 20px;
+  border: 1px dashed var(--color-border);
+  border-radius: 12px;
+  color: var(--wm-family-muted);
+  text-align: center;
+}
+
+.wm-family-market-empty strong {
+  color: var(--color-foreground);
+  font-size: 12px;
+}
+
+.wm-family-market-empty span {
+  font-size: 10px;
+}
+
+@media (max-width: 760px) {
+  .wm-family-market-head {
+    flex-direction: column;
+  }
+
+  .wm-family-market-head button {
+    width: 100%;
+  }
+
+  .wm-family-market-card-head {
+    grid-template-columns: 46px minmax(0, 1fr);
+    padding-inline: 10px;
+  }
+
+  .wm-family-market-thumb {
+    width: 42px;
+    height: 42px;
+  }
+
+  .wm-family-market-offer {
+    padding-inline: 10px;
+  }
+}
