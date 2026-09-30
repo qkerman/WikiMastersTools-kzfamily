@@ -710,6 +710,10 @@ html.wm-theme-route main > :not(#wm-theme-tracker-page) {
 
 /* Card picker */
 
+.wm-family-picker-overlay {
+  align-items: center;
+}
+
 .wm-family-picker-modal {
   display: flex;
   width: min(800px, 100%);
