@@ -962,3 +962,62 @@ html.wm-theme-route main > :not(#wm-theme-tracker-page) {
     gap: 26px !important;
   }
 }
+
+
+/* v4.23 — vue propre + mode édition des Familles */
+.wm-family-card-slot.is-missing .wm-family-native-card {
+  filter: grayscale(1) saturate(0) brightness(0.62);
+  opacity: 0.58;
+}
+
+.wm-family-card-slot.is-missing .wm-family-native-card:hover {
+  filter: grayscale(1) saturate(0) brightness(0.70);
+  opacity: 0.68;
+}
+
+.wm-family-edit-controls {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 7px;
+}
+
+.wm-family-cover-button,
+.wm-family-card-remove {
+  width: 100%;
+  min-height: 31px;
+  margin: 0;
+  padding: 6px 8px;
+  border-radius: 8px;
+  font: inherit;
+  font-size: 9.5px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: 140ms ease;
+}
+
+.wm-family-cover-button {
+  border: 1px solid rgba(168, 85, 247, 0.28);
+  background: rgba(124, 58, 237, 0.08);
+  color: rgb(196, 181, 253);
+}
+
+.wm-family-cover-button:hover:not(:disabled) {
+  border-color: rgba(192, 132, 252, 0.5);
+  background: rgba(124, 58, 237, 0.16);
+}
+
+.wm-family-cover-button.is-selected {
+  border-color: rgba(250, 204, 21, 0.34);
+  background: rgba(113, 63, 18, 0.12);
+  color: #fde68a;
+  cursor: default;
+}
+
+.wm-family-card-slot.is-cover-card .wm-family-native-card {
+  box-shadow:
+    0 0 0 1px rgba(250, 204, 21, 0.34),
+    0 0 18px rgba(250, 204, 21, 0.10);
+}
+
