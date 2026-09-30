@@ -1101,7 +1101,6 @@
           exportButton.type = 'button';
           exportButton.className = 'wm-family-secondary';
           exportButton.textContent = 'Exporter';
-          exportButton.disabled = family.cards.length === 0;
           exportButton.addEventListener('click', () => openExportModal(family.id));
 
           const edit = document.createElement('button');
