@@ -1343,6 +1343,12 @@ html.wm-theme-route main > :not(#wm-theme-tracker-page) {
   object-fit: cover;
 }
 
+.wm-family-market-thumb .wm-family-market-logo {
+  padding: 6px;
+  object-fit: contain;
+  opacity: 0.7;
+}
+
 .wm-family-market-card-head > div:last-child {
   min-width: 0;
 }
