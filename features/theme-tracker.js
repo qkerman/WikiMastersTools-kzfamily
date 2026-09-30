@@ -710,6 +710,24 @@
         };
       }
 
+      function marketplaceQueryForCoverageKeyword(keyword) {
+        const tokens = normalize(keyword)
+          .split(' ')
+          .filter((token) =>
+            token.length >= 4 &&
+            !OWNERSHIP_STOPWORDS.has(token) &&
+            !/^\d+$/.test(token)
+          );
+
+        if (!tokens.length) return String(keyword || '').trim();
+        if (tokens.length === 1) return tokens[0];
+
+        // Le Marketplace tolère mieux une recherche courte. Comme les
+        // résultats sont ensuite validés par card_id, on peut élargir sans
+        // créer de faux positif.
+        return [...tokens].sort((a, b) => b.length - a.length)[0];
+      }
+
       async function searchMarketplaceQuery(query, missingIds) {
         const listingsById = new Map();
 
@@ -791,7 +809,10 @@
           const keyword = keywords[index];
 
           try {
-            const listings = await searchMarketplaceQuery(keyword, missingIds);
+            const listings = await searchMarketplaceQuery(
+              marketplaceQueryForCoverageKeyword(keyword),
+              missingIds
+            );
 
             for (const auction of listings) {
               const cardId = auction?.card_id || auction?.card?.id;
@@ -876,7 +897,9 @@
         // qualificatifs Wikipédia entre parenthèses.
         add(
           rawTitle
-            .replace(/\s*[([{][^\])}]*[\])}]\s*$/g, '')
+            .replace(/\s*\([^)]*\)\s*$/g, '')
+            .replace(/\s*\[[^\]]*\]\s*$/g, '')
+            .replace(/\s*\{[^}]*\}\s*$/g, '')
             .trim()
         );
 
