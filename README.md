@@ -79,3 +79,5 @@ Puis cliquer sur **Recharger** dans `chrome://extensions/` et faire un F5 sur Wi
 - **30/09/2026** — « Familles » : le mode Marché affiche le logo WikiMasters pour les cartes sans image et « Rechercher toutes les manquantes » réessaie jusqu’à 3 fois à 5 secondes d’intervalle avant de passer à la suite.
 
 - **30/09/2026** — « Familles » : les cartes manquantes restent grisées mais conservent désormais 100 % d’opacité et une luminosité suffisante pour garder titres et descriptions lisibles.
+
+- **30/09/2026** — « Familles » : les cartes manquantes ne sont plus filtrées en bloc ; seuls les éléments visuels sont grisés et la zone texte garde un fond clair pour garantir la lisibilité, même sur les raretés sombres.
