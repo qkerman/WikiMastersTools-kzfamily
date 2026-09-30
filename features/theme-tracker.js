@@ -37,13 +37,17 @@
         };
       }
 
-      function isThemePage() {
+      function isThemeRoute() {
         if (location.pathname !== '/global-collection') return false;
         try {
           return new URLSearchParams(location.search).get('wm') === 'themes';
         } catch (_) {
           return false;
         }
+      }
+
+      function isThemePage() {
+        return runtime.settings.isEnabled('themeTracker') && isThemeRoute();
       }
 
       function normalize(value) {
@@ -827,10 +831,10 @@
 
         if (!stats.total) {
           numbers.textContent = 'Famille vide';
-        } else if (stats.unchecked) {
-          numbers.textContent = `${stats.owned} / ${stats.total} possédées • ${stats.unchecked} à vérifier`;
+        } else if (!family.ownershipUpdatedAt) {
+          numbers.textContent = `${stats.total} carte${stats.total > 1 ? 's' : ''} • collection non chargée`;
         } else {
-          numbers.textContent = `${stats.owned} / ${stats.total} possédées`;
+          numbers.textContent = `${stats.owned} / ${stats.total} possédée${stats.owned > 1 ? 's' : ''}`;
         }
 
         const progress = document.createElement('span');
@@ -841,6 +845,7 @@
 
         body.append(title, numbers, progress);
         button.append(thumb, body);
+        button.setAttribute('aria-label', `Ouvrir la famille ${family.name}`);
 
         button.addEventListener('click', () => {
           activeFamilyId = family.id;
@@ -1060,6 +1065,7 @@
         actions.className = 'wm-family-actions';
 
         const editing = editingFamilyId === family.id;
+        wrap.classList.toggle('is-editing', editing);
 
         if (editing) {
           const manage = document.createElement('button');
@@ -1091,17 +1097,18 @@
 
           actions.append(manage, done, remove);
         } else {
+          const neverLoaded = !family.ownershipUpdatedAt && family.cards.length > 0;
+
           const complete = document.createElement('button');
           complete.type = 'button';
-          complete.className = 'wm-family-secondary';
+          complete.className = neverLoaded
+            ? 'wm-family-primary wm-family-load-attention'
+            : 'wm-family-secondary';
           complete.textContent = 'Charger mes cartes';
           complete.disabled = family.cards.length === 0;
-
-          if (!family.ownershipUpdatedAt && family.cards.length > 0) {
-            complete.classList.add('wm-family-load-attention');
-            complete.title = 'Charge ta collection pour identifier les cartes que tu possèdes.';
-          }
-
+          complete.title = neverLoaded
+            ? 'Charge ta collection pour identifier les cartes que tu possèdes.'
+            : 'Actualise les cartes que tu possèdes dans cette famille.';
           complete.addEventListener('click', () => syncOwnedFamily(family.id));
 
           const exportButton = document.createElement('button');
@@ -1112,7 +1119,7 @@
 
           const edit = document.createElement('button');
           edit.type = 'button';
-          edit.className = 'wm-family-primary';
+          edit.className = neverLoaded ? 'wm-family-secondary' : 'wm-family-primary';
           edit.textContent = 'Modifier';
           edit.addEventListener('click', () => {
             editingFamilyId = family.id;
@@ -1124,6 +1131,11 @@
 
         top.append(back, actions);
 
+        const editBanner = document.createElement('div');
+        editBanner.className = 'wm-family-edit-banner';
+        editBanner.hidden = !editing;
+        editBanner.innerHTML = '<strong>Mode édition</strong><span>Ajoute, retire ou choisis la carte de couverture.</span>';
+
         const heading = document.createElement('div');
         heading.className = 'wm-family-detail-head';
 
@@ -1132,10 +1144,10 @@
         title.textContent = family.name;
 
         const info = document.createElement('p');
-        const ownershipDate = family.ownershipUpdatedAt
-          ? ` • possessions vérifiées le ${formatDate(family.ownershipUpdatedAt)}`
-          : '';
-        info.textContent = `${stats.total.toLocaleString('fr-FR')} carte${stats.total > 1 ? 's' : ''}${ownershipDate}`;
+        const ownershipCopy = family.ownershipUpdatedAt
+          ? `Collection chargée le ${formatDate(family.ownershipUpdatedAt)}`
+          : 'Collection non chargée';
+        info.textContent = `${stats.total.toLocaleString('fr-FR')} carte${stats.total > 1 ? 's' : ''} • ${ownershipCopy}`;
 
         copy.append(title, info);
 
@@ -1195,7 +1207,7 @@
           renderDetailGrid(family, wrap, { append: true });
         });
 
-        wrap.append(top, heading, progress, filters, toolbar, empty, grid, more);
+        wrap.append(top, editBanner, heading, progress, filters, toolbar, empty, grid, more);
         requestAnimationFrame(() => renderDetailGrid(family, wrap));
         return wrap;
       }
@@ -1545,7 +1557,15 @@
 
       function ensurePage() {
         const enabled = runtime.settings.isEnabled('themeTracker');
-        const active = enabled && isThemePage();
+
+        if (!enabled && isThemeRoute()) {
+          document.documentElement.classList.remove('wm-theme-route');
+          document.getElementById(PAGE_ID)?.remove();
+          location.replace('/global-collection');
+          return;
+        }
+
+        const active = enabled && isThemeRoute();
         document.documentElement.classList.toggle('wm-theme-route', active);
 
         if (!active) {
