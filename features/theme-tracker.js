@@ -1290,12 +1290,16 @@
         intro.className = 'wm-family-intro';
 
         const introMain = document.createElement('p');
-        introMain.textContent = 'Crée tes propres familles, choisis les cartes qui en font partie et charge ta collection pour voir celles que tu possèdes. Quand des cartes te manquent, le mode Marché peut chercher directement les annonces correspondantes.';
+        introMain.textContent = 'Crée tes propres familles, choisis les cartes qui en font partie et charge ta collection pour voir celles que tu possèdes.';
+
+        const marketHighlight = document.createElement('strong');
+        marketHighlight.className = 'wm-family-market-highlight';
+        marketHighlight.textContent = 'Le mode Marché te permet de rechercher en un seul clic toutes les cartes manquantes de ta famille actuellement en vente.';
 
         const introShare = document.createElement('p');
         introShare.textContent = 'Tu peux aussi importer ou exporter une famille pour la partager. Dans le futur, j’ajouterai sûrement des familles préfaites si des gens m’en envoient.';
 
-        intro.append(introMain, introShare);
+        intro.append(introMain, marketHighlight, introShare);
         copy.append(devNote, title, intro);
 
         const homeActions = document.createElement('div');
