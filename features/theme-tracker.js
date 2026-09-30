@@ -860,7 +860,7 @@
         const button = document.createElement('button');
         button.type = 'button';
         button.className = 'wm-family-add-card';
-        button.innerHTML = '<span>+</span><strong>Ajouter une famille</strong>';
+        button.innerHTML = '<span>+</span><strong>Créer une famille</strong>';
         button.addEventListener('click', openCreateModal);
         return button;
       }
@@ -884,10 +884,20 @@
         const add = document.createElement('button');
         add.type = 'button';
         add.className = 'wm-family-primary';
-        add.textContent = '+ Ajouter une famille';
+        add.textContent = '+ Créer une famille';
         add.addEventListener('click', openCreateModal);
 
-        heading.append(copy, add);
+        const homeActions = document.createElement('div');
+        homeActions.className = 'wm-family-home-actions';
+
+        const importButton = document.createElement('button');
+        importButton.type = 'button';
+        importButton.className = 'wm-family-secondary';
+        importButton.textContent = 'Importer une famille';
+        importButton.addEventListener('click', openImportModal);
+
+        homeActions.append(add, importButton);
+        heading.append(copy, homeActions);
 
         const grid = document.createElement('div');
         grid.className = 'wm-family-grid';
@@ -902,10 +912,20 @@
           const emptyButton = document.createElement('button');
           emptyButton.type = 'button';
           emptyButton.className = 'wm-family-primary';
-          emptyButton.textContent = 'Ajouter une famille';
+          emptyButton.textContent = 'Créer une famille';
           emptyButton.addEventListener('click', openCreateModal);
 
-          empty.append(emptyButton);
+          const importEmptyButton = document.createElement('button');
+          importEmptyButton.type = 'button';
+          importEmptyButton.className = 'wm-family-secondary';
+          importEmptyButton.textContent = 'Importer une famille';
+          importEmptyButton.addEventListener('click', openImportModal);
+
+          const emptyActions = document.createElement('div');
+          emptyActions.className = 'wm-family-empty-actions';
+          emptyActions.append(emptyButton, importEmptyButton);
+
+          empty.append(emptyActions);
           grid.append(empty);
         } else {
           families.forEach((family) => grid.append(createFamilyCard(family)));
@@ -1077,6 +1097,13 @@
           complete.disabled = family.cards.length === 0;
           complete.addEventListener('click', () => syncOwnedFamily(family.id));
 
+          const exportButton = document.createElement('button');
+          exportButton.type = 'button';
+          exportButton.className = 'wm-family-secondary';
+          exportButton.textContent = 'Exporter';
+          exportButton.disabled = family.cards.length === 0;
+          exportButton.addEventListener('click', () => openExportModal(family.id));
+
           const edit = document.createElement('button');
           edit.type = 'button';
           edit.className = 'wm-family-primary';
@@ -1086,7 +1113,7 @@
             renderPageContent();
           });
 
-          actions.append(complete, edit);
+          actions.append(complete, exportButton, edit);
         }
 
         top.append(back, actions);
@@ -1544,7 +1571,7 @@
         modal.className = 'wm-family-modal';
 
         const title = document.createElement('h2');
-        title.textContent = 'Ajouter une famille';
+        title.textContent = 'Créer une famille';
 
         const description = document.createElement('p');
         description.textContent = 'Crée la famille vide, puis choisis manuellement ses cartes.';
