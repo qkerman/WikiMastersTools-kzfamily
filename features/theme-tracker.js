@@ -1236,64 +1236,40 @@
         title.textContent = 'Marché des cartes manquantes';
 
         const subtitle = document.createElement('p');
-        subtitle.textContent = 'Annonces trouvées uniquement pour les cartes marquées comme manquantes dans cette famille.';
+        subtitle.textContent = 'Aucune recherche n’est lancée automatiquement. Clique sur une carte pour chercher son nom exact sur le marché.';
         copy.append(title, subtitle);
-
-        const refresh = document.createElement('button');
-        refresh.type = 'button';
-        refresh.className = 'wm-family-secondary';
-        refresh.textContent = marketState.loading ? 'Recherche…' : 'Actualiser';
-        refresh.disabled = marketState.loading;
-        refresh.addEventListener('click', () => loadMissingMarketplace(family));
-
-        header.append(copy, refresh);
+        header.append(copy);
         panel.append(header);
 
-        const missingCards = (family.cards || []).filter((card) => card.owned === false);
-        const missingMap = new Map(missingCards.map((card) => [card.id, card]));
-        const listings = marketState.familyId === family.id
-          ? marketState.listings
-          : [];
+        const missingCards = (family.cards || [])
+          .filter((card) => card.owned === false)
+          .sort((a, b) => a.title.localeCompare(b.title, 'fr'));
 
-        const grouped = new Map();
-        for (const auction of listings) {
-          const cardId = auction?.card_id || auction?.card?.id;
-          if (!cardId || !missingMap.has(cardId)) continue;
-          const current = grouped.get(cardId) || [];
-          current.push(auction);
-          grouped.set(cardId, current);
-        }
-
-        const foundCardIds = [...grouped.keys()];
         const summary = document.createElement('div');
         summary.className = 'wm-family-market-summary';
 
-        if (marketState.loading) {
-          summary.dataset.mode = 'loading';
-          summary.textContent = marketState.progress || 'Recherche des annonces…';
-        } else if (marketState.error) {
-          summary.dataset.mode = 'error';
-          summary.textContent = `Recherche incomplète : ${marketState.error}`;
-        } else {
-          summary.textContent = `${foundCardIds.length.toLocaleString('fr-FR')} carte${foundCardIds.length > 1 ? 's' : ''} trouvée${foundCardIds.length > 1 ? 's' : ''} sur ${missingCards.length.toLocaleString('fr-FR')} manquante${missingCards.length > 1 ? 's' : ''} • ${listings.length.toLocaleString('fr-FR')} annonce${listings.length > 1 ? 's' : ''}`;
-        }
+        const searchedCount = missingCards.filter((card) => {
+          const state = marketCardState(card.id);
+          return state.loading || state.searchedAt;
+        }).length;
+
+        const availableCount = missingCards.filter((card) => {
+          const state = marketCardState(card.id);
+          return Array.isArray(state.listings) && state.listings.length > 0;
+        }).length;
+
+        summary.textContent = searchedCount
+          ? `${searchedCount} / ${missingCards.length} recherchée${searchedCount > 1 ? 's' : ''} • ${availableCount} avec annonce${availableCount > 1 ? 's' : ''}`
+          : `${missingCards.length} carte${missingCards.length > 1 ? 's' : ''} manquante${missingCards.length > 1 ? 's' : ''} • clique sur « Chercher sur le marché » pour vérifier une carte`;
 
         panel.append(summary);
-
-        if (!marketState.loading && !marketState.error && !listings.length) {
-          const empty = document.createElement('div');
-          empty.className = 'wm-family-market-empty';
-          empty.innerHTML = '<strong>Aucune annonce trouvée.</strong><span>Il n’y a peut-être rien en vente pour les cartes manquantes actuellement.</span>';
-          panel.append(empty);
-          return panel;
-        }
 
         const groups = document.createElement('div');
         groups.className = 'wm-family-market-groups';
 
-        for (const cardId of foundCardIds) {
-          const card = missingMap.get(cardId);
-          const offers = [...(grouped.get(cardId) || [])].sort((a, b) => {
+        for (const card of missingCards) {
+          const state = marketCardState(card.id);
+          const offers = [...(state.listings || [])].sort((a, b) => {
             const priceA = marketplacePrice(a);
             const priceB = marketplacePrice(b);
 
@@ -1313,10 +1289,9 @@
           const thumb = document.createElement('div');
           thumb.className = 'wm-family-market-thumb';
 
-          const imageUrl = card?.imageUrl || offers[0]?.card?.image_url || null;
-          if (imageUrl) {
+          if (card.imageUrl) {
             const image = document.createElement('img');
-            image.src = imageUrl;
+            image.src = card.imageUrl;
             image.alt = '';
             image.loading = 'lazy';
             thumb.append(image);
@@ -1326,42 +1301,78 @@
 
           const cardCopy = document.createElement('div');
           const cardTitle = document.createElement('strong');
-          cardTitle.textContent = card?.title || offers[0]?.card?.wikipedia_title || 'Carte';
+          cardTitle.textContent = card.title;
 
           const cardMeta = document.createElement('span');
-          const rarity = card?.rarity || offers[0]?.card?.rarity || null;
-          cardMeta.textContent = [rarity, `${offers.length} annonce${offers.length > 1 ? 's' : ''}`]
+          const stateCopy = state.loading
+            ? 'Recherche en cours…'
+            : state.error
+              ? 'Erreur de recherche'
+              : state.searchedAt
+                ? offers.length
+                  ? `${offers.length} annonce${offers.length > 1 ? 's' : ''} trouvée${offers.length > 1 ? 's' : ''}`
+                  : 'Aucune annonce'
+                : 'Pas encore recherchée';
+
+          cardMeta.textContent = [card.rarity, stateCopy]
             .filter(Boolean)
             .join(' • ');
 
           cardCopy.append(cardTitle, cardMeta);
-          identity.append(thumb, cardCopy);
 
-          const offerList = document.createElement('div');
-          offerList.className = 'wm-family-market-offers';
+          const search = document.createElement('button');
+          search.type = 'button';
+          search.className = 'wm-family-secondary wm-family-market-search';
+          search.textContent = state.loading
+            ? 'Recherche…'
+            : state.searchedAt
+              ? 'Rechercher à nouveau'
+              : 'Chercher sur le marché';
+          search.disabled = state.loading;
+          search.addEventListener('click', () => searchMarketplaceCard(family, card));
 
-          const visibleOffers = offers.slice(0, 4);
-          for (const offer of visibleOffers) {
-            offerList.append(createMarketplaceOffer(offer));
-          }
+          identity.append(thumb, cardCopy, search);
+          group.append(identity);
 
-          if (offers.length > visibleOffers.length) {
-            const details = document.createElement('details');
-            details.className = 'wm-family-market-more';
+          if (state.error) {
+            const error = document.createElement('div');
+            error.className = 'wm-family-market-card-status is-error';
+            error.textContent = `Impossible de vérifier cette carte : ${state.error}`;
+            group.append(error);
+          } else if (state.searchedAt && !state.loading && !offers.length) {
+            const none = document.createElement('div');
+            none.className = 'wm-family-market-card-status';
+            none.textContent = 'Aucune annonce active trouvée pour cette carte.';
+            group.append(none);
+          } else if (offers.length) {
+            const offerList = document.createElement('div');
+            offerList.className = 'wm-family-market-offers';
 
-            const summaryMore = document.createElement('summary');
-            summaryMore.textContent = `Voir ${offers.length - visibleOffers.length} autre${offers.length - visibleOffers.length > 1 ? 's' : ''} annonce${offers.length - visibleOffers.length > 1 ? 's' : ''}`;
-
-            const extra = document.createElement('div');
-            for (const offer of offers.slice(visibleOffers.length)) {
-              extra.append(createMarketplaceOffer(offer));
+            const visibleOffers = offers.slice(0, 4);
+            for (const offer of visibleOffers) {
+              offerList.append(createMarketplaceOffer(offer));
             }
 
-            details.append(summaryMore, extra);
-            offerList.append(details);
+            if (offers.length > visibleOffers.length) {
+              const details = document.createElement('details');
+              details.className = 'wm-family-market-more';
+
+              const summaryMore = document.createElement('summary');
+              const extraCount = offers.length - visibleOffers.length;
+              summaryMore.textContent = `Voir ${extraCount} autre${extraCount > 1 ? 's' : ''} annonce${extraCount > 1 ? 's' : ''}`;
+
+              const extra = document.createElement('div');
+              for (const offer of offers.slice(visibleOffers.length)) {
+                extra.append(createMarketplaceOffer(offer));
+              }
+
+              details.append(summaryMore, extra);
+              offerList.append(details);
+            }
+
+            group.append(offerList);
           }
 
-          group.append(identity, offerList);
           groups.append(group);
         }
 
