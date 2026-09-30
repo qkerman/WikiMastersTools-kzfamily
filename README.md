@@ -53,6 +53,7 @@ Puis cliquer sur **Recharger** dans `chrome://extensions/` et faire un F5 sur Wi
 *Heure de Paris*
 
 - **30/09/2026** — « Familles » devient manuel : création d’une famille vide, recherche dans toutes les cartes WikiMasters, ajout/retrait carte par carte et bouton pour compléter automatiquement les cartes possédées. Les cartes utilisent désormais exactement la structure visuelle de la vraie page Collection, avec ou sans full-art.
+- **30/09/2026** — « Familles » : vue normale épurée, cartes manquantes grisées, modifications regroupées dans un mode Édition et choix d’une carte de couverture pour la vignette de la famille.
 - **28/09/2026** — Nouveaux outils pour les cartes, les échanges et les notifications, avec davantage de réglages pour les paquets.
 - **27/09/2026** — Mise à jour du style et des performances des cartes.
 - **25/09/2026** — Ajout des paramètres et amélioration des cartes sans image.
