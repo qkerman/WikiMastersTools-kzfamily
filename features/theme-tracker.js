@@ -852,6 +852,55 @@
         if (marketFamilyId === family.id) renderPageContent();
       }
 
+      function marketplaceQueriesForCard(card) {
+        const rawTitle = String(card?.title || '').trim();
+        if (!rawTitle) return [];
+
+        const queries = [];
+        const seen = new Set();
+
+        const add = (value) => {
+          const clean = String(value || '')
+            .replace(/[()[\]{}]/g, ' ')
+            .replace(/[,:;!?]+/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim();
+
+          const key = normalize(clean);
+          if (key.length < SEARCH_MIN_LENGTH || seen.has(key)) return;
+          seen.add(key);
+          queries.push(clean);
+        };
+
+        // Le moteur Marketplace répond mieux au titre principal qu'aux
+        // qualificatifs Wikipédia entre parenthèses.
+        add(
+          rawTitle
+            .replace(/\s*[([{][^\])}]*[\])}]\s*$/g, '')
+            .trim()
+        );
+
+        add(rawTitle);
+
+        const meaningful = normalize(rawTitle)
+          .split(' ')
+          .filter((token) =>
+            token.length >= 4 &&
+            !OWNERSHIP_STOPWORDS.has(token) &&
+            !/^\d+$/.test(token)
+          );
+
+        // En dernier recours, tente le terme le plus distinctif. Le card_id
+        // reste le filtre de vérité, donc une requête texte plus large est sûre.
+        if (meaningful.length) {
+          const distinctive = [...meaningful]
+            .sort((a, b) => b.length - a.length)[0];
+          add(distinctive);
+        }
+
+        return queries.slice(0, 3);
+      }
+
       async function searchMarketplaceCard(family, card) {
         if (!family?.id || !card?.id || !card?.title) return;
 
@@ -862,22 +911,40 @@
         });
         renderPageContent();
 
-        try {
-          const listings = await searchMarketplaceQuery(
-            card.title,
-            new Set([card.id])
-          );
+        const queries = marketplaceQueriesForCard(card);
+        const listingsById = new Map();
+        let lastError = null;
 
+        for (const query of queries) {
+          try {
+            const listings = await searchMarketplaceQuery(
+              query,
+              new Set([card.id])
+            );
+
+            for (const auction of listings) {
+              if (auction?.id) listingsById.set(auction.id, auction);
+            }
+
+            // Dès qu'une variante retrouve cette carte par card_id, inutile
+            // d'élargir davantage la recherche.
+            if (listingsById.size) break;
+          } catch (error) {
+            lastError = error;
+          }
+        }
+
+        if (listingsById.size || !lastError) {
           setMarketCardState(family.id, card.id, {
             loading: false,
             error: '',
-            listings,
+            listings: [...listingsById.values()],
             searchedAt: Date.now()
           });
-        } catch (error) {
+        } else {
           setMarketCardState(family.id, card.id, {
             loading: false,
-            error: String(error?.message || error),
+            error: String(lastError?.message || lastError),
             listings: [],
             searchedAt: Date.now()
           });
