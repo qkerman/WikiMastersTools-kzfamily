@@ -184,6 +184,8 @@ if (typeof window !== 'undefined' && typeof document !== 'undefined') {
       'features/collection-bulk.js',
       'features/extra-tools.js',
       'features/theme-tracker.js',
+      'features/my-bids-logic.js',
+      'features/my-bids.js',
       'features/app.js',
       'content.js'
     ];

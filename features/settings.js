@@ -20,6 +20,7 @@
         ranking: true,
         rankingSales: true,
         themeTracker: true,
+        myBids: true,
         compactMode: true,
         packRecap: true,
         pullStats: true,
@@ -60,6 +61,13 @@
           description: 'Collectionne et partage des groupes de cartes personnalisés.',
           items: [
             ['themeTracker', 'Afficher la page Familles', 'Ajoute Familles au menu latéral. Désactive cette option pour masquer entièrement la page et son entrée dans le menu.']
+          ]
+        },
+        {
+          title: 'Marché',
+          description: 'Outils pour suivre et gagner des enchères.',
+          items: [
+            ['myBids', 'Afficher la page Mes enchères', 'Ajoute Mes enchères au menu latéral : liste légère de tes enchères en cours, surenchère en un clic et alerte sonore sous 1 minute.']
           ]
         },
         {
