@@ -52,6 +52,7 @@ Puis cliquer sur **Recharger** dans `chrome://extensions/` et faire un F5 sur Wi
 
 *Heure de Paris*
 
+- **02/10/2026** — Marketplace : le prix de départ et le nombre d’enchères s’affichent sous chaque annonce.
 - **30/09/2026** — Ajout de la page « Familles ».
 - **28/09/2026** — Nouveaux outils pour les cartes, les échanges et les notifications, avec davantage de réglages pour les paquets.
 - **27/09/2026** — Mise à jour du style et des performances des cartes.

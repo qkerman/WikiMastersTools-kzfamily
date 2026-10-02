@@ -21,6 +21,8 @@
 
         if (isMarketplaceDetailPage()) {
           runtime.priceUi.renderMarketplaceCurrent();
+        } else if (isMarketplacePage()) {
+          runtime.marketplaceInfo.render();
         }
 
         if (isPullsPage()) {
@@ -101,7 +103,7 @@
 
         return Boolean(
           target?.closest?.(
-            '.wm-average-badge, .wm-tools-bar, .wm-modal-overlay, .wm-marketplace-average-wrap, ' +
+            '.wm-average-badge, .wm-tools-bar, .wm-modal-overlay, .wm-marketplace-average-wrap, .wm-marketplace-info, ' +
             '.wm-pulls-tools, .wm-pulls-info, .wm-pack-recap, .wm-trade-values-panel, ' +
             '.wm-trade-values-controls, #wm-open-all-overlay, .wm-pull-stats, ' +
             '.wm-wikipedia-card-button, .wm-missing-image-credit, .wm-missing-title-art, .wm-compact-tools, .wm-price-legend, ' +

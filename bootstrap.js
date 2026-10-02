@@ -184,6 +184,7 @@ if (typeof window !== 'undefined' && typeof document !== 'undefined') {
       'features/collection-bulk.js',
       'features/extra-tools.js',
       'features/theme-tracker.js',
+      'features/marketplace-info.js',
       'features/app.js',
       'content.js'
     ];

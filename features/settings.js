@@ -21,6 +21,7 @@
         rankingSales: true,
         themeTracker: true,
         compactMode: true,
+        marketplaceInfo: true,
         packRecap: true,
         pullStats: true,
         openAll: true,
@@ -48,6 +49,7 @@
           items: [
             ['collectionPrices', 'Prix moyens dans la collection', 'Affiche les badges de prix moyen directement sur les cartes de la collection.'],
             ['marketplacePrice', 'Prix moyen sur Marketplace', 'Affiche le prix moyen sur la fiche d’une annonce Marketplace.'],
+            ['marketplaceInfo', 'Départ et enchères sur Marketplace', 'Affiche sous chaque annonce du Marché le prix de départ et le nombre d’enchères.'],
             ['globalCollectionPrice', 'Prix dans la collection globale', 'Affiche le prix moyen quand une carte est inspectée dans la collection globale.'],
             ['bulkPriceLoader', 'Chargement massif des prix', 'Ajoute « Charger les prix » avec sélection des raretés.'],
             ['ranking', 'Classement « Plus chères »', 'Ajoute le classement des cartes connues par prix moyen.'],
