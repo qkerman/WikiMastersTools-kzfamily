@@ -41,10 +41,11 @@ surveiller pendant l'implémentation.
 
 ## Architecture
 
-- `bridge/my-bids.js` : `fetchMyBids()` (GET liste) et `placeBid(id, amount)`
-  (POST). Utilise `originalFetch` comme `bridge/marketplace.js`, communique avec
-  la couche features par `CustomEvent` (même convention que les autres bridges).
-- `features/my-bids.js` : entrée de menu, page, polling, compteurs, son.
+- Pas de module `bridge/` : les scripts `features/*` tournent dans le monde de la
+  page et appellent déjà `fetch('/api/marketplace…')` directement avec les
+  cookies (cf. `features/theme-tracker.js`). Un bridge n'apporterait rien.
+- `features/my-bids.js` : entrée de menu, page, polling, compteurs, son, appels
+  `GET` liste et `POST /bid`.
 - `features/my-bids-logic.js` : fonctions pures sans DOM (tri, statut en tête ou
   dépassé, prochaine mise, détection du passage sous 60 s dédoublonnée). C'est
   la partie testée en Node.
@@ -58,9 +59,13 @@ surveiller pendant l'implémentation.
 - Polling de la liste toutes les 5 à 10 s page visible, plus lent en arrière-plan.
 - Les compteurs sont recalculés chaque seconde localement à partir de `end_at`,
   sans requête.
-- Id utilisateur : déduit des enchères où l'utilisateur est `current_bidder_id`
-  et confirmé par la réponse du `POST /bid`. Fallback à valider à l'implémentation
-  (par exemple lecture de la session ou de `/api/wikibidous`).
+- Id utilisateur : lu dans le cookie Supabase `sb-<ref>-auth-token` (éventuellement
+  découpé en `.0`, `.1`), JSON encodé en base64 préfixé `base64-`, champ `user.id`.
+  Vérifié : cet id correspond bien aux enchères où l'on est `current_bidder_id`.
+  Seul `user.id` est lu, jamais les jetons. Si le cookie est illisible, le statut
+  est « inconnu » (pas de badge), le reste fonctionne.
+- Solde : `GET /api/wikibidous` renvoie `{"balance": n}`. Lu au chargement, puis
+  au plus une fois par minute, et mis à jour par `bidder_balance` après une mise.
 
 ## Interface
 
@@ -97,6 +102,10 @@ surveiller pendant l'implémentation.
 
 ## Questions ouvertes pour l'implémentation
 
-- Incrément minimum exigé par le site et règle exacte de validation côté serveur.
-- Rôle de `/api/human-check` dans le flux de mise.
-- Source fiable de l'id utilisateur.
+- Incrément minimum exigé par le site : inconnu sans placer de mise réelle. L'incrément
+  par défaut est 1 et le message d'erreur du serveur est affiché tel quel.
+- Rôle de `/api/human-check` dans le flux de mise : le message d'erreur du serveur
+  est affiché tel quel.
+- Onglet en arrière-plan plus de 5 minutes : Chrome peut limiter les minuteries à
+  une exécution par minute, ce qui retarderait le bip. À mesurer en conditions
+  réelles ; si c'est le cas, déplacer le métronome dans un Web Worker.
