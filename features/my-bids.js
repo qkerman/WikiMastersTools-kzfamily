@@ -162,6 +162,7 @@
       }
 
       function checkAlerts() {
+        if (state.soundOn && !audioRunning()) return;
         const fresh = alerts.collect(state.bids, Date.now());
         if (fresh.length && state.soundOn) playUrgentBeep();
       }
@@ -223,7 +224,11 @@
           state.error = String(error?.message || error);
         } finally {
           loading = false;
-          renderAll();
+          try {
+            renderAll();
+          } catch (error) {
+            console.debug('[WM Average] rendu Mes enchères', error);
+          }
           if (refreshQueued) {
             refreshQueued = false;
             if (running) refresh();
@@ -330,6 +335,15 @@
         sound.type = 'button';
         sound.dataset.role = 'sound';
         sound.addEventListener('click', () => {
+          if (state.soundOn && !audioRunning()) {
+            unlockAudio();
+            setTimeout(() => {
+              playUrgentBeep();
+              updateSoundButton();
+            }, 120);
+            return;
+          }
+
           state.soundOn = !state.soundOn;
           writeLocalValue(SOUND_KEY, state.soundOn);
           if (state.soundOn) {
@@ -371,6 +385,12 @@
         updateSoundButton();
       }
 
+      function isBidDisabled(bid, remaining) {
+        return state.pending.has(bid.id) ||
+          remaining <= 0 ||
+          logic.bidStatus(bid, state.userId) === 'leading';
+      }
+
       function buildRow(bid) {
         const now = Date.now();
         const remaining = logic.remainingMs(bid, now);
@@ -383,8 +403,8 @@
         row.classList.toggle('is-ended', remaining <= 0);
         row.classList.toggle('is-urgent', remaining > 0 && remaining <= 60000);
 
-        const rarity = bid.snapshot_rarity || bid.card?.rarity || '';
-        row.append(el('span', `wm-bids-rarity rarity-${rarity.toLowerCase()}`, rarity));
+        const rarity = String(bid.snapshot_rarity || bid.card?.rarity || '');
+        row.append(el('span', 'wm-bids-rarity', rarity));
 
         const title = el('a', 'wm-bids-card', bid.card?.wikipedia_title || 'Carte');
         title.href = `/marketplace/${encodeURIComponent(bid.id)}`;
@@ -402,7 +422,7 @@
 
         const button = el('button', 'wm-bids-bid', pending ? '…' : `+${state.increment}`);
         button.type = 'button';
-        button.disabled = pending || remaining <= 0 || status === 'leading';
+        button.disabled = isBidDisabled(bid, remaining);
         button.title = status === 'leading'
           ? 'Tu es déjà en tête'
           : `Miser ${formatAmount(nextAmount)}`;
@@ -467,6 +487,9 @@
 
           row.classList.toggle('is-ended', remaining <= 0);
           row.classList.toggle('is-urgent', remaining > 0 && remaining <= 60000);
+
+          const button = row.querySelector('.wm-bids-bid');
+          if (button) button.disabled = isBidDisabled(bid, remaining);
         }
 
         checkAlerts();
@@ -478,8 +501,11 @@
         if (!running) return;
 
         pollTimer = setTimeout(async () => {
-          await refresh();
-          schedulePoll();
+          try {
+            await refresh();
+          } finally {
+            schedulePoll();
+          }
         }, document.hidden ? POLL_HIDDEN_MS : POLL_VISIBLE_MS);
       }
 
@@ -494,8 +520,10 @@
         running = true;
 
         document.addEventListener('visibilitychange', onVisibilityChange);
-        document.addEventListener('pointerdown', unlockAudio, true);
-        document.addEventListener('keydown', unlockAudio, true);
+        for (const type of ['pointerdown', 'pointerup', 'touchend', 'click', 'keydown']) {
+          document.addEventListener(type, unlockAudio, true);
+        }
+        unlockAudio();
 
         tickTimer = setInterval(tick, 1000);
         refresh();
@@ -509,8 +537,9 @@
         clearTimeout(pollTimer);
         clearInterval(tickTimer);
         document.removeEventListener('visibilitychange', onVisibilityChange);
-        document.removeEventListener('pointerdown', unlockAudio, true);
-        document.removeEventListener('keydown', unlockAudio, true);
+        for (const type of ['pointerdown', 'pointerup', 'touchend', 'click', 'keydown']) {
+          document.removeEventListener(type, unlockAudio, true);
+        }
       }
 
       function ensurePage() {
