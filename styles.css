@@ -222,6 +222,18 @@
   cursor: pointer;
 }
 
+/* La liste déroulante native de la durée garde sinon un fond clair avec le texte clair hérité. */
+.wm-ranking-sale-field select {
+  color-scheme: dark;
+}
+
+.wm-ranking-sale-field select option {
+  background: #111512;
+  color: #f8fafc;
+  /* La liste native n'hérite pas de la police du site et retombe sur une serif. */
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
 .wm-ranking-sale-hint {
   grid-column: 1 / -1;
   color: rgba(226, 232, 240, 0.5);
