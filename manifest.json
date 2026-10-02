@@ -32,7 +32,8 @@
       ],
       "css": [
         "styles.css",
-        "theme-tracker.css"
+        "theme-tracker.css",
+        "my-bids.css"
       ],
       "run_at": "document_start"
     }
@@ -62,6 +63,8 @@
         "features/collection-bulk.js",
         "features/extra-tools.js",
         "features/theme-tracker.js",
+        "features/my-bids-logic.js",
+        "features/my-bids.js",
         "features/app.js",
         "content.js"
       ],

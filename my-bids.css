@@ -1,0 +1,17 @@
+/* Page « Mes enchères » */
+
+html.wm-bids-route main > :not(#wm-my-bids-page) {
+  display: none !important;
+}
+
+.wm-bids-page {
+  width: 100%;
+  min-width: 0;
+  color: var(--color-foreground);
+}
+
+.wm-bids-shell {
+  width: min(920px, 100%);
+  margin: 0 auto;
+  padding: 24px clamp(14px, 3vw, 28px) 48px;
+}
