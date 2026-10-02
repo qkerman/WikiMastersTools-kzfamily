@@ -71,10 +71,11 @@ surveiller pendant l'implémentation.
 
 - Liste compacte triée par fin imminente.
 - Ligne : vignette, titre, rareté, mise actuelle, compte à rebours, badge
-  « En tête » ou « Dépassé », bouton « +X ».
-- Clic sur « +X » : `POST /bid` avec `current_bid + incrément`, puis mise à jour
-  de la ligne avec `current_bid` et `bidder_balance`.
-- L'incrément est réglable, avec le minimum du site par défaut.
+  « En tête » ou « Dépassé », bouton « Miser N ».
+- Un clic mise le minimum accepté par le site : première mise au montant de départ,
+  puis la mise courante plus 10 % arrondie au supérieur. Si le serveur répond avec
+  un minimum, le bouton l'adopte. Puis mise à jour de la ligne avec `current_bid`
+  et `bidder_balance`.
 - Erreurs (solde insuffisant, mise dépassée, enchère terminée) affichées sur la ligne.
 - Bouton son activé ou coupé, qui sert aussi au déblocage audio par premier clic.
 
@@ -102,8 +103,9 @@ surveiller pendant l'implémentation.
 
 ## Questions ouvertes pour l'implémentation
 
-- Incrément minimum exigé par le site : inconnu sans placer de mise réelle. L'incrément
-  par défaut est 1 et le message d'erreur du serveur est affiché tel quel.
+- Règle du minimum, mesurée sur 21 paires de mises réelles : première mise égale au
+  montant de départ, puis minimum égal à `ceil(mise courante x 1,1)` (1000 donne 1100,
+  111 donne 123, 5 donne 6). Calcul en entiers pour éviter les erreurs de flottants.
 - Rôle de `/api/human-check` dans le flux de mise : le message d'erreur du serveur
   est affiché tel quel.
 - Onglet en arrière-plan plus de 5 minutes : Chrome peut limiter les minuteries à

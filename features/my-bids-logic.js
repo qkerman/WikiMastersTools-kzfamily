@@ -79,12 +79,19 @@
       return 0;
     }
 
-    function nextBidAmount(auction, increment) {
-      const step = Math.max(1, Math.floor(Number(increment)) || 1);
+    function nextBidAmount(auction) {
       const price = currentPrice(auction);
 
       if (auction?.current_bid == null) return price;
-      return price + step;
+      return Math.ceil((price * 11) / 10);
+    }
+
+    function parseMinimumFromError(message) {
+      const match = /minimum\s+(\d[\d\s\u00a0\u202f.,]*)\s*wikibidous/i.exec(String(message ?? ''));
+      if (!match) return null;
+
+      const minimum = Number(match[1].replace(/\D/g, ''));
+      return Number.isInteger(minimum) && minimum > 0 ? minimum : null;
     }
 
     function remainingMs(auction, now) {
@@ -164,6 +171,7 @@
       bidStatus,
       currentPrice,
       nextBidAmount,
+      parseMinimumFromError,
       remainingMs,
       formatRemaining,
       sortBids,

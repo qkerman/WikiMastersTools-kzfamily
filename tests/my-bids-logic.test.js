@@ -83,16 +83,32 @@ test('currentPrice suit l\'ordre effective_bid, current_bid, listing_base_amount
   assert.equal(logic.currentPrice({}), 0);
 });
 
-test('nextBidAmount ajoute l\'incrément à la mise courante, au minimum 1', () => {
-  assert.equal(logic.nextBidAmount(auction({ current_bid: 10, effective_bid: 10 }), 3), 13);
-  assert.equal(logic.nextBidAmount(auction({ current_bid: 10, effective_bid: 10 }), 0), 11);
-  assert.equal(logic.nextBidAmount(auction({ current_bid: 10, effective_bid: 10 }), 'abc'), 11);
-  assert.equal(logic.nextBidAmount(auction({ current_bid: 10, effective_bid: 10 }), 2.9), 12);
+test('nextBidAmount mise le minimum du site : mise courante + 10 % arrondi au supérieur', () => {
+  const cases = [[1000, 1100], [100, 110], [300, 330], [700, 770], [10, 11], [5, 6], [6, 7], [111, 123], [123, 136], [40, 44]];
+  for (const [current, expected] of cases) {
+    assert.equal(logic.nextBidAmount(auction({ current_bid: current, effective_bid: current })), expected, `${current}`);
+  }
 });
 
 test('nextBidAmount mise la mise de départ si personne n\'a misé', () => {
   const fresh = auction({ current_bid: null, effective_bid: 50, base_amount: 50 });
-  assert.equal(logic.nextBidAmount(fresh, 5), 50);
+  assert.equal(logic.nextBidAmount(fresh), 50);
+});
+
+test('parseMinimumFromError lit le minimum du message du site', () => {
+  assert.equal(logic.parseMinimumFromError('Mise trop basse (minimum 1100 wikibidous)'), 1100);
+  assert.equal(logic.parseMinimumFromError('Mise trop basse (minimum 1 100 wikibidous)'), 1100);
+  assert.equal(logic.parseMinimumFromError('Mise trop basse (minimum 1\u00a0100 wikibidous)'), 1100);
+  assert.equal(logic.parseMinimumFromError('Mise trop basse (minimum 1\u202f100 wikibidous)'), 1100);
+  assert.equal(logic.parseMinimumFromError('Mise trop basse (minimum 1.100 wikibidous)'), 1100);
+});
+
+test('parseMinimumFromError renvoie null pour les autres messages', () => {
+  assert.equal(logic.parseMinimumFromError('Erreur réseau'), null);
+  assert.equal(logic.parseMinimumFromError(''), null);
+  assert.equal(logic.parseMinimumFromError(undefined), null);
+  assert.equal(logic.parseMinimumFromError(null), null);
+  assert.equal(logic.parseMinimumFromError('minimum 0 wikibidous'), null);
 });
 
 test('remainingMs et end_at invalide', () => {

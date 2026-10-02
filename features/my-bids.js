@@ -9,7 +9,6 @@
       const SETTING_KEY = 'myBids';
 
       const SOUND_KEY = 'wm_my_bids_sound_v1';
-      const INCREMENT_KEY = 'wm_my_bids_increment_v1';
       const POLL_VISIBLE_MS = 7000;
       const POLL_HIDDEN_MS = 20000;
       const BALANCE_REFRESH_MS = 60 * 1000;
@@ -26,9 +25,9 @@
         error: null,
         updatedAt: 0,
         soundOn: readLocalValue(SOUND_KEY) !== false,
-        increment: normalizeIncrement(readLocalValue(INCREMENT_KEY)),
         pending: new Set(),
-        rowErrors: new Map()
+        rowErrors: new Map(),
+        minHints: new Map()
       };
 
       let running = false;
@@ -39,11 +38,6 @@
       let tickTimer = null;
       let balanceAt = 0;
       let audioContext = null;
-
-      function normalizeIncrement(value) {
-        const number = Math.floor(Number(value));
-        return Number.isFinite(number) && number >= 1 ? Math.min(number, 1000000) : 1;
-      }
 
       function el(tag, className, text) {
         const node = document.createElement(tag);
@@ -213,6 +207,10 @@
           const bids = await fetchBids();
           if (generation !== bidGeneration) return;
           state.bids = bids;
+          const ids = new Set(bids.map((item) => item.id));
+          for (const id of state.minHints.keys()) {
+            if (!ids.has(id)) state.minHints.delete(id);
+          }
           state.userId = logic.parseUserIdFromCookies(document.cookie);
           state.error = null;
           state.loaded = true;
@@ -240,7 +238,7 @@
         const bid = state.bids.find((item) => item.id === auctionId);
         if (!bid || state.pending.has(auctionId)) return;
 
-        const amount = logic.nextBidAmount(bid, state.increment);
+        const amount = bidAmountFor(bid);
         state.pending.add(auctionId);
         state.rowErrors.delete(auctionId);
         renderList();
@@ -263,6 +261,11 @@
               auctionId,
               String(json?.error || json?.message || `Mise refusée (HTTP ${response.status}).`)
             );
+
+            const minimum = logic.parseMinimumFromError(state.rowErrors.get(auctionId));
+            if (minimum) {
+              state.minHints.set(auctionId, { price: logic.currentPrice(bid), amount: minimum });
+            }
           } else {
             bidGeneration += 1;
             state.bids = state.bids.map((item) =>
@@ -316,21 +319,6 @@
         const balance = el('span', 'wm-bids-balance', null);
         balance.dataset.role = 'balance';
 
-        const incrementLabel = el('label', 'wm-bids-increment', 'Surenchère +');
-        const incrementInput = document.createElement('input');
-        incrementInput.type = 'number';
-        incrementInput.min = '1';
-        incrementInput.step = '1';
-        incrementInput.value = String(state.increment);
-        incrementInput.setAttribute('aria-label', 'Incrément de surenchère en wikibidous');
-        incrementInput.addEventListener('change', () => {
-          state.increment = normalizeIncrement(incrementInput.value);
-          incrementInput.value = String(state.increment);
-          writeLocalValue(INCREMENT_KEY, state.increment);
-          renderList();
-        });
-        incrementLabel.append(incrementInput);
-
         const sound = el('button', 'wm-bids-sound', soundLabel());
         sound.type = 'button';
         sound.dataset.role = 'sound';
@@ -356,7 +344,7 @@
           updateSoundButton();
         });
 
-        controls.append(balance, incrementLabel, sound);
+        controls.append(balance, sound);
         header.append(titleWrap, controls);
         return header;
       }
@@ -385,6 +373,14 @@
         updateSoundButton();
       }
 
+      function bidAmountFor(bid) {
+        const computed = logic.nextBidAmount(bid);
+        const hint = state.minHints.get(bid.id);
+        return hint && hint.price === logic.currentPrice(bid)
+          ? Math.max(computed, hint.amount)
+          : computed;
+      }
+
       function isBidDisabled(bid, remaining) {
         return state.pending.has(bid.id) ||
           remaining <= 0 ||
@@ -395,7 +391,7 @@
         const now = Date.now();
         const remaining = logic.remainingMs(bid, now);
         const status = logic.bidStatus(bid, state.userId);
-        const nextAmount = logic.nextBidAmount(bid, state.increment);
+        const nextAmount = bidAmountFor(bid);
         const pending = state.pending.has(bid.id);
 
         const row = el('li', 'wm-bids-row');
@@ -420,7 +416,7 @@
         const countdown = el('span', 'wm-bids-countdown', logic.formatRemaining(remaining));
         countdown.dataset.role = 'countdown';
 
-        const button = el('button', 'wm-bids-bid', pending ? '…' : `+${state.increment}`);
+        const button = el('button', 'wm-bids-bid', pending ? '…' : `Miser ${numberFormat.format(nextAmount)}`);
         button.type = 'button';
         button.disabled = isBidDisabled(bid, remaining);
         button.title = status === 'leading'
