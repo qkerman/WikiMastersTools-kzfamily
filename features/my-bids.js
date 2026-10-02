@@ -33,6 +33,8 @@
 
       let running = false;
       let loading = false;
+      let refreshQueued = false;
+      let bidGeneration = 0;
       let pollTimer = null;
       let tickTimer = null;
       let balanceAt = 0;
@@ -199,11 +201,17 @@
       }
 
       async function refresh() {
-        if (loading) return;
+        if (loading) {
+          refreshQueued = true;
+          return;
+        }
         loading = true;
+        const generation = bidGeneration;
 
         try {
-          state.bids = await fetchBids();
+          const bids = await fetchBids();
+          if (generation !== bidGeneration) return;
+          state.bids = bids;
           state.userId = logic.parseUserIdFromCookies(document.cookie);
           state.error = null;
           state.loaded = true;
@@ -216,6 +224,10 @@
         } finally {
           loading = false;
           renderAll();
+          if (refreshQueued) {
+            refreshQueued = false;
+            if (running) refresh();
+          }
         }
       }
 
@@ -247,6 +259,7 @@
               String(json?.error || json?.message || `Mise refusée (HTTP ${response.status}).`)
             );
           } else {
+            bidGeneration += 1;
             state.bids = state.bids.map((item) =>
               item.id === auctionId
                 ? logic.applyBidResult(item, json, amount, state.userId)
@@ -261,7 +274,7 @@
         } finally {
           state.pending.delete(auctionId);
           renderAll();
-          refresh();
+          if (running) refresh();
         }
       }
 
