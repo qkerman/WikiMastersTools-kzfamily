@@ -20,6 +20,7 @@
     'collectionBulk',
     'extraTools',
     'themeTracker',
+    'marketplaceInfo',
     'app'
   ];
 
@@ -101,6 +102,7 @@
   runtime.collectionBulk = featureRegistry.collectionBulk.create(runtime);
   runtime.extraTools = featureRegistry.extraTools.create(runtime);
   runtime.themeTracker = featureRegistry.themeTracker.create(runtime);
+  runtime.marketplaceInfo = featureRegistry.marketplaceInfo.create(runtime);
   runtime.app = featureRegistry.app.create(runtime);
 
   runtime.app.startObserver();
