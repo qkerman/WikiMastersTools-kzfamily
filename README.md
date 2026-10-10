@@ -1,3 +1,6 @@
+FIN DU DEV JAI LA FLEMME HESITEZ PAS A FORK ET POSTER SUR LE STORE ETC HF !!!!
+
+
 PATCH NOTE EN BAS
 
 [Chrome Web Store](https://chromewebstore.google.com/detail/wikimasters-prix-moyen-co/pkcnhclbagpfmlmolfcgedcmbccffgci)
