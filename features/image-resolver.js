@@ -197,7 +197,7 @@
         };
       }
 
-      function resolveWikidataCandidate(candidate) {
+      async function resolveWikidataCandidate(candidate) {
         const entity = candidate?.entity;
         if (!entity) return null;
 
@@ -208,9 +208,22 @@
 
         if (!fileName) return null;
 
+        const wikimediaQuery = "https://commons.wikimedia.org/w/api.php" +
+          "?action=query" +
+          "&format=json" +
+          "&origin=*" +
+          "&prop=imageinfo" +
+          "&iiprop=url" +
+          `&titles=File:${encodeURIComponent(fileName)}`;
+
+        const data = await fetch(wikimediaQuery).then(r => r.json());
+        const url = Object.values(data.query.pages)?.[0].imageinfo?.[0].url;
+
+        if (!url) return null;
+
         return {
           found: true,
-          url: `https://commons.wikimedia.org/wiki/Special:Redirect/file/${encodeURIComponent(fileName)}?width=900`,
+          url: url,
           source: 'wikidata',
           sourceUrl: `https://www.wikidata.org/wiki/${candidate.id}`,
           creditLabel: 'Wikidata',
@@ -289,7 +302,7 @@
 
         // Wikidata P18 puis P154 (logo) : excellent fallback généraliste.
         for (const { candidate } of ranked) {
-          const entry = resolveWikidataCandidate(candidate);
+          const entry = await resolveWikidataCandidate(candidate);
           if (entry) return entry;
         }
 
